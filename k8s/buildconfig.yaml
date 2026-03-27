@@ -1,0 +1,27 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: marketing-assistant
+  namespace: 0-marketing-assistant-demo
+  labels:
+    app: marketing-assistant
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:latest
+  triggers: []
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: marketing-assistant
+  namespace: 0-marketing-assistant-demo
+  labels:
+    app: marketing-assistant

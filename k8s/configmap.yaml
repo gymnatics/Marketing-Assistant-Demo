@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marketing-assistant-config
+  namespace: 0-marketing-assistant-demo
+  labels:
+    app: marketing-assistant
+data:
+  # Cluster Configuration
+  CLUSTER_DOMAIN: "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
+  NAMESPACE: "0-marketing-assistant-demo"
+  DEV_NAMESPACE: "0-marketing-assistant-demo-dev"
+  PROD_NAMESPACE: "0-marketing-assistant-demo-prod"
+  
+  # Model Endpoints (internal cluster URLs for lower latency)
+  CODE_MODEL_ENDPOINT: "https://qwen25-coder-32b-fp8-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
+  CODE_MODEL_NAME: "qwen25-coder-32b-fp8"
+  LANG_MODEL_ENDPOINT: "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
+  LANG_MODEL_NAME: "qwen3-32b-fp8-dynamic"
+  
+  # MongoDB (not configured - using mock data)
+  MONGODB_URI: "mongodb://localhost:27017"
+  MONGODB_DATABASE: "casino_crm"
+  
+  # Email settings
+  EMAIL_MODE: "simulate"
+  
+  # Application settings
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  SUPPORTED_LANGUAGES: "en,zh-CN"
+  DEFAULT_LANGUAGE: "en"
