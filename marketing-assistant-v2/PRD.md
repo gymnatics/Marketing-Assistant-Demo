@@ -212,46 +212,29 @@
 
 **Role:** Generates marketing emails and deploys campaigns to OpenShift.
 
-**Agent Card:**
+**Architecture:** 3-layer A2A SDK pattern:
+- `agent.py` — Pure business logic (`DeliveryManagerAgent` class)
+- `agent_executor.py` — A2A `AgentExecutor` bridge (JSON dispatch)
+- `__main__.py` — Entry point with `AgentCard`, skills, health check
+
+**Agent Card (a2a-sdk `AgentCard`):**
 ```json
 {
   "name": "Delivery Manager",
-  "description": "Generates marketing emails and deploys campaigns",
+  "description": "Generates marketing emails and deploys campaigns to OpenShift",
   "version": "1.0.0",
-  "protocol_version": "0.3.0",
   "skills": [
-    {
-      "name": "generate_email",
-      "description": "Generate marketing email content in EN and ZH",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "campaign_name": {"type": "string"},
-          "description": {"type": "string"},
-          "campaign_url": {"type": "string"},
-          "start_date": {"type": "string"},
-          "end_date": {"type": "string"}
-        }
-      }
-    },
-    {
-      "name": "deploy_preview",
-      "description": "Deploy campaign to preview environment"
-    },
-    {
-      "name": "deploy_production",
-      "description": "Deploy campaign to production environment"
-    },
-    {
-      "name": "send_emails",
-      "description": "Send marketing emails to customer list (simulated)"
-    }
+    {"id": "generate_email", "name": "Generate Email", "description": "Generate marketing email content in English and Chinese"},
+    {"id": "deploy_preview", "name": "Deploy Preview", "description": "Deploy campaign landing page to preview environment"},
+    {"id": "deploy_production", "name": "Deploy Production", "description": "Deploy campaign landing page to production"},
+    {"id": "send_emails", "name": "Send Emails", "description": "Send marketing emails to customer list (simulated)"}
   ]
 }
 ```
 
 **Model:** Qwen3-32B-FP8-Dynamic  
-**Integration:** Kubernetes Python client for OpenShift deployment
+**Integration:** Kubernetes Python client for OpenShift deployment  
+**Dependencies:** `a2a-sdk[http-server]>=0.3.25`, `httpx`, `kubernetes>=29.0.0`
 
 ---
 
@@ -469,18 +452,26 @@ Event types:
 
 ### A2A Agent Endpoints
 
-Each agent exposes:
-```
-GET /.well-known/agent-card.json
-  Agent capabilities discovery
+Each agent uses the official `a2a-sdk` with a 3-layer architecture:
+- **`agent.py`** – Pure business logic (no framework deps)
+- **`agent_executor.py`** – `AgentExecutor` bridge to a2a-sdk
+- **`__main__.py`** – `A2AStarletteApplication` entry point with `AgentCard`
 
-POST /a2a/invoke
-  Invoke agent skill
-  Body: {skill: "...", params: {...}}
+Standard endpoints exposed by a2a-sdk:
+```
+GET /.well-known/agent.json
+  Agent card discovery (AgentCard via a2a-sdk)
+
+POST /
+  A2A message/task endpoint (DefaultRequestHandler)
 
 GET /health
-  Health check
+  Health check (custom Starlette route)
 ```
+
+**Refactored agents:** Creative Producer (complete), Customer Analyst (complete)
+
+**Pending refactor:** Delivery Manager, Campaign Director
 
 ---
 
@@ -535,7 +526,7 @@ docker-compose up
 
 | v1 File | v2 Location | Changes |
 |---------|-------------|---------|
-| `src/agents/coder_agent.py` | `services/creative-producer/` | Wrap in A2A server |
+| `src/agents/coder_agent.py` | `services/creative-producer/` | 3-layer a2a-sdk pattern (agent.py, agent_executor.py, __main__.py) |
 | `src/agents/customer_agent.py` | `services/customer-analyst/` | Add MCP client |
 | `src/agents/marketing_agent.py` | `services/delivery-manager/` | Combine with k8s |
 | `src/agents/k8s_agent.py` | `services/delivery-manager/` | Merge into Delivery Manager |

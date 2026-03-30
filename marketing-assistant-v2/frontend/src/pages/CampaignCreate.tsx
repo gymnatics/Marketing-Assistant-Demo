@@ -104,6 +104,7 @@ export default function CampaignCreate() {
   const [agentEvents, setAgentEvents] = useState<Array<{agent: string; task: string; type: string; time: string}>>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (!urlCampaignId) return;
@@ -270,7 +271,6 @@ export default function CampaignCreate() {
       if (!response.ok) throw new Error('Failed to create campaign');
       const result = await response.json();
       setCampaignState(prev => ({ ...prev, id: result.campaign_id, status: 'draft' }));
-      window.history.replaceState(null, '', `/campaign/${result.campaign_id}`);
       return result.campaign_id;
     } catch (err) {
       setCampaignState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'Unknown error' }));
@@ -378,21 +378,27 @@ export default function CampaignCreate() {
   };
 
   const handleNext = async () => {
+    if (busyRef.current) return;
     if (currentStep === 0) {
       setCurrentStep(1);
     } else if (currentStep === 1) {
+      busyRef.current = true;
       try {
         const id = campaignState.id || await createCampaign();
         await generateLandingPage(id);
       } catch (err) {
         console.error('Error:', err);
+      } finally {
+        busyRef.current = false;
       }
     } else if (currentStep === 2) {
-      await prepareEmailPreview();
+      busyRef.current = true;
+      try { await prepareEmailPreview(); } finally { busyRef.current = false; }
     } else if (currentStep === 3) {
       setCurrentStep(4);
     } else if (currentStep === 4) {
-      await goLive();
+      busyRef.current = true;
+      try { await goLive(); } finally { busyRef.current = false; }
     }
   };
 
