@@ -542,5 +542,39 @@ If LlamaStack integration is desired later:
 
 ---
 
+## Appendix: Known Issues and Fixes
+
+### Issue 1: MongoDB MCP Server Unreachable (Connection Refused)
+- **Symptom**: Customer Analyst fails with "Connection refused" when calling MongoDB MCP
+- **Root Cause**: FastMCP `mcp.run()` binds to `127.0.0.1` (localhost only), not accessible from other pods
+- **Fix**: Replaced `mcp.run()` with a custom Starlette app binding to `0.0.0.0`, exposing REST `/tools/{name}` endpoints for direct HTTP tool calls
+
+### Issue 2: Workflow Continues After Node Failure
+- **Symptom**: Customer retrieval fails but email generation proceeds anyway, producing emails without customer data
+- **Root Cause**: LangGraph `add_edge()` always routes to the next node regardless of state
+- **Fix**: Added `add_conditional_edges()` with a `_check_failed()` function that routes to END when `status == "failed"`
+
+### Issue 3: "All connection attempts failed" Error Banner
+- **Symptom**: Red error banner appears intermittently during campaign generation
+- **Root Cause**: SSE EventSource connection to Event Hub fails/reconnects, triggering error state
+- **Fix**: SSE `onerror` handler now closes the connection cleanly; polling continues independently
+
+### Issue 4: Broken QR Code Image in Generated Landing Pages
+- **Symptom**: QR code section shows broken image placeholder
+- **Root Cause**: LLM generates `<img>` tags with invalid/placeholder URLs for QR codes
+- **Status**: Cosmetic issue - QR code generation requires an actual QR code service integration (e.g., goqr.me API)
+
+### Issue 5: OpenShift Image Caching (imagePullPolicy)
+- **Symptom**: Pods continue running old code after image push and rollout restart
+- **Root Cause**: Default `imagePullPolicy: IfNotPresent` uses cached images when tag is the same
+- **Fix**: Added `imagePullPolicy: Always` to all deployment manifests
+
+### Issue 6: Secret Tokens Committed to Git
+- **Symptom**: GitGuardian alert for Kubernetes service account tokens in git history
+- **Root Cause**: `k8s/secret.yaml` was tracked before `.gitignore` was updated
+- **Fix**: Purged from git history via `git filter-branch`, added `secret-example.yaml` template, strengthened `.gitignore` patterns
+
+---
+
 *Document maintained by: AI Demo Team*  
 *Based on Elastic Blog A2A Architecture Pattern*
