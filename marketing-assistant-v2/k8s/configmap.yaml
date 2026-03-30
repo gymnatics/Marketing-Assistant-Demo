@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marketing-assistant-config
+  namespace: marketing-assistant-v2
+data:
+  CODE_MODEL_NAME: "qwen25-coder-32b-fp8"
+  LANG_MODEL_NAME: "qwen3-32b-fp8-dynamic"
+  CLUSTER_DOMAIN: "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
+  DEV_NAMESPACE: "0-marketing-assistant-demo-dev"
+  PROD_NAMESPACE: "0-marketing-assistant-demo-prod"
+  MONGODB_DATABASE: "casino_crm"
+  
+  # Internal service URLs
+  CAMPAIGN_DIRECTOR_URL: "http://campaign-director:8080"
+  CREATIVE_PRODUCER_URL: "http://creative-producer:8081"
+  CUSTOMER_ANALYST_URL: "http://customer-analyst:8082"
+  DELIVERY_MANAGER_URL: "http://delivery-manager:8083"
+  MONGODB_MCP_URL: "http://mongodb-mcp:8090"
+  EVENT_HUB_URL: "http://event-hub:5001"

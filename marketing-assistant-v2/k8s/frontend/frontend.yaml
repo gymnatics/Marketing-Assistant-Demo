@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: marketing-assistant-v2
+  labels:
+    app: frontend
+    component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        component: ui
+    spec:
+      containers:
+        - name: frontend
+          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-frontend:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: marketing-assistant-v2
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: marketing-assistant-v2
+  namespace: marketing-assistant-v2
+spec:
+  to:
+    kind: Service
+    name: frontend
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge

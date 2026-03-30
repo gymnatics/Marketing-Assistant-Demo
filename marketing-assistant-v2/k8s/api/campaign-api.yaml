@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: campaign-api
+  namespace: marketing-assistant-v2
+  labels:
+    app: campaign-api
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: campaign-api
+  template:
+    metadata:
+      labels:
+        app: campaign-api
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-campaign-api:latest
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: marketing-assistant-config
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: campaign-api
+  namespace: marketing-assistant-v2
+spec:
+  selector:
+    app: campaign-api
+  ports:
+    - port: 5000
+      targetPort: 5000
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: campaign-api
+  namespace: marketing-assistant-v2
+spec:
+  to:
+    kind: Service
+    name: campaign-api
+  port:
+    targetPort: 5000
+  tls:
+    termination: edge
