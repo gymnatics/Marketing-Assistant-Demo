@@ -133,6 +133,7 @@ export default function CampaignCreate() {
           email_subject_zh: data.email_subject_zh,
           email_body_zh: data.email_body_zh,
           customer_count: data.customer_count,
+          customer_list: data.customer_list,
           error: data.error_message
         });
         const step = statusToStep(data.status);
@@ -331,6 +332,7 @@ export default function CampaignCreate() {
         ...prev,
         status: result.status,
         customer_count: result.customer_count,
+        customer_list: result.customer_list,
         email_subject_en: result.email_subject_en,
         email_body_en: result.email_body_en,
         email_subject_zh: result.email_subject_zh,
