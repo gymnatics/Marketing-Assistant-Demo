@@ -1,22 +1,21 @@
 """
-Campaign Director A2A Agent - Orchestrates the campaign creation workflow.
+Campaign Director Agent - Business logic for orchestrating campaign workflows.
 
-Uses LangGraph for workflow orchestration and A2A protocol to communicate
+Uses LangGraph for workflow orchestration and A2A SDK client to communicate
 with specialized agents (Creative Producer, Customer Analyst, Delivery Manager).
 """
 import os
+import sys
 import uuid
+import json
 import asyncio
+import traceback
 import httpx
-from typing import TypedDict, Annotated, List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from typing import TypedDict, Annotated, List
 import operator
 
 from langgraph.graph import StateGraph, START, END
 
-import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import (
     CampaignRequest,
@@ -26,34 +25,6 @@ from shared.models import (
     CAMPAIGN_THEMES
 )
 
-
-app = FastAPI(title="Campaign Director Agent")
-
-AGENT_CARD = {
-    "name": "Campaign Director",
-    "description": "Orchestrates marketing campaign creation workflow",
-    "version": "1.0.0",
-    "protocol_version": "0.3.0",
-    "skills": [
-        {
-            "name": "create_campaign",
-            "description": "Create a new marketing campaign through the full workflow",
-            "input_schema": CampaignRequest.model_json_schema()
-        },
-        {
-            "name": "generate_landing_page",
-            "description": "Generate landing page for an existing campaign"
-        },
-        {
-            "name": "prepare_email_preview",
-            "description": "Retrieve customers and generate email content for preview"
-        },
-        {
-            "name": "go_live",
-            "description": "Deploy campaign to production and send emails"
-        }
-    ]
-}
 
 CREATIVE_PRODUCER_URL = os.environ.get("CREATIVE_PRODUCER_URL", "http://creative-producer:8081")
 CUSTOMER_ANALYST_URL = os.environ.get("CUSTOMER_ANALYST_URL", "http://customer-analyst:8082")
@@ -89,21 +60,35 @@ class CampaignState(TypedDict):
     messages: Annotated[list, operator.add]
 
 
-class InvokeRequest(BaseModel):
-    skill: str
-    params: dict
-
-
 async def call_a2a_agent(agent_url: str, skill: str, params: dict) -> dict:
-    """Call an A2A agent's skill."""
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        response = await client.post(
-            f"{agent_url}/a2a/invoke",
-            json={"skill": skill, "params": params}
-        )
-        if response.status_code != 200:
-            raise Exception(f"A2A call failed: {response.status_code} - {response.text}")
-        return response.json()
+    """Call an A2A agent via JSON-RPC (a2a-sdk protocol)."""
+    from a2a.client import A2AClient
+    from a2a.types import MessageSendParams, SendMessageRequest, TextPart, Part
+
+    message_params = MessageSendParams(
+        message={
+            "role": "user",
+            "parts": [{"kind": "text", "text": json.dumps({"skill": skill, **params})}],
+            "messageId": uuid.uuid4().hex,
+        }
+    )
+    request = SendMessageRequest(id=str(uuid.uuid4()), params=message_params)
+
+    timeout = httpx.Timeout(connect=30.0, read=600.0, write=30.0, pool=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as httpx_client:
+        client = A2AClient(httpx_client=httpx_client, url=agent_url)
+        response = await client.send_message(request)
+
+    result_data = response.result
+    if hasattr(result_data, 'artifacts') and result_data.artifacts:
+        for artifact in result_data.artifacts:
+            for part in (artifact.parts or []):
+                if hasattr(part, 'root') and hasattr(part.root, 'text'):
+                    return json.loads(part.root.text)
+                elif hasattr(part, 'text'):
+                    return json.loads(part.text)
+
+    return {"status": "error", "error": "No artifact returned from agent"}
 
 
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
@@ -124,158 +109,100 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
         print(f"[Campaign Director] Failed to publish event: {e}")
 
 
+# ── LangGraph Workflow Nodes ──
+
 async def generate_landing_page_node(state: CampaignState) -> CampaignState:
-    """Generate landing page via Creative Producer agent."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Delegating to Creative Producer",
-        data={"step": "generating_landing_page"}
-    )
-    
-    result = await call_a2a_agent(
-        CREATIVE_PRODUCER_URL,
-        "generate_landing_page",
-        {
-            "campaign_id": state["campaign_id"],
-            "campaign_name": state["campaign_name"],
-            "campaign_description": state["campaign_description"],
-            "hotel_name": state["hotel_name"],
-            "theme": state["theme"],
-            "start_date": state["start_date"],
-            "end_date": state["end_date"]
-        }
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Delegating to Creative Producer", {"step": "generating_landing_page"})
+
+    result = await call_a2a_agent(CREATIVE_PRODUCER_URL, "generate_landing_page", {
+        "campaign_id": state["campaign_id"],
+        "campaign_name": state["campaign_name"],
+        "campaign_description": state["campaign_description"],
+        "hotel_name": state["hotel_name"],
+        "theme": state["theme"],
+        "start_date": state["start_date"],
+        "end_date": state["end_date"]
+    })
+
     if result.get("status") == "error":
         state["error_message"] = result.get("error", "Unknown error")
         state["status"] = "failed"
     else:
         state["landing_page_html"] = result.get("html", "")
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Creative Producer",
-            "content": "Landing page generated successfully"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Creative Producer",
+                              "content": "Landing page generated successfully"}]
     return state
 
 
 async def deploy_preview_node(state: CampaignState) -> CampaignState:
-    """Deploy landing page to preview via Delivery Manager."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Deploying preview",
-        data={"step": "deploying_preview"}
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Deploying preview", {"step": "deploying_preview"})
     try:
-        result = await call_a2a_agent(
-            DELIVERY_MANAGER_URL,
-            "deploy_preview",
-            {
-                "campaign_id": state["campaign_id"],
-                "html_content": state["landing_page_html"],
-                "namespace": DEV_NAMESPACE
-            }
-        )
-        
+        result = await call_a2a_agent(DELIVERY_MANAGER_URL, "deploy_preview", {
+            "campaign_id": state["campaign_id"],
+            "html_content": state["landing_page_html"],
+            "namespace": DEV_NAMESPACE
+        })
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
-            if "Could not configure Kubernetes" in error_msg or "Kubernetes" in error_msg:
+            if "Kubernetes" in error_msg:
                 state["preview_url"] = f"local://preview/{state['campaign_id']}"
                 state["status"] = "preview_ready"
-                state["messages"] = [{
-                    "role": "assistant",
-                    "agent": "Delivery Manager",
-                    "content": "Preview ready (local mode - K8s deployment skipped)"
-                }]
+                state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                                      "content": "Preview ready (local mode - K8s deployment skipped)"}]
             else:
                 state["error_message"] = error_msg
                 state["status"] = "failed"
         else:
             state["preview_url"] = result.get("preview_url", "")
             state["status"] = "preview_ready"
-            state["messages"] = [{
-                "role": "assistant",
-                "agent": "Delivery Manager",
-                "content": f"Preview deployed at {state['preview_url']}"
-            }]
-    except Exception as e:
+            state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                                  "content": f"Preview deployed at {state['preview_url']}"}]
+    except Exception:
         state["preview_url"] = f"local://preview/{state['campaign_id']}"
         state["status"] = "preview_ready"
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Delivery Manager",
-            "content": "Preview ready (local mode - K8s deployment skipped)"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                              "content": "Preview ready (local mode - K8s deployment skipped)"}]
     return state
 
 
 async def retrieve_customers_node(state: CampaignState) -> CampaignState:
-    """Retrieve target customers via Customer Analyst."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Retrieving customers",
-        data={"step": "retrieving_customers"}
-    )
-    
-    result = await call_a2a_agent(
-        CUSTOMER_ANALYST_URL,
-        "get_target_customers",
-        {
-            "campaign_id": state["campaign_id"],
-            "target_audience": state["target_audience"],
-            "limit": 50
-        }
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Retrieving customers", {"step": "retrieving_customers"})
+
+    result = await call_a2a_agent(CUSTOMER_ANALYST_URL, "get_target_customers", {
+        "campaign_id": state["campaign_id"],
+        "target_audience": state["target_audience"],
+        "limit": 50
+    })
+
     if result.get("status") == "error":
         state["error_message"] = result.get("error", "Unknown error")
         state["status"] = "failed"
     else:
         state["customer_list"] = result.get("customers", [])
         state["customer_count"] = result.get("count", 0)
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Customer Analyst",
-            "content": f"Retrieved {state['customer_count']} {result.get('recipient_type', 'customers')}"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Customer Analyst",
+                              "content": f"Retrieved {state['customer_count']} {result.get('recipient_type', 'customers')}"}]
     return state
 
 
 async def generate_email_node(state: CampaignState) -> CampaignState:
-    """Generate email content via Delivery Manager."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Generating email content",
-        data={"step": "generating_email"}
-    )
-    
-    result = await call_a2a_agent(
-        DELIVERY_MANAGER_URL,
-        "generate_email",
-        {
-            "campaign_id": state["campaign_id"],
-            "campaign_name": state["campaign_name"],
-            "campaign_description": state["campaign_description"],
-            "hotel_name": state["hotel_name"],
-            "campaign_url": state["preview_url"],
-            "target_audience": state["target_audience"],
-            "start_date": state["start_date"],
-            "end_date": state["end_date"]
-        }
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Generating email content", {"step": "generating_email"})
+
+    result = await call_a2a_agent(DELIVERY_MANAGER_URL, "generate_email", {
+        "campaign_id": state["campaign_id"],
+        "campaign_name": state["campaign_name"],
+        "campaign_description": state["campaign_description"],
+        "hotel_name": state["hotel_name"],
+        "campaign_url": state["preview_url"],
+        "target_audience": state["target_audience"],
+        "start_date": state["start_date"],
+        "end_date": state["end_date"]
+    })
+
     if result.get("status") == "error":
         state["error_message"] = result.get("error", "Unknown error")
         state["status"] = "failed"
@@ -285,149 +212,97 @@ async def generate_email_node(state: CampaignState) -> CampaignState:
         state["email_subject_zh"] = result.get("email_subject_zh", "")
         state["email_body_zh"] = result.get("email_body_zh", "")
         state["status"] = "email_ready"
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Delivery Manager",
-            "content": "Email content generated in English and Chinese"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                              "content": "Email content generated in English and Chinese"}]
     return state
 
 
 async def deploy_production_node(state: CampaignState) -> CampaignState:
-    """Deploy to production via Delivery Manager."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Deploying to production",
-        data={"step": "deploying_production"}
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Deploying to production", {"step": "deploying_production"})
     try:
-        result = await call_a2a_agent(
-            DELIVERY_MANAGER_URL,
-            "deploy_production",
-            {
-                "campaign_id": state["campaign_id"],
-                "html_content": state["landing_page_html"],
-                "namespace": PROD_NAMESPACE
-            }
-        )
-        
+        result = await call_a2a_agent(DELIVERY_MANAGER_URL, "deploy_production", {
+            "campaign_id": state["campaign_id"],
+            "html_content": state["landing_page_html"],
+            "namespace": PROD_NAMESPACE
+        })
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
-            if "Could not configure Kubernetes" in error_msg or "Kubernetes" in error_msg:
+            if "Kubernetes" in error_msg:
                 state["production_url"] = f"local://production/{state['campaign_id']}"
-                state["messages"] = [{
-                    "role": "assistant",
-                    "agent": "Delivery Manager",
-                    "content": "Production ready (local mode - K8s deployment skipped)"
-                }]
+                state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                                      "content": "Production ready (local mode)"}]
             else:
                 state["error_message"] = error_msg
                 state["status"] = "failed"
         else:
             state["production_url"] = result.get("production_url", "")
-            state["messages"] = [{
-                "role": "assistant",
-                "agent": "Delivery Manager",
-                "content": f"Production deployed at {state['production_url']}"
-            }]
-    except Exception as e:
+            state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                                  "content": f"Production deployed at {state['production_url']}"}]
+    except Exception:
         state["production_url"] = f"local://production/{state['campaign_id']}"
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Delivery Manager",
-            "content": "Production ready (local mode - K8s deployment skipped)"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                              "content": "Production ready (local mode)"}]
     return state
 
 
 async def send_emails_node(state: CampaignState) -> CampaignState:
-    """Send emails via Delivery Manager."""
-    await publish_event(
-        campaign_id=state["campaign_id"],
-        event_type="workflow_status",
-        agent="Campaign Director",
-        task="Sending emails",
-        data={"step": "sending_emails"}
-    )
-    
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Sending emails", {"step": "sending_emails"})
+
     customers = [CustomerProfile(**c) for c in state["customer_list"]]
-    
-    result = await call_a2a_agent(
-        DELIVERY_MANAGER_URL,
-        "send_emails",
-        {
-            "campaign_id": state["campaign_id"],
-            "customers": [c.model_dump() for c in customers],
-            "email_subject_en": state["email_subject_en"],
-            "email_body_en": state["email_body_en"],
-            "email_subject_zh": state["email_subject_zh"],
-            "email_body_zh": state["email_body_zh"]
-        }
-    )
-    
+    result = await call_a2a_agent(DELIVERY_MANAGER_URL, "send_emails", {
+        "campaign_id": state["campaign_id"],
+        "customers": [c.model_dump() for c in customers],
+        "email_subject_en": state["email_subject_en"],
+        "email_body_en": state["email_body_en"],
+        "email_subject_zh": state["email_subject_zh"],
+        "email_body_zh": state["email_body_zh"]
+    })
+
     if result.get("status") == "error":
         state["error_message"] = result.get("error", "Unknown error")
         state["status"] = "failed"
     else:
         state["status"] = "live"
-        state["messages"] = [{
-            "role": "assistant",
-            "agent": "Delivery Manager",
-            "content": f"Sent {result.get('sent_count', 0)} emails (simulated)"
-        }]
-    
+        state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
+                              "content": f"Sent {result.get('sent_count', 0)} emails (simulated)"}]
     return state
 
 
+# ── Workflow Builders ──
+
 def build_landing_page_workflow():
-    """Build workflow for generating landing page and deploying preview."""
     workflow = StateGraph(CampaignState)
-    
     workflow.add_node("generate_landing_page", generate_landing_page_node)
     workflow.add_node("deploy_preview", deploy_preview_node)
-    
     workflow.add_edge(START, "generate_landing_page")
     workflow.add_edge("generate_landing_page", "deploy_preview")
     workflow.add_edge("deploy_preview", END)
-    
     return workflow.compile()
 
-
 def build_email_preview_workflow():
-    """Build workflow for retrieving customers and generating email."""
     workflow = StateGraph(CampaignState)
-    
     workflow.add_node("retrieve_customers", retrieve_customers_node)
     workflow.add_node("generate_email", generate_email_node)
-    
     workflow.add_edge(START, "retrieve_customers")
     workflow.add_edge("retrieve_customers", "generate_email")
     workflow.add_edge("generate_email", END)
-    
     return workflow.compile()
 
-
 def build_go_live_workflow():
-    """Build workflow for deploying to production and sending emails."""
     workflow = StateGraph(CampaignState)
-    
     workflow.add_node("deploy_production", deploy_production_node)
     workflow.add_node("send_emails", send_emails_node)
-    
     workflow.add_edge(START, "deploy_production")
     workflow.add_edge("deploy_production", "send_emails")
     workflow.add_edge("send_emails", END)
-    
     return workflow.compile()
 
 
+# ── Background Workflow Runners ──
+
 async def _run_landing_page_workflow(campaign_id: str, campaign):
-    """Background task: generate landing page and deploy preview."""
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -452,13 +327,12 @@ async def _run_landing_page_workflow(campaign_id: str, campaign):
         campaign.status = CampaignStatus(final_state.get("status", "preview_ready"))
         campaign.error_message = final_state.get("error_message")
     except Exception as e:
-        print(f"[Campaign Director] Landing page workflow error: {e}")
+        print(f"[Campaign Director] Landing page workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
-        campaign.error_message = str(e)
+        campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
 
 
 async def _run_email_preview_workflow(campaign_id: str, campaign):
-    """Background task: retrieve customers and generate emails."""
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -489,13 +363,12 @@ async def _run_email_preview_workflow(campaign_id: str, campaign):
         campaign.status = CampaignStatus(final_state.get("status", "email_ready"))
         campaign.error_message = final_state.get("error_message")
     except Exception as e:
-        print(f"[Campaign Director] Email preview workflow error: {e}")
+        print(f"[Campaign Director] Email preview workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
-        campaign.error_message = str(e)
+        campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
 
 
 async def _run_go_live_workflow(campaign_id: str, campaign):
-    """Background task: deploy to production and send emails."""
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -524,129 +397,67 @@ async def _run_go_live_workflow(campaign_id: str, campaign):
         campaign.status = CampaignStatus(final_state.get("status", "live"))
         campaign.error_message = final_state.get("error_message")
     except Exception as e:
-        print(f"[Campaign Director] Go live workflow error: {e}")
+        print(f"[Campaign Director] Go live workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
-        campaign.error_message = str(e)
+        campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
 
 
-@app.get("/.well-known/agent-card.json")
-async def get_agent_card():
-    """Return agent capabilities for A2A discovery."""
-    return JSONResponse(content=AGENT_CARD)
+class CampaignDirectorAgent:
+    """Handles campaign management and workflow orchestration."""
 
+    async def handle_skill(self, skill: str, params: dict) -> dict:
+        if skill == "create_campaign":
+            return await self._create_campaign(params)
+        elif skill == "generate_landing_page":
+            return await self._generate_landing_page(params)
+        elif skill == "prepare_email_preview":
+            return await self._prepare_email_preview(params)
+        elif skill == "go_live":
+            return await self._go_live(params)
+        else:
+            return {"error": f"Unknown skill: {skill}"}
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "agent": "Campaign Director"}
-
-
-@app.get("/campaigns")
-async def list_campaigns():
-    """List all campaigns."""
-    return list(campaigns_store.values())
-
-
-@app.get("/campaigns/{campaign_id}")
-async def get_campaign(campaign_id: str):
-    """Get campaign by ID."""
-    if campaign_id not in campaigns_store:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    return campaigns_store[campaign_id]
-
-
-@app.post("/a2a/invoke")
-async def invoke_skill(request: InvokeRequest):
-    """Invoke an agent skill via A2A protocol."""
-    
-    if request.skill == "create_campaign":
-        try:
-            params = CampaignRequest(**request.params)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-        
+    async def _create_campaign(self, params: dict) -> dict:
+        req = CampaignRequest(**params)
         campaign_id = str(uuid.uuid4())[:8]
-        
         campaign = CampaignData(
             id=campaign_id,
-            campaign_name=params.campaign_name,
-            campaign_description=params.campaign_description,
-            hotel_name=params.hotel_name,
-            target_audience=params.target_audience,
-            theme=params.theme.value if hasattr(params.theme, 'value') else params.theme,
-            start_date=params.start_date,
-            end_date=params.end_date,
+            campaign_name=req.campaign_name,
+            campaign_description=req.campaign_description,
+            hotel_name=req.hotel_name,
+            target_audience=req.target_audience,
+            theme=req.theme.value if hasattr(req.theme, 'value') else req.theme,
+            start_date=req.start_date,
+            end_date=req.end_date,
             status=CampaignStatus.DRAFT
         )
-        
         campaigns_store[campaign_id] = campaign
-        
-        await publish_event(
-            campaign_id=campaign_id,
-            event_type="campaign_created",
-            agent="Campaign Director",
-            task="Campaign created",
-            data={"campaign_id": campaign_id}
-        )
-        
+        await publish_event(campaign_id, "campaign_created", "Campaign Director",
+                            "Campaign created", {"campaign_id": campaign_id})
         return {"campaign_id": campaign_id, "status": "created"}
-    
-    elif request.skill == "generate_landing_page":
-        campaign_id = request.params.get("campaign_id")
+
+    async def _generate_landing_page(self, params: dict) -> dict:
+        campaign_id = params.get("campaign_id")
         if not campaign_id or campaign_id not in campaigns_store:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        
+            return {"error": "Campaign not found"}
         campaign = campaigns_store[campaign_id]
         campaign.status = CampaignStatus.GENERATING
-        
         asyncio.create_task(_run_landing_page_workflow(campaign_id, campaign))
-        
-        return {
-            "campaign_id": campaign_id,
-            "status": "generating",
-            "preview_url": "",
-            "error": None
-        }
-    
-    elif request.skill == "prepare_email_preview":
-        campaign_id = request.params.get("campaign_id")
+        return {"campaign_id": campaign_id, "status": "generating", "preview_url": "", "error": None}
+
+    async def _prepare_email_preview(self, params: dict) -> dict:
+        campaign_id = params.get("campaign_id")
         if not campaign_id or campaign_id not in campaigns_store:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        
+            return {"error": "Campaign not found"}
         campaign = campaigns_store[campaign_id]
-        
         asyncio.create_task(_run_email_preview_workflow(campaign_id, campaign))
-        
-        return {
-            "campaign_id": campaign_id,
-            "status": "preparing_email",
-            "customer_count": 0,
-            "error": None
-        }
-    
-    elif request.skill == "go_live":
-        campaign_id = request.params.get("campaign_id")
+        return {"campaign_id": campaign_id, "status": "preparing_email", "customer_count": 0, "error": None}
+
+    async def _go_live(self, params: dict) -> dict:
+        campaign_id = params.get("campaign_id")
         if not campaign_id or campaign_id not in campaigns_store:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        
+            return {"error": "Campaign not found"}
         campaign = campaigns_store[campaign_id]
         campaign.status = CampaignStatus.APPROVED
-        
         asyncio.create_task(_run_go_live_workflow(campaign_id, campaign))
-        
-        return {
-            "campaign_id": campaign_id,
-            "status": "deploying",
-            "production_url": "",
-            "emails_sent": 0,
-            "error": None
-        }
-    
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown skill: {request.skill}")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+        return {"campaign_id": campaign_id, "status": "deploying", "production_url": "", "emails_sent": 0, "error": None}

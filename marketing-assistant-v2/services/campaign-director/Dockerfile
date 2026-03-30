@@ -2,16 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy and install requirements
 COPY services/campaign-director/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared models
 COPY shared/ /app/shared/
 
-# Copy agent code
 COPY services/campaign-director/agent.py .
+COPY services/campaign-director/agent_executor.py .
+COPY services/campaign-director/__main__.py .
 
 EXPOSE 8080
 
-CMD ["python", "agent.py"]
+CMD ["python", "__main__.py"]

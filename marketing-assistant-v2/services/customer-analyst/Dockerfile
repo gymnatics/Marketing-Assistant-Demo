@@ -2,16 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy and install requirements
 COPY services/customer-analyst/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared models
 COPY shared/ /app/shared/
 
-# Copy agent code
 COPY services/customer-analyst/agent.py .
+COPY services/customer-analyst/agent_executor.py .
+COPY services/customer-analyst/__main__.py .
 
 EXPOSE 8082
 
-CMD ["python", "agent.py"]
+CMD ["python", "__main__.py"]

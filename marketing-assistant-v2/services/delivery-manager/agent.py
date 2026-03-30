@@ -1,20 +1,16 @@
 """
-Delivery Manager A2A Agent - Generates marketing emails and deploys campaigns.
+Delivery Manager Agent - Pure business logic.
 
-Uses Qwen3-32B-FP8-Dynamic for email generation.
-Uses Kubernetes Python client for OpenShift deployment.
+Generates marketing emails (EN/ZH) using Qwen3-32B-FP8-Dynamic and
+deploys campaign landing pages to OpenShift via the Kubernetes Python client.
 """
 import os
 import json
 import uuid
 import httpx
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
-import base64
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -27,49 +23,19 @@ from shared.models import (
     DeployProductionInput,
     DeployProductionOutput,
     SendEmailsInput,
-    SendEmailsOutput
+    SendEmailsOutput,
 )
-
-
-app = FastAPI(title="Delivery Manager Agent")
-
-AGENT_CARD = {
-    "name": "Delivery Manager",
-    "description": "Generates marketing emails and deploys campaigns to OpenShift",
-    "version": "1.0.0",
-    "protocol_version": "0.3.0",
-    "skills": [
-        {
-            "name": "generate_email",
-            "description": "Generate marketing email content in English and Chinese",
-            "input_schema": GenerateEmailInput.model_json_schema()
-        },
-        {
-            "name": "deploy_preview",
-            "description": "Deploy campaign landing page to preview environment",
-            "input_schema": DeployPreviewInput.model_json_schema()
-        },
-        {
-            "name": "deploy_production",
-            "description": "Deploy campaign landing page to production environment",
-            "input_schema": DeployProductionInput.model_json_schema()
-        },
-        {
-            "name": "send_emails",
-            "description": "Send marketing emails to customer list (simulated)",
-            "input_schema": SendEmailsInput.model_json_schema()
-        }
-    ]
-}
 
 LANG_MODEL_ENDPOINT = os.environ.get(
     "LANG_MODEL_ENDPOINT",
-    "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
+    "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1",
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 LANG_MODEL_TOKEN = os.environ.get("LANG_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
-CLUSTER_DOMAIN = os.environ.get("CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com")
+CLUSTER_DOMAIN = os.environ.get(
+    "CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
+)
 DEV_NAMESPACE = os.environ.get("DEV_NAMESPACE", "0-marketing-assistant-demo-dev")
 PROD_NAMESPACE = os.environ.get("PROD_NAMESPACE", "0-marketing-assistant-demo-prod")
 
@@ -106,35 +72,25 @@ Generate email content in the following EXACT format:
 IMPORTANT: The call-to-action button href MUST use the exact campaign URL provided in the prompt. Do NOT use placeholder text like "{{campaign_url}}" - use the actual URL."""
 
 
-class InvokeRequest(BaseModel):
-    skill: str
-    params: dict
-
-
-def init_k8s_client():
-    """Initialize Kubernetes client."""
-    try:
-        config.load_incluster_config()
-    except config.ConfigException:
-        try:
-            config.load_kube_config()
-        except config.ConfigException:
-            raise Exception("Could not configure Kubernetes client")
-
-
-async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
+async def publish_event(
+    campaign_id: str,
+    event_type: str,
+    agent: str,
+    task: str,
+    data: dict = None,
+):
     """Publish event to Event Hub for UI updates."""
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
+        async with httpx.AsyncClient() as http_client:
+            await http_client.post(
                 f"{EVENT_HUB_URL}/events/{campaign_id}/publish",
                 json={
                     "event_type": event_type,
                     "agent": agent,
                     "task": task,
-                    "data": data or {}
+                    "data": data or {},
                 },
-                timeout=5.0
+                timeout=5.0,
             )
     except Exception as e:
         print(f"[Delivery Manager] Failed to publish event: {e}")
@@ -146,33 +102,33 @@ def parse_email_response(response: str) -> dict:
         "email_subject_en": "",
         "email_body_en": "",
         "email_subject_zh": "",
-        "email_body_zh": ""
+        "email_body_zh": "",
     }
-    
+
     sections = {
         "---ENGLISH_SUBJECT---": "email_subject_en",
         "---ENGLISH_BODY---": "email_body_en",
         "---CHINESE_SUBJECT---": "email_subject_zh",
-        "---CHINESE_BODY---": "email_body_zh"
+        "---CHINESE_BODY---": "email_body_zh",
     }
-    
+
     current_section = None
-    current_content = []
-    
-    for line in response.split('\n'):
+    current_content: list[str] = []
+
+    for line in response.split("\n"):
         line_stripped = line.strip()
-        
+
         if line_stripped in sections:
             if current_section:
-                result[current_section] = '\n'.join(current_content).strip()
+                result[current_section] = "\n".join(current_content).strip()
             current_section = sections[line_stripped]
             current_content = []
         elif current_section:
             current_content.append(line)
-    
+
     if current_section:
-        result[current_section] = '\n'.join(current_content).strip()
-    
+        result[current_section] = "\n".join(current_content).strip()
+
     return result
 
 
@@ -183,16 +139,16 @@ async def generate_email_with_streaming(
     campaign_url: str,
     target_audience: str,
     start_date: str,
-    end_date: str
+    end_date: str,
 ) -> dict:
     """Generate email content using streaming to avoid timeout."""
-    
+
     date_info = ""
     if start_date and end_date:
         date_info = f"\n- **Campaign Period:** {start_date} to {end_date}"
     elif end_date:
         date_info = f"\n- **Offer Expires:** {end_date}"
-    
+
     user_prompt = f"""Create a marketing email for the following campaign:
 
 ## Campaign Details:
@@ -224,26 +180,30 @@ Generate the email content now:"""
     headers = {"Content-Type": "application/json"}
     if LANG_MODEL_TOKEN:
         headers["Authorization"] = f"Bearer {LANG_MODEL_TOKEN}"
-    
+
     payload = {
         "model": LANG_MODEL_NAME,
         "messages": [
             {"role": "system", "content": MARKETING_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.7,
         "max_tokens": 4000,
-        "stream": True
+        "stream": True,
     }
-    
+
     content = ""
-    
+
     async with httpx.AsyncClient(timeout=180.0) as http_client:
-        async with http_client.stream("POST", url, json=payload, headers=headers) as response:
+        async with http_client.stream(
+            "POST", url, json=payload, headers=headers
+        ) as response:
             if response.status_code != 200:
                 error_text = await response.aread()
-                raise Exception(f"Model API error: {response.status_code} - {error_text}")
-            
+                raise Exception(
+                    f"Model API error: {response.status_code} - {error_text}"
+                )
+
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
                     data = line[6:]
@@ -258,25 +218,37 @@ Generate the email content now:"""
                                 content += text
                     except json.JSONDecodeError:
                         continue
-    
+
     return parse_email_response(content)
 
 
-def deploy_campaign_to_k8s(campaign_id: str, html_content: str, namespace: str) -> str:
+def init_k8s_client():
+    """Initialize Kubernetes client."""
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        try:
+            config.load_kube_config()
+        except config.ConfigException:
+            raise Exception("Could not configure Kubernetes client")
+
+
+def deploy_campaign_to_k8s(
+    campaign_id: str, html_content: str, namespace: str
+) -> str:
     """Deploy campaign landing page to OpenShift."""
     init_k8s_client()
-    
+
     core_v1 = client.CoreV1Api()
     apps_v1 = client.AppsV1Api()
-    networking_v1 = client.NetworkingV1Api()
-    
+
     deployment_name = f"campaign-{campaign_id[:8]}-preview"
-    
+
     configmap = client.V1ConfigMap(
         metadata=client.V1ObjectMeta(name=f"{deployment_name}-html"),
-        data={"index.html": html_content}
+        data={"index.html": html_content},
     )
-    
+
     nginx_config = """
 server {
     listen 8080;
@@ -294,9 +266,9 @@ server {
 """
     nginx_configmap = client.V1ConfigMap(
         metadata=client.V1ObjectMeta(name=f"{deployment_name}-nginx"),
-        data={"default.conf": nginx_config}
+        data={"default.conf": nginx_config},
     )
-    
+
     try:
         core_v1.create_namespaced_config_map(namespace=namespace, body=configmap)
     except ApiException as e:
@@ -304,11 +276,11 @@ server {
             core_v1.replace_namespaced_config_map(
                 name=f"{deployment_name}-html",
                 namespace=namespace,
-                body=configmap
+                body=configmap,
             )
         else:
             raise
-    
+
     try:
         core_v1.create_namespaced_config_map(namespace=namespace, body=nginx_configmap)
     except ApiException as e:
@@ -316,11 +288,11 @@ server {
             core_v1.replace_namespaced_config_map(
                 name=f"{deployment_name}-nginx",
                 namespace=namespace,
-                body=nginx_configmap
+                body=nginx_configmap,
             )
         else:
             raise
-    
+
     deployment = client.V1Deployment(
         metadata=client.V1ObjectMeta(name=deployment_name),
         spec=client.V1DeploymentSpec(
@@ -339,13 +311,13 @@ server {
                             volume_mounts=[
                                 client.V1VolumeMount(
                                     name="html",
-                                    mount_path="/usr/share/nginx/html"
+                                    mount_path="/usr/share/nginx/html",
                                 ),
                                 client.V1VolumeMount(
                                     name="nginx-config",
-                                    mount_path="/etc/nginx/conf.d"
-                                )
-                            ]
+                                    mount_path="/etc/nginx/conf.d",
+                                ),
+                            ],
                         )
                     ],
                     volumes=[
@@ -353,20 +325,20 @@ server {
                             name="html",
                             config_map=client.V1ConfigMapVolumeSource(
                                 name=f"{deployment_name}-html"
-                            )
+                            ),
                         ),
                         client.V1Volume(
                             name="nginx-config",
                             config_map=client.V1ConfigMapVolumeSource(
                                 name=f"{deployment_name}-nginx"
-                            )
-                        )
-                    ]
-                )
-            )
-        )
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        ),
     )
-    
+
     try:
         apps_v1.create_namespaced_deployment(namespace=namespace, body=deployment)
     except ApiException as e:
@@ -374,27 +346,27 @@ server {
             apps_v1.replace_namespaced_deployment(
                 name=deployment_name,
                 namespace=namespace,
-                body=deployment
+                body=deployment,
             )
         else:
             raise
-    
+
     service = client.V1Service(
         metadata=client.V1ObjectMeta(name=deployment_name),
         spec=client.V1ServiceSpec(
             selector={"app": deployment_name},
-            ports=[client.V1ServicePort(port=80, target_port=8080)]
-        )
+            ports=[client.V1ServicePort(port=80, target_port=8080)],
+        ),
     )
-    
+
     try:
         core_v1.create_namespaced_service(namespace=namespace, body=service)
     except ApiException as e:
         if e.status != 409:
             raise
-    
+
     route_url = f"https://{deployment_name}-{namespace}.{CLUSTER_DOMAIN}/"
-    
+
     try:
         custom_api = client.CustomObjectsApi()
         route = {
@@ -404,96 +376,80 @@ server {
             "spec": {
                 "to": {
                     "kind": "Service",
-                    "name": deployment_name
+                    "name": deployment_name,
                 },
                 "port": {"targetPort": 8080},
-                "tls": {"termination": "edge"}
-            }
+                "tls": {"termination": "edge"},
+            },
         }
-        
+
         try:
             custom_api.create_namespaced_custom_object(
                 group="route.openshift.io",
                 version="v1",
                 namespace=namespace,
                 plural="routes",
-                body=route
+                body=route,
             )
         except ApiException as e:
             if e.status != 409:
                 raise
     except Exception as e:
         print(f"[Delivery Manager] Route creation failed (may not be OpenShift): {e}")
-    
+
     return route_url
 
 
-@app.get("/.well-known/agent-card.json")
-async def get_agent_card():
-    """Return agent capabilities for A2A discovery."""
-    return JSONResponse(content=AGENT_CARD)
+class DeliveryManagerAgent:
+    """Pure business logic for the Delivery Manager agent."""
 
+    async def generate_email(self, params: dict) -> dict:
+        """Generate marketing email content in English and Chinese."""
+        validated = GenerateEmailInput(**params)
+        campaign_id = params.get("campaign_id", str(uuid.uuid4())[:8])
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "agent": "Delivery Manager"}
-
-
-@app.post("/a2a/invoke")
-async def invoke_skill(request: InvokeRequest):
-    """Invoke an agent skill via A2A protocol."""
-    
-    campaign_id = request.params.get("campaign_id", str(uuid.uuid4())[:8])
-    
-    if request.skill == "generate_email":
-        try:
-            params = GenerateEmailInput(**request.params)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-        
         await publish_event(
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Generating marketing email"
+            task="Generating marketing email",
         )
-        
+
         try:
             email_data = await generate_email_with_streaming(
-                campaign_name=params.campaign_name,
-                campaign_description=params.campaign_description,
-                hotel_name=params.hotel_name,
-                campaign_url=params.campaign_url,
-                target_audience=params.target_audience,
-                start_date=params.start_date,
-                end_date=params.end_date
+                campaign_name=validated.campaign_name,
+                campaign_description=validated.campaign_description,
+                hotel_name=validated.hotel_name,
+                campaign_url=validated.campaign_url,
+                target_audience=validated.target_audience,
+                start_date=validated.start_date,
+                end_date=validated.end_date,
             )
-            
+
             result = GenerateEmailOutput(
                 email_subject_en=email_data.get("email_subject_en", ""),
                 email_body_en=email_data.get("email_body_en", ""),
                 email_subject_zh=email_data.get("email_subject_zh", ""),
                 email_body_zh=email_data.get("email_body_zh", ""),
-                status="success"
+                status="success",
             )
-            
+
             await publish_event(
                 campaign_id=campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
-                task="Email content generated"
+                task="Email content generated",
             )
-            
+
             return result.model_dump()
-            
+
         except Exception as e:
             await publish_event(
                 campaign_id=campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
                 task="Email generation failed",
-                data={"error": str(e)}
+                data={"error": str(e)},
             )
             return GenerateEmailOutput(
                 email_subject_en="",
@@ -501,136 +457,123 @@ async def invoke_skill(request: InvokeRequest):
                 email_subject_zh="",
                 email_body_zh="",
                 status="error",
-                error=str(e)
+                error=str(e),
             ).model_dump()
-    
-    elif request.skill == "deploy_preview":
-        try:
-            params = DeployPreviewInput(**request.params)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-        
+
+    async def deploy_preview(self, params: dict) -> dict:
+        """Deploy campaign landing page to the preview (dev) environment."""
+        validated = DeployPreviewInput(**params)
+
         await publish_event(
-            campaign_id=params.campaign_id,
+            campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Deploying to preview environment"
+            task="Deploying to preview environment",
         )
-        
+
         try:
             preview_url = deploy_campaign_to_k8s(
-                campaign_id=params.campaign_id,
-                html_content=params.html_content,
-                namespace=params.namespace or DEV_NAMESPACE
+                campaign_id=validated.campaign_id,
+                html_content=validated.html_content,
+                namespace=validated.namespace or DEV_NAMESPACE,
             )
-            
+
             result = DeployPreviewOutput(preview_url=preview_url, status="success")
-            
+
             await publish_event(
-                campaign_id=params.campaign_id,
+                campaign_id=validated.campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
                 task="Preview deployment complete",
-                data={"preview_url": preview_url}
+                data={"preview_url": preview_url},
             )
-            
+
             return result.model_dump()
-            
+
         except Exception as e:
             await publish_event(
-                campaign_id=params.campaign_id,
+                campaign_id=validated.campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
                 task="Preview deployment failed",
-                data={"error": str(e)}
+                data={"error": str(e)},
             )
             return DeployPreviewOutput(
                 preview_url="",
                 status="error",
-                error=str(e)
+                error=str(e),
             ).model_dump()
-    
-    elif request.skill == "deploy_production":
-        try:
-            params = DeployProductionInput(**request.params)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-        
+
+    async def deploy_production(self, params: dict) -> dict:
+        """Deploy campaign landing page to the production environment."""
+        validated = DeployProductionInput(**params)
+
         await publish_event(
-            campaign_id=params.campaign_id,
+            campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Deploying to production environment"
+            task="Deploying to production environment",
         )
-        
+
         try:
             production_url = deploy_campaign_to_k8s(
-                campaign_id=params.campaign_id,
-                html_content=params.html_content,
-                namespace=params.namespace or PROD_NAMESPACE
+                campaign_id=validated.campaign_id,
+                html_content=validated.html_content,
+                namespace=validated.namespace or PROD_NAMESPACE,
             )
-            
-            result = DeployProductionOutput(production_url=production_url, status="success")
-            
+
+            result = DeployProductionOutput(
+                production_url=production_url, status="success"
+            )
+
             await publish_event(
-                campaign_id=params.campaign_id,
+                campaign_id=validated.campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
                 task="Production deployment complete",
-                data={"production_url": production_url}
+                data={"production_url": production_url},
             )
-            
+
             return result.model_dump()
-            
+
         except Exception as e:
             await publish_event(
-                campaign_id=params.campaign_id,
+                campaign_id=validated.campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
                 task="Production deployment failed",
-                data={"error": str(e)}
+                data={"error": str(e)},
             )
             return DeployProductionOutput(
                 production_url="",
                 status="error",
-                error=str(e)
+                error=str(e),
             ).model_dump()
-    
-    elif request.skill == "send_emails":
-        try:
-            params = SendEmailsInput(**request.params)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-        
+
+    async def send_emails(self, params: dict) -> dict:
+        """Send marketing emails to customer list (simulated)."""
+        validated = SendEmailsInput(**params)
+
         await publish_event(
-            campaign_id=params.campaign_id,
+            campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task=f"Sending emails to {len(params.customers)} recipients"
+            task=f"Sending emails to {len(validated.customers)} recipients",
         )
-        
-        sent_count = len(params.customers)
-        
-        for customer in params.customers:
+
+        sent_count = len(validated.customers)
+
+        for customer in validated.customers:
             print(f"[Delivery Manager] SIMULATED: Sending email to {customer.email}")
-        
+
         result = SendEmailsOutput(sent_count=sent_count, status="success")
-        
+
         await publish_event(
-            campaign_id=params.campaign_id,
+            campaign_id=validated.campaign_id,
             event_type="agent_completed",
             agent="Delivery Manager",
             task=f"Sent {sent_count} emails (simulated)",
-            data={"sent_count": sent_count}
+            data={"sent_count": sent_count},
         )
-        
+
         return result.model_dump()
-    
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown skill: {request.skill}")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8083))
-    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,40 +1,16 @@
 """
-Creative Producer A2A Agent - Generates luxury marketing landing pages.
+Creative Producer Agent - Pure business logic for generating luxury marketing landing pages.
 
 Uses Qwen2.5-Coder-32B-FP8 model for HTML/CSS/JS generation.
 """
 import os
+import sys
 import json
 import httpx
-from typing import Optional
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
-import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from shared.models import (
-    CAMPAIGN_THEMES,
-    GenerateLandingPageInput,
-    GenerateLandingPageOutput
-)
+from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
 
-
-app = FastAPI(title="Creative Producer Agent")
-
-AGENT_CARD = {
-    "name": "Creative Producer",
-    "description": "Generates luxury marketing landing pages with HTML/CSS/JS",
-    "version": "1.0.0",
-    "protocol_version": "0.3.0",
-    "skills": [
-        {
-            "name": "generate_landing_page",
-            "description": "Create a luxury marketing landing page for casino campaigns",
-            "input_schema": GenerateLandingPageInput.model_json_schema()
-        }
-    ]
-}
 
 CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
@@ -72,11 +48,6 @@ Return ONLY the complete HTML code, starting with <!DOCTYPE html> and ending wit
 Do not include any explanation or markdown formatting."""
 
 
-class InvokeRequest(BaseModel):
-    skill: str
-    params: dict
-
-
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
     """Publish event to Event Hub for UI updates."""
     try:
@@ -104,13 +75,13 @@ async def generate_html_with_streaming(
     end_date: str
 ) -> str:
     """Generate landing page HTML using streaming to avoid timeout."""
-    
+
     theme_config = CAMPAIGN_THEMES.get(theme, CAMPAIGN_THEMES["luxury_gold"])
-    
+
     date_info = ""
     if start_date and end_date:
         date_info = f"\n- Campaign Period: {start_date} to {end_date}"
-    
+
     user_prompt = f"""Create a luxury marketing landing page for:
 
 ## Campaign Details:
@@ -148,7 +119,7 @@ Generate the complete HTML page now:"""
     }
     if CODE_MODEL_TOKEN:
         headers["Authorization"] = f"Bearer {CODE_MODEL_TOKEN}"
-    
+
     payload = {
         "model": CODE_MODEL_NAME,
         "messages": [
@@ -159,15 +130,15 @@ Generate the complete HTML page now:"""
         "max_tokens": 8000,
         "stream": True
     }
-    
+
     html_content = ""
-    
+
     async with httpx.AsyncClient(timeout=300.0) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             if response.status_code != 200:
                 error_text = await response.aread()
                 raise Exception(f"Model API error: {response.status_code} - {error_text}")
-            
+
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
                     data = line[6:]
@@ -182,89 +153,66 @@ Generate the complete HTML page now:"""
                                 html_content += content
                     except json.JSONDecodeError:
                         continue
-    
+
     if html_content.startswith("```html"):
         html_content = html_content[7:]
     if html_content.startswith("```"):
         html_content = html_content[3:]
     if html_content.endswith("```"):
         html_content = html_content[:-3]
-    
+
     return html_content.strip()
 
 
-@app.get("/.well-known/agent-card.json")
-async def get_agent_card():
-    """Return agent capabilities for A2A discovery."""
-    return JSONResponse(content=AGENT_CARD)
+class CreativeProducerAgent:
+    """Pure business logic for the Creative Producer agent."""
 
+    async def generate(self, params: dict) -> dict:
+        """Generate a landing page from campaign parameters.
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "agent": "Creative Producer"}
+        Args:
+            params: dict with keys campaign_id, campaign_name, campaign_description,
+                    hotel_name, theme, start_date, end_date
 
+        Returns:
+            dict with keys html, status, and optionally error
+        """
+        campaign_id = params.get("campaign_id", "unknown")
 
-@app.post("/a2a/invoke")
-async def invoke_skill(request: InvokeRequest):
-    """Invoke an agent skill via A2A protocol."""
-    
-    if request.skill != "generate_landing_page":
-        raise HTTPException(status_code=400, detail=f"Unknown skill: {request.skill}")
-    
-    try:
-        params = GenerateLandingPageInput(**request.params)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid parameters: {e}")
-    
-    campaign_id = request.params.get("campaign_id", "unknown")
-    
-    await publish_event(
-        campaign_id=campaign_id,
-        event_type="agent_started",
-        agent="Creative Producer",
-        task="Generating landing page"
-    )
-    
-    try:
-        html = await generate_html_with_streaming(
-            campaign_name=params.campaign_name,
-            campaign_description=params.campaign_description,
-            hotel_name=params.hotel_name,
-            theme=params.theme,
-            start_date=params.start_date,
-            end_date=params.end_date
-        )
-        
-        result = GenerateLandingPageOutput(html=html, status="success")
-        
         await publish_event(
             campaign_id=campaign_id,
-            event_type="agent_completed",
+            event_type="agent_started",
             agent="Creative Producer",
-            task="Landing page generated",
-            data={"html_length": len(html)}
+            task="Generating landing page"
         )
-        
-        return result.model_dump()
-        
-    except Exception as e:
-        await publish_event(
-            campaign_id=campaign_id,
-            event_type="agent_error",
-            agent="Creative Producer",
-            task="Generation failed",
-            data={"error": str(e)}
-        )
-        
-        return GenerateLandingPageOutput(
-            html="",
-            status="error",
-            error=str(e)
-        ).model_dump()
 
+        try:
+            html = await generate_html_with_streaming(
+                campaign_name=params["campaign_name"],
+                campaign_description=params["campaign_description"],
+                hotel_name=params["hotel_name"],
+                theme=params["theme"],
+                start_date=params["start_date"],
+                end_date=params["end_date"]
+            )
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8081))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+            await publish_event(
+                campaign_id=campaign_id,
+                event_type="agent_completed",
+                agent="Creative Producer",
+                task="Landing page generated",
+                data={"html_length": len(html)}
+            )
+
+            return {"html": html, "status": "success"}
+
+        except Exception as e:
+            await publish_event(
+                campaign_id=campaign_id,
+                event_type="agent_error",
+                agent="Creative Producer",
+                task="Generation failed",
+                data={"error": str(e)}
+            )
+
+            return {"html": "", "status": "error", "error": str(e)}

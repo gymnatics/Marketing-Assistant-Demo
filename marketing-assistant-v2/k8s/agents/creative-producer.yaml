@@ -6,6 +6,9 @@ metadata:
   labels:
     app: creative-producer
     component: agent
+    kagenti.io/type: agent
+    protocol.kagenti.io/a2a: ""
+    kagenti.io/framework: Custom
 spec:
   replicas: 1
   selector:
@@ -16,6 +19,8 @@ spec:
       labels:
         app: creative-producer
         component: agent
+        kagenti.io/type: agent
+        protocol.kagenti.io/a2a: ""
     spec:
       containers:
         - name: agent
