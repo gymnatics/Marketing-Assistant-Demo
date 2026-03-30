@@ -13,7 +13,7 @@ interface WorkflowNavigatorProps {
 
 export default function WorkflowNavigator({ steps, currentStep }: WorkflowNavigatorProps) {
   return (
-    <nav aria-label="Progress">
+    <nav aria-label="Progress" className="mb-8 pb-6">
       <ol className="flex items-center">
         {steps.map((step, index) => (
           <li key={step.id} className={`relative ${index !== steps.length - 1 ? 'pr-8 sm:pr-20 flex-1' : ''}`}>
@@ -48,7 +48,7 @@ export default function WorkflowNavigator({ steps, currentStep }: WorkflowNaviga
               </>
             )}
             
-            <div className="hidden sm:block absolute top-10 left-1/2 -translate-x-1/2 text-center w-32">
+            <div className="hidden sm:block absolute top-10 left-1/2 -translate-x-1/2 text-center w-24">
               <span className={`text-xs font-medium ${index <= currentStep ? 'text-primary' : 'text-gray-500'}`}>
                 {step.name}
               </span>

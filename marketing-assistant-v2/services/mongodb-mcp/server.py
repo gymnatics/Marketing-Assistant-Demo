@@ -12,10 +12,7 @@ from pydantic import BaseModel
 
 
 # Initialize FastMCP server
-mcp = FastMCP(
-    name="Customer Database MCP",
-    description="Access VIP customer profiles for marketing campaign targeting"
-)
+mcp = FastMCP("Customer Database MCP")
 
 
 # Mock data for when MongoDB is unavailable

@@ -13,7 +13,9 @@ services:
 
   # MongoDB MCP Server
   mongodb-mcp:
-    build: ./services/mongodb-mcp
+    build:
+      context: .
+      dockerfile: ./services/mongodb-mcp/Dockerfile
     ports:
       - "8090:8090"
     environment:
@@ -24,7 +26,9 @@ services:
 
   # Event Hub (SSE)
   event-hub:
-    build: ./services/event-hub
+    build:
+      context: .
+      dockerfile: ./services/event-hub/Dockerfile
     ports:
       - "5001:5001"
 
@@ -69,11 +73,9 @@ services:
       LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
       LANG_MODEL_TOKEN: ${LANG_MODEL_TOKEN}
       EVENT_HUB_URL: http://event-hub:5001
-      CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-apps.cluster.example.com}
+      CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}
       PROD_NAMESPACE: ${PROD_NAMESPACE:-marketing-assistant-prod}
-    volumes:
-      - ~/.kube:/root/.kube:ro
     depends_on:
       - event-hub
 
@@ -89,7 +91,7 @@ services:
       CUSTOMER_ANALYST_URL: http://customer-analyst:8082
       DELIVERY_MANAGER_URL: http://delivery-manager:8083
       EVENT_HUB_URL: http://event-hub:5001
-      CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-apps.cluster.example.com}
+      CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}
       PROD_NAMESPACE: ${PROD_NAMESPACE:-marketing-assistant-prod}
     depends_on:
@@ -110,11 +112,17 @@ services:
     depends_on:
       - campaign-director
 
-  # React Frontend
+  # React Frontend (dev mode - no build needed)
   frontend:
-    build: ./frontend
+    image: node:18-alpine
+    working_dir: /app
     ports:
-      - "3000:8080"
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm start"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       - campaign-api
       - event-hub

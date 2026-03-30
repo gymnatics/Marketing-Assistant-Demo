@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Layout from '../components/Layout/Layout';
 
 interface Campaign {
   id: string;
@@ -6,32 +8,33 @@ interface Campaign {
   status: string;
   target_audience: string;
   theme: string;
+  hotel_name?: string;
+  start_date?: string;
+  end_date?: string;
   created_at: string;
   preview_url?: string;
   production_url?: string;
 }
 
-const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  generating: 'bg-blue-100 text-blue-800',
-  preview_ready: 'bg-yellow-100 text-yellow-800',
-  email_ready: 'bg-purple-100 text-purple-800',
-  approved: 'bg-indigo-100 text-indigo-800',
-  live: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800'
+const statusConfig: Record<string, { label: string; color: string }> = {
+  draft: { label: 'Draft', color: 'bg-white/90 text-slate-500' },
+  generating: { label: 'Generating', color: 'bg-tertiary-fixed-dim text-tertiary' },
+  preview_ready: { label: 'Preview', color: 'bg-white/90 text-primary' },
+  email_ready: { label: 'Email Ready', color: 'bg-white/90 text-primary' },
+  approved: { label: 'Approved', color: 'bg-white/90 text-primary' },
+  live: { label: 'Live', color: 'bg-white/90 text-primary' },
+  failed: { label: 'Failed', color: 'bg-error text-on-error' }
 };
 
-const statusLabels: Record<string, string> = {
-  draft: 'Draft',
-  generating: 'Generating...',
-  preview_ready: 'Preview Ready',
-  email_ready: 'Email Ready',
-  approved: 'Approved',
-  live: 'Live',
-  failed: 'Failed'
+const themeImages: Record<string, string> = {
+  luxury_gold: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBRBqHxuMQLl522QOmlGrL9x3bANbx9wDf1mdgGPlgYfTMdmn1lNaTGsGG1IvKA20BW_2j_zp-LRA1Wge2FX8W_9soCXrUg7VCv1JCXtHzkY8iSSCsCdIxX8Sn4f935tB1CpfbgQKauQbxifEmTIL2Zn-xsUtzQuIno_p-aqWpBc4ExahinyWZRRVUZgm6int4wXDKgylFtAL4rlT-zspuYtXPflVXedjMCgX0EI8kskVWElGJHxWmExupW1ffyC8APz6gEXuYwHLI',
+  festive_red: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAFj3s1Lg-nB_uRfAPZ6uLDRTgkoSnw0_japaDC68mxVPALBv-ANKzjFZLoDEnsudst6sdKJJpn2G0EsbfStbWo8EIgz_GVh1wdIxCYIxQQ1bJJ_OKEnpkULU7PFeGvuI-k-f281uMxrgUmZMOwaA0Rj9U49w5Pzx3wkU5hV5QACeox5ZX-li71xYZOT06g2KLaHMuxyl0T0nydxtqSnPaOT54N-h9fcrXR3g1nfime1jI9gkQO6S-2TBD5pdpql7HFAr9jip1Bh08',
+  modern_black: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBDBP4BrTyi2GcMPBop8amdkt4v-nIeZrjS6-XLaEAF-UfcGSr-QzBO4OJHx4CvAOTNYY3JrM9cA_FILjRpTxRmxpGzk0N0SVZrVQEVUlQdqrzRT_xZsUMJ92pOCle6OFvWVGVHEiG47llaaujFUvkuBDOcUAqbSYi1hHFKQEpMVL83ofmlspEPk8sUM-Of37AxWYBC6atL35ESMaaNbHoZf0WgpgZjg-L2yKE21l2ApPZsRKcyrozZpbzwKlsp8S0bbXeFtCDo80Y',
+  classic_casino: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU4kOdI4foPxzBZPaJWeU4e6hgpb1ob2ELtVg_0vSv-_f1j9pA2_7_M-KiZHBQZQbUWmXjvVyoBbMxzdNcIOy-GFE6vxya-o-yNe6gH0LOF52hHIkxVjPcuYCg7m46wtFSLdK6YnVVC2N29HsTwPrSuxK9HoNvrzzO5TnpSVpJLK6EEAIaQ-vHFxZmzDXlZxS8Jm6YOYOWbQoA6MfbBnQHLVTec7iDytDDtxxYBVZU0LIjInSiM0UQgFxMewJLa06nErZ-0FMZyfs'
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,100 +56,237 @@ export default function Dashboard() {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">Error: {error}</p>
-        <button 
-          onClick={fetchCampaigns}
-          className="mt-2 text-red-600 underline"
-        >
-          Retry
-        </button>
-      </div>
+      <Layout activeStep="performance">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="text-on-surface-variant text-sm">Loading campaigns...</p>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Campaign Dashboard</h1>
-        <p className="mt-2 text-gray-600">Manage your marketing campaigns</p>
-      </div>
+    <Layout activeStep="performance">
+      {/* Hero Section */}
+      <section className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
+        <div className="max-w-2xl">
+          <span className="text-tertiary-fixed-dim font-label text-[0.6875rem] uppercase tracking-[0.1em] font-bold mb-4 block">
+            Executive Performance Portal
+          </span>
+          <h1 className="text-[3.5rem] font-extrabold text-on-surface leading-[1.1] tracking-tight mb-4 font-headline">
+            Campaign Overview.
+          </h1>
+          <p className="text-on-surface-variant text-lg leading-relaxed max-w-lg">
+            Manage and orchestrate high-value marketing campaigns for your luxury properties and VIP customer tiers.
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => navigate('/campaign/create')} 
+            className="bg-primary text-on-primary px-8 py-4 rounded-xl font-bold flex items-center gap-3 shadow-2xl hover:scale-[1.02] transition-transform active:scale-[0.98] ease-[cubic-bezier(0.2,0,0,1)]"
+          >
+            <span className="material-symbols-outlined">add</span>
+            Create New Campaign
+          </button>
+        </div>
+      </section>
 
-      {campaigns.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-          </svg>
-          <h3 className="mt-2 text-lg font-medium text-gray-900">No campaigns yet</h3>
-          <p className="mt-1 text-gray-500">Get started by creating a new campaign.</p>
-          <div className="mt-6">
-            <a
-              href="/create"
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-secondary bg-primary hover:bg-yellow-500"
-            >
-              Create Campaign
-            </a>
+      {/* Stats Section */}
+      <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
+        <div className="md:col-span-2 bg-primary-container p-8 rounded-[2rem] flex flex-col justify-between h-64 overflow-hidden relative group">
+          <div className="relative z-10">
+            <span className="text-tertiary-fixed-dim font-bold text-xs uppercase tracking-widest">Total Campaigns</span>
+            <div className="text-[4rem] font-extrabold text-white mt-2 leading-none">
+              {campaigns.length}<span className="text-lg opacity-50 ml-1">active</span>
+            </div>
+          </div>
+          <div className="relative z-10 flex items-center gap-2 text-white/70 font-medium">
+            <span className="material-symbols-outlined text-tertiary-fixed-dim" style={{fontVariationSettings: "'FILL' 1"}}>trending_up</span>
+            AI-Powered Campaign Generation
           </div>
         </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {campaigns.map((campaign) => (
-            <div key={campaign.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[campaign.status] || statusColors.draft}`}>
-                    {statusLabels[campaign.status] || campaign.status}
+        <div className="bg-surface-container-low p-8 rounded-[2rem] flex flex-col justify-between h-64 border-none">
+          <div>
+            <span className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Live Campaigns</span>
+            <div className="text-[2rem] font-bold text-on-surface mt-2">
+              {campaigns.filter(c => c.status === 'live').length}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {['language', 'mail', 'share'].map(icon => (
+              <div key={icon} className="p-2 bg-secondary-container rounded-lg">
+                <span className="material-symbols-outlined text-on-secondary-container">{icon}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-surface-container-lowest p-8 rounded-[2rem] flex flex-col justify-between h-64 border-none shadow-sm group hover:bg-white transition-colors duration-300">
+          <div>
+            <span className="text-on-surface-variant font-bold text-xs uppercase tracking-widest">Draft Campaigns</span>
+            <div className="text-[2rem] font-bold text-on-surface mt-2">
+              {campaigns.filter(c => c.status === 'draft' || c.status === 'preview_ready').length}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-on-surface-variant text-sm">
+            <span className="material-symbols-outlined text-[18px]">edit_note</span>
+            Ready for review
+          </div>
+        </div>
+      </section>
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-error-container border border-error/20 rounded-xl p-6 mb-8">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-error">error</span>
+            <p className="text-on-error-container font-medium">{error}</p>
+          </div>
+          <button 
+            onClick={fetchCampaigns}
+            className="mt-4 text-error font-bold text-sm flex items-center gap-2 hover:underline"
+          >
+            <span className="material-symbols-outlined text-sm">refresh</span> Retry
+          </button>
+        </div>
+      )}
+
+      {/* Campaign List Header */}
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="text-[1.75rem] font-bold tracking-tight text-on-surface font-headline">Active Portfolio</h2>
+        <div className="flex items-center gap-4 text-on-surface-variant text-sm font-medium">
+          <span className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors">
+            <span className="material-symbols-outlined text-[18px]">sort</span> Filter
+          </span>
+          <span className="w-[1px] h-4 bg-outline-variant/30"></span>
+          <span className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors">
+            <span className="material-symbols-outlined text-[18px]">view_column</span> View: Cards
+          </span>
+        </div>
+      </div>
+
+      {/* Campaign Cards */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {campaigns.map((campaign) => {
+          const status = statusConfig[campaign.status] || statusConfig.draft;
+          const image = themeImages[campaign.theme] || themeImages.luxury_gold;
+          
+          return (
+            <div 
+              key={campaign.id} 
+              className="bg-surface-container-lowest rounded-[2rem] overflow-hidden flex flex-col group transition-all duration-300 hover:scale-[1.01]"
+            >
+              <div className="h-48 w-full relative">
+                <img 
+                  className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-500" 
+                  src={image} 
+                  alt={campaign.campaign_name} 
+                />
+                <div className="absolute top-6 left-6 flex gap-2">
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm ${status.color}`}>
+                    {status.label}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    {new Date(campaign.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {campaign.campaign_name}
-                </h3>
-                
-                <p className="text-sm text-gray-600 mb-4">
-                  Target: {campaign.target_audience}
-                </p>
-                
-                <div className="flex space-x-2">
-                  {campaign.preview_url && (
-                    <a
-                      href={campaign.preview_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Preview →
-                    </a>
-                  )}
-                  {campaign.production_url && (
-                    <a
-                      href={campaign.production_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-green-600 hover:text-green-800"
-                    >
-                      Live Site →
-                    </a>
+                  {campaign.status === 'live' && (
+                    <span className="bg-tertiary-fixed-dim px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-tertiary shadow-sm">
+                      Priority
+                    </span>
                   )}
                 </div>
               </div>
+              <div className="p-8 flex flex-col flex-1">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold mb-1 group-hover:text-primary transition-colors font-headline">
+                      {campaign.campaign_name}
+                    </h3>
+                    <div className="flex items-center gap-2 text-on-surface-variant text-sm font-medium">
+                      <span className="material-symbols-outlined text-[16px]">location_on</span>
+                      {campaign.hotel_name || 'Grand Lisboa Palace'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mb-1">AUDIENCE</div>
+                    <div className="text-sm font-bold text-on-surface">{campaign.target_audience}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-6 border-t border-surface-container-low">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Timeline</span>
+                    <span className="text-sm font-medium text-on-surface">
+                      {campaign.start_date && campaign.end_date 
+                        ? `${formatDate(campaign.start_date)} — ${formatDate(campaign.end_date)}`
+                        : formatDate(campaign.created_at)
+                      }
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {campaign.preview_url && (
+                      <a 
+                        href={campaign.preview_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95"
+                      >
+                        Preview
+                      </a>
+                    )}
+                    {campaign.production_url && (
+                      <a 
+                        href={campaign.production_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all active:scale-95"
+                      >
+                        View Live
+                      </a>
+                    )}
+                    {!campaign.preview_url && !campaign.production_url && (
+                      <button className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95">
+                        Manage
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          ))}
+          );
+        })}
+        
+        {/* Create New Campaign Card */}
+        <div 
+          onClick={() => navigate('/campaign/create')} 
+          className="border-2 border-dashed border-outline-variant/30 rounded-[2rem] h-full min-h-[400px] flex items-center justify-center group cursor-pointer hover:border-primary/40 transition-all bg-surface-container-low/20"
+        >
+          <div className="flex flex-col items-center gap-4 text-on-surface-variant group-hover:text-primary transition-colors text-center">
+            <div className="p-6 rounded-full bg-white shadow-sm group-hover:shadow-md transition-all">
+              <span className="material-symbols-outlined text-[48px]">add_circle</span>
+            </div>
+            <span className="font-bold text-lg font-headline">Initiate New Journey</span>
+            <span className="text-sm max-w-[200px] opacity-60">Leverage AI to generate a strategic marketing campaign.</span>
+          </div>
         </div>
-      )}
-    </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-32 pt-16 border-t border-surface-container flex flex-col md:flex-row items-center justify-between gap-8 opacity-60">
+        <div className="text-sm font-medium">© 2024 Marketing Assistant. Enterprise Campaign Framework.</div>
+        <div className="flex items-center gap-8 text-sm font-bold uppercase tracking-[0.2em]">
+          <span className="hover:text-primary transition-colors cursor-pointer">Integrations</span>
+          <span className="hover:text-primary transition-colors cursor-pointer">Network</span>
+          <span className="hover:text-primary transition-colors cursor-pointer">Security</span>
+        </div>
+      </footer>
+    </Layout>
   );
 }

@@ -45,3 +45,11 @@ k8s/secret.yaml
 # Temporary files
 tmp/
 temp/
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Stitch template (reference only)
+stitch.zip
+stitch-template/
