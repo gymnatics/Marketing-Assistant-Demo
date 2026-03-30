@@ -1,4 +1,5 @@
 import React from 'react';
+import { CheckCircleIcon, RocketLaunchIcon, ArrowRightIcon, ArrowLeftIcon } from '@heroicons/react/24/solid';
 import { CampaignData, CampaignState } from '../../pages/CampaignCreate';
 
 interface CampaignWizardProps {
@@ -105,7 +106,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           disabled={!data.campaign_name || !data.campaign_description || !data.target_audience || !data.start_date || !data.end_date}
           className="px-6 py-2 bg-primary text-secondary font-medium rounded-lg hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue →
+          Continue <ArrowRightIcon className="inline h-4 w-4 ml-1" />
         </button>
       </div>
     </div>
@@ -142,7 +143,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           onClick={onBack}
           className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
         >
-          ← Back
+          <ArrowLeftIcon className="inline h-4 w-4 mr-1" /> Back
         </button>
         <button
           onClick={onNext}
@@ -155,7 +156,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
               Generating...
             </>
           ) : (
-            'Generate Landing Page →'
+            <>Generate Landing Page <ArrowRightIcon className="inline h-4 w-4 ml-1" /></>
           )}
         </button>
       </div>
@@ -188,7 +189,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           rel="noopener noreferrer"
           className="text-blue-600 hover:text-blue-800 text-sm"
         >
-          Open in new tab →
+          Open in new tab <ArrowRightIcon className="inline h-3 w-3 ml-1" />
         </a>
       )}
       
@@ -197,7 +198,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           onClick={onBack}
           className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
         >
-          ← Edit Theme
+          <ArrowLeftIcon className="inline h-4 w-4 mr-1" /> Edit Theme
         </button>
         <button
           onClick={onNext}
@@ -210,7 +211,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
               Preparing...
             </>
           ) : (
-            'Preview Email →'
+            <>Preview Email <ArrowRightIcon className="inline h-4 w-4 ml-1" /></>
           )}
         </button>
       </div>
@@ -261,14 +262,14 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           onClick={onBack}
           className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
         >
-          ← Back
+          <ArrowLeftIcon className="inline h-4 w-4 mr-1" /> Back
         </button>
         <button
           onClick={onNext}
           disabled={loading || !state.email_subject_en}
           className="px-6 py-2 bg-primary text-secondary font-medium rounded-lg hover:bg-yellow-500 disabled:opacity-50"
         >
-          Continue to Confirmation →
+          Continue to Confirmation <ArrowRightIcon className="inline h-4 w-4 ml-1" />
         </button>
       </div>
     </div>
@@ -320,7 +321,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
           onClick={onBack}
           className="px-6 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
         >
-          ← Back
+          <ArrowLeftIcon className="inline h-4 w-4 mr-1" /> Back
         </button>
         <button
           onClick={onNext}
@@ -333,7 +334,7 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
               Going Live...
             </>
           ) : (
-            '🚀 Go Live'
+            <><RocketLaunchIcon className="inline h-4 w-4 mr-1" /> Go Live</>
           )}
         </button>
       </div>
@@ -342,15 +343,17 @@ export default function CampaignWizard({ step, data, state, onChange, onNext, on
 
   const renderSuccessStep = () => (
     <div className="text-center space-y-6 py-8">
-      <div className="text-6xl">🎉</div>
+      <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100">
+        <CheckCircleIcon className="h-12 w-12 text-green-600" />
+      </div>
       <h2 className="text-3xl font-bold text-gray-900">Campaign is Live!</h2>
       <p className="text-gray-600">Your campaign has been deployed and emails have been sent.</p>
       
       <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-left max-w-md mx-auto">
         <p className="text-green-800 font-medium mb-2">Campaign Details:</p>
         <ul className="text-green-700 text-sm space-y-1">
-          <li>✓ Landing page deployed to production</li>
-          <li>✓ {state.customer_count || 0} emails sent (simulated)</li>
+          <li className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-2 text-green-600" /> Landing page deployed to production</li>
+          <li className="flex items-center"><CheckCircleIcon className="h-4 w-4 mr-2 text-green-600" /> {state.customer_count || 0} emails sent (simulated)</li>
         </ul>
         
         {state.production_url && (
