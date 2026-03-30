@@ -20,6 +20,7 @@ spec:
       containers:
         - name: mcp
           image: quay.io/rh-ee-dayeo/marketing-assistant:mongodb-mcp
+          imagePullPolicy: Always
           ports:
             - containerPort: 8090
           envFrom:

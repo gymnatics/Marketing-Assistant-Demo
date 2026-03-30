@@ -11,4 +11,4 @@ COPY services/mongodb-mcp/server.py .
 
 EXPOSE 8090
 
-CMD ["python", "server.py", "--transport", "http", "--port", "8090"]
+CMD ["python", "server.py", "--port", "8090"]

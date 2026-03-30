@@ -282,12 +282,15 @@ async def send_emails_node(state: CampaignState) -> CampaignState:
 
 # ── Workflow Builders ──
 
+def _check_failed(state: CampaignState) -> str:
+    return "end" if state.get("status") == "failed" else "continue"
+
 def build_landing_page_workflow():
     workflow = StateGraph(CampaignState)
     workflow.add_node("generate_landing_page", generate_landing_page_node)
     workflow.add_node("deploy_preview", deploy_preview_node)
     workflow.add_edge(START, "generate_landing_page")
-    workflow.add_edge("generate_landing_page", "deploy_preview")
+    workflow.add_conditional_edges("generate_landing_page", _check_failed, {"continue": "deploy_preview", "end": END})
     workflow.add_edge("deploy_preview", END)
     return workflow.compile()
 
@@ -296,7 +299,7 @@ def build_email_preview_workflow():
     workflow.add_node("retrieve_customers", retrieve_customers_node)
     workflow.add_node("generate_email", generate_email_node)
     workflow.add_edge(START, "retrieve_customers")
-    workflow.add_edge("retrieve_customers", "generate_email")
+    workflow.add_conditional_edges("retrieve_customers", _check_failed, {"continue": "generate_email", "end": END})
     workflow.add_edge("generate_email", END)
     return workflow.compile()
 
@@ -305,7 +308,7 @@ def build_go_live_workflow():
     workflow.add_node("deploy_production", deploy_production_node)
     workflow.add_node("send_emails", send_emails_node)
     workflow.add_edge(START, "deploy_production")
-    workflow.add_edge("deploy_production", "send_emails")
+    workflow.add_conditional_edges("deploy_production", _check_failed, {"continue": "send_emails", "end": END})
     workflow.add_edge("send_emails", END)
     return workflow.compile()
 
