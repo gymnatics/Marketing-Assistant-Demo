@@ -79,14 +79,24 @@ async def call_a2a_agent(agent_url: str, skill: str, params: dict) -> dict:
         client = A2AClient(httpx_client=httpx_client, url=agent_url)
         response = await client.send_message(request)
 
-    result_data = response.result
-    if hasattr(result_data, 'artifacts') and result_data.artifacts:
-        for artifact in result_data.artifacts:
+    resp = response.root
+    if hasattr(resp, 'error') and resp.error:
+        return {"status": "error", "error": f"A2A error: {resp.error.message}"}
+
+    task_result = resp.result if hasattr(resp, 'result') else None
+    if task_result and hasattr(task_result, 'artifacts') and task_result.artifacts:
+        for artifact in task_result.artifacts:
             for part in (artifact.parts or []):
+                text = None
                 if hasattr(part, 'root') and hasattr(part.root, 'text'):
-                    return json.loads(part.root.text)
+                    text = part.root.text
                 elif hasattr(part, 'text'):
-                    return json.loads(part.text)
+                    text = part.text
+                if text:
+                    try:
+                        return json.loads(text)
+                    except json.JSONDecodeError:
+                        return {"status": "success", "content": text}
 
     return {"status": "error", "error": "No artifact returned from agent"}
 

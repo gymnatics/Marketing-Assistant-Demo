@@ -26,25 +26,26 @@ class CreativeProducerExecutor(AgentExecutor):
             task = new_task(context.message)
             await event_queue.enqueue_event(task)
 
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
+        updater = TaskUpdater(event_queue, task.id, task.context_id)
 
         await updater.update_status(
             TaskState.working,
             message=new_agent_text_message(
-                f"Generating landing page for '{params.get('campaign_name', 'campaign')}'..."
+                f"Generating landing page for '{params.get('campaign_name', 'campaign')}'...",
+                task.context_id, task.id,
             ),
         )
 
         result = await self.agent.generate(params)
 
         result_json = json.dumps(result)
-        parts: list[Part] = [TextPart(text=result_json)]
+        parts: list[Part] = [Part(root=TextPart(text=result_json))]
 
         await updater.add_artifact(parts)
         await updater.update_status(
             TaskState.completed,
-            message=new_agent_text_message("Landing page generation complete."),
+            message=new_agent_text_message("Landing page generation complete.", task.context_id, task.id),
         )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        raise NotImplementedError("Cancel not supported for Creative Producer")
+        raise NotImplementedError("Cancel not supported")

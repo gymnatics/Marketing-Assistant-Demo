@@ -1,8 +1,5 @@
 """
-Delivery Manager A2A AgentExecutor bridge.
-
-Translates A2A protocol requests into DeliveryManagerAgent method calls
-and returns results as A2A artifacts.
+Delivery Manager A2A AgentExecutor - Bridge between a2a-sdk and business logic.
 """
 import json
 import traceback
@@ -11,10 +8,9 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState, Part, TextPart
-from a2a.utils import new_agent_text_message
+from a2a.utils import new_task, new_agent_text_message
 
 from agent import DeliveryManagerAgent
-
 
 SKILL_DISPATCH = {
     "generate_email": "generate_email",
@@ -25,77 +21,63 @@ SKILL_DISPATCH = {
 
 
 class DeliveryManagerExecutor(AgentExecutor):
-    """Bridges A2A protocol to DeliveryManagerAgent business logic."""
 
     def __init__(self):
         self.agent = DeliveryManagerAgent()
 
-    async def execute(
-        self,
-        context: RequestContext,
-        event_queue: EventQueue,
-    ) -> None:
-        updater = TaskUpdater(event_queue, context.task_id, context.context_id)
-        updater.start_work()
+    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+        task = context.current_task
+        if task is None:
+            task = new_task(context.message)
+            await event_queue.enqueue_event(task)
+
+        updater = TaskUpdater(event_queue, task.id, task.context_id)
 
         try:
             raw_input = context.get_user_input()
             params = json.loads(raw_input)
         except (json.JSONDecodeError, TypeError) as e:
-            updater.update_status(
+            await updater.update_status(
                 TaskState.failed,
-                message=new_agent_text_message(
-                    f"Invalid JSON input: {e}",
-                    context.task_id,
-                    context.context_id,
-                ),
+                message=new_agent_text_message(f"Invalid JSON input: {e}", task.context_id, task.id),
             )
             return
 
-        skill = params.get("skill", "")
+        skill = params.pop("skill", "")
         method_name = SKILL_DISPATCH.get(skill)
 
         if not method_name:
-            updater.update_status(
+            await updater.update_status(
                 TaskState.failed,
                 message=new_agent_text_message(
-                    f"Unknown skill: {skill}. "
-                    f"Available: {list(SKILL_DISPATCH.keys())}",
-                    context.task_id,
-                    context.context_id,
+                    f"Unknown skill: {skill}. Available: {list(SKILL_DISPATCH.keys())}",
+                    task.context_id, task.id,
                 ),
             )
             return
 
+        await updater.update_status(
+            TaskState.working,
+            message=new_agent_text_message(f"Executing {skill}...", task.context_id, task.id),
+        )
+
         try:
             method = getattr(self.agent, method_name)
-            result = await method(params.get("params", params))
+            result = await method(params)
 
             result_json = json.dumps(result)
-            parts: list[Part] = [TextPart(text=result_json)]
-            updater.add_artifact(parts)
-            updater.complete()
-
+            parts: list[Part] = [Part(root=TextPart(text=result_json))]
+            await updater.add_artifact(parts)
+            await updater.update_status(
+                TaskState.completed,
+                message=new_agent_text_message(f"{skill} completed.", task.context_id, task.id),
+            )
         except Exception as e:
             traceback.print_exc()
-            updater.update_status(
+            await updater.update_status(
                 TaskState.failed,
-                message=new_agent_text_message(
-                    f"Error executing {skill}: {e}",
-                    context.task_id,
-                    context.context_id,
-                ),
+                message=new_agent_text_message(f"Error executing {skill}: {e}", task.context_id, task.id),
             )
 
-    async def cancel(
-        self, context: RequestContext, event_queue: EventQueue
-    ) -> None:
-        updater = TaskUpdater(event_queue, context.task_id, context.context_id)
-        updater.update_status(
-            TaskState.canceled,
-            message=new_agent_text_message(
-                "Task cancelled.",
-                context.task_id,
-                context.context_id,
-            ),
-        )
+    async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
+        raise NotImplementedError("Cancel not supported")

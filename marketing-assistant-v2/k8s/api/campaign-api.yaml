@@ -20,6 +20,7 @@ spec:
       containers:
         - name: api
           image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-api
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
           envFrom:

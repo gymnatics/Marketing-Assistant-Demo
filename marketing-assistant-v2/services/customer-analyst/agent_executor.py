@@ -1,5 +1,5 @@
 """
-Customer Analyst A2A AgentExecutor - Bridges A2A SDK with business logic.
+Customer Analyst A2A AgentExecutor - Bridge between a2a-sdk and business logic.
 """
 import json
 import traceback
@@ -14,48 +14,42 @@ from agent import CustomerAnalystAgent
 
 
 class CustomerAnalystExecutor(AgentExecutor):
-    """A2A executor that delegates to CustomerAnalystAgent business logic."""
 
     def __init__(self):
         self.agent = CustomerAnalystAgent()
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        task = context.current_task or new_task(context.message)
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
+        task = context.current_task
+        if task is None:
+            task = new_task(context.message)
+            await event_queue.enqueue_event(task)
 
-        updater.start_work()
+        updater = TaskUpdater(event_queue, task.id, task.context_id)
+
+        await updater.update_status(
+            TaskState.working,
+            message=new_agent_text_message("Retrieving customer profiles...", task.context_id, task.id),
+        )
 
         try:
             user_input = context.get_user_input()
             params = json.loads(user_input)
-        except (json.JSONDecodeError, TypeError) as e:
-            error_msg = f"Invalid input: expected JSON with campaign_id, target_audience, limit. Error: {e}"
-            updater.update_status(
-                TaskState.failed,
-                new_agent_text_message(error_msg),
-            )
-            return
-
-        try:
             result = await self.agent.get_customers(params)
             result_json = json.dumps(result, ensure_ascii=False, default=str)
 
-            parts: list[Part] = [TextPart(text=result_json)]
-            updater.add_artifact(parts)
-            updater.complete()
-
+            parts: list[Part] = [Part(root=TextPart(text=result_json))]
+            await updater.add_artifact(parts)
+            await updater.update_status(
+                TaskState.completed,
+                message=new_agent_text_message("Customer retrieval complete.", task.context_id, task.id),
+            )
         except Exception:
             tb = traceback.format_exc()
             print(f"[Customer Analyst Executor] Error: {tb}")
-            updater.update_status(
+            await updater.update_status(
                 TaskState.failed,
-                new_agent_text_message(f"Customer retrieval failed: {tb}"),
+                message=new_agent_text_message(f"Customer retrieval failed: {tb}", task.context_id, task.id),
             )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        task = context.current_task or new_task(context.message)
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
-        updater.update_status(
-            TaskState.canceled,
-            new_agent_text_message("Customer retrieval cancelled"),
-        )
+        raise NotImplementedError("Cancel not supported")
