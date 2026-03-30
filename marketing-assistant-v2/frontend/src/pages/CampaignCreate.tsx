@@ -290,6 +290,7 @@ export default function CampaignCreate() {
     setAgentStatus('Creative Producer: Generating landing page...');
     startSSE(campaignId);
     startProgressSimulation();
+    await new Promise(r => setTimeout(r, 1500));
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/generate`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start generation');
@@ -321,6 +322,7 @@ export default function CampaignCreate() {
     setAgentStatus('Customer Analyst: Retrieving customers...');
     startSSE(campaignState.id);
     startProgressSimulation();
+    await new Promise(r => setTimeout(r, 1500));
     try {
       const response = await fetch(`/api/campaigns/${campaignState.id}/preview-email`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start email preview');
@@ -357,6 +359,7 @@ export default function CampaignCreate() {
     setAgentStatus('Delivery Manager: Deploying to production...');
     startSSE(campaignState.id);
     startProgressSimulation();
+    await new Promise(r => setTimeout(r, 1500));
     try {
       const response = await fetch(`/api/campaigns/${campaignState.id}/approve`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start deployment');
