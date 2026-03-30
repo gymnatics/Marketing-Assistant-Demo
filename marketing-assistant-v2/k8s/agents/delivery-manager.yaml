@@ -26,6 +26,7 @@ spec:
       containers:
         - name: agent
           image: quay.io/rh-ee-dayeo/marketing-assistant:delivery-manager
+          imagePullPolicy: Always
           ports:
             - containerPort: 8083
           envFrom:
