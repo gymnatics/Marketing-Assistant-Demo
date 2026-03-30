@@ -275,7 +275,7 @@ export default function Dashboard() {
 
       {/* Footer */}
       <footer className="mt-32 pt-16 border-t border-surface-container flex flex-col md:flex-row items-center justify-between gap-8 opacity-60">
-        <div className="text-sm font-medium">© 2024 Marketing Assistant. Enterprise Campaign Framework.</div>
+        <div className="text-sm font-medium">© 2024 Marketing Assistant. Powered by OpenShift AI.</div>
         <div className="flex items-center gap-8 text-sm font-bold uppercase tracking-[0.2em]">
           <span className="hover:text-primary transition-colors cursor-pointer">Integrations</span>
           <span className="hover:text-primary transition-colors cursor-pointer">Network</span>

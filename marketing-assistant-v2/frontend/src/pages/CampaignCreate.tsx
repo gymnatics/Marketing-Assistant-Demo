@@ -197,9 +197,7 @@ export default function CampaignCreate() {
       } catch (e) {}
     };
     
-    es.onerror = () => {
-      es.close();
-    };
+    es.onerror = () => {};
   }, []);
 
   const stopSSE = useCallback(() => {
