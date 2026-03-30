@@ -21,39 +21,37 @@ CODE_MODEL_TOKEN = os.environ.get("CODE_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 
 
-CODER_SYSTEM_PROMPT = """You are an expert frontend developer specializing in luxury marketing landing pages for high-end casinos and resorts in Macau.
+CODER_SYSTEM_PROMPT = """You are a world-class UI/UX Designer and Frontend Engineer specializing in "The Editorial Architect" aesthetic — a design style that prioritizes high-end typography, sophisticated whitespace, and a luxury brand feel. Your goal is to generate high-fidelity, responsive HTML/CSS for marketing landing pages that cater to C-suite executives.
 
-Your task is to generate a complete, responsive, single-page HTML file with embedded CSS and JavaScript for a marketing campaign. The result must feel luxurious, exclusive, and visually impressive.
+## Visual Identity Principles:
+1. **Typography First**: Use 'Manrope' as the primary typeface via Google Fonts CDN. Headlines should be bold, high-contrast, and have tight letter-spacing. Body text should be airy and legible with 'Inter' font.
+2. **The Power of Negative Space**: Use generous margins and padding to create a sense of exclusivity and focus. Never cram content.
+3. **Controlled Color Palette**: Use the provided theme colors. Accents should be used sparingly for high impact.
+4. **Imagery as Architecture**: Use CSS gradients and geometric patterns to create sophisticated visual depth. Include subtle parallax or scale-in effects.
+5. **Interactive Precision**: Buttons should have slightly rounded corners. Use subtle hover states (opacity changes, slight tonal shifts, scale transforms) rather than heavy shadows.
 
-## Design Requirements:
-1. Create a visually stunning, mobile-responsive landing page that feels luxurious and exclusive
-2. Use the provided color scheme consistently throughout with elegant gradients
-3. Include smooth CSS animations, hover effects, and scroll-triggered fade-ins
-4. Use modern CSS features: flexbox, grid, CSS variables, backdrop-filter
-5. Add a prominent, animated call-to-action button with hover glow effects
-6. Include a QR code section using: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:160px;height:160px;border-radius:12px;">
-7. Support both English and Chinese text with elegant bilingual typography
-8. Use Google Fonts (e.g., Playfair Display for headings, Inter for body)
-9. Include subtle background effects: animated gradients, particle effects, or geometric patterns
-10. Add decorative elements: gold borders, subtle shadows, glass-morphism cards
+## Structural Requirements:
+- **Sticky Navigation**: A slim, translucent top bar with the hotel/casino name and a primary CTA button.
+- **Hero Section**: A powerful "Editorial Headline" with the campaign name, followed by a concise value proposition. Use an animated gradient or geometric pattern background.
+- **Narrative Flow**: Use single-column text blocks for the campaign philosophy and multi-column grids for details/benefits.
+- **Social Proof/Exclusivity**: A dedicated section for "Invitation Tiers" or "Limited Availability" to create urgency and prestige.
+- **QR Code Section**: Include a QR code for mobile access using: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code">
+- **Footer**: Hotel/casino branding with contact information.
 
-## Page Sections (in order):
-1. Hero section with campaign headline, tagline, and a stunning animated gradient/pattern background
-2. Campaign details section explaining the offer with elegant typography and icons
-3. Benefits/features section with visual cards (use CSS icons or Unicode symbols)
-4. Campaign dates prominently displayed with a countdown-style design
-5. Call-to-action section with a prominent, animated button
-6. QR code section for mobile access
-7. Footer with hotel/casino branding and contact info
+## Theme Presets (Apply based on the theme provided):
+- **Luxury Gold**: Slate-950 background, Amber-500/600 accents, warm gold tones throughout.
+- **Festive Red**: Deep Maroon/Dark Red backgrounds, Silver/White accents, festive yet professional luxury.
+- **Modern Black**: Pure Black/Slate-950 backgrounds, Neutral Gray/White accents, ultra-minimalist.
+- **Classic Casino**: Deep Forest Green/Emerald backgrounds, Gold accents, traditional high-stakes elegance.
 
-## Technical Requirements:
-- Single HTML file with embedded <style> and <script> tags
-- NO external dependencies except Google Fonts CDN
-- Mobile-first responsive design with media queries
-- Smooth scroll behavior
-- CSS @keyframes animations for hero background and element entrances
-- High contrast for readability
-- Minimum 800 lines of well-structured HTML/CSS/JS
+## Technical Constraints:
+- Single self-contained HTML file with embedded <style> and <script> tags.
+- Use Tailwind CSS via CDN (https://cdn.tailwindcss.com) for all styling.
+- Include Google Fonts CDN for Manrope and Inter.
+- Ensure all sections are fully responsive with mobile-first design.
+- Use Semantic HTML5 tags.
+- Include CSS animations: fade-ins on scroll, animated gradient backgrounds, hover transforms.
+- Support both English and Chinese text.
 
 ## Output Format:
 Return ONLY the complete HTML code, starting with <!DOCTYPE html> and ending with </html>.
@@ -94,43 +92,38 @@ async def generate_html_with_streaming(
     if start_date and end_date:
         date_info = f"\n- Campaign Period: {start_date} to {end_date}"
 
-    user_prompt = f"""Create a visually impressive luxury marketing landing page with the following details:
+    user_prompt = f"""Create an Editorial Architect-style landing page for a luxury casino marketing campaign.
 
-## Campaign Information:
+## Campaign Details:
 - **Campaign Name:** {campaign_name}
 - **Description:** {campaign_description}
 - **Hotel/Casino:** {hotel_name}
-- **Theme:** {theme_config['name']}{date_info}
+- **Selected Theme:** {theme_config['name']}{date_info}
 
-## Color Scheme (use consistently with gradients):
-- Primary Color: {theme_config['primary_color']}
-- Secondary Color: {theme_config['secondary_color']}
-- Accent Color: {theme_config['accent_color']}
-- Background Color: {theme_config['background']}
-- Text Color: {theme_config['text_color']}
-- Button Color: {theme_config['button_color']}
-- Button Text Color: {theme_config['button_text']}
+## Theme Colors:
+- Primary: {theme_config['primary_color']}
+- Secondary: {theme_config['secondary_color']}
+- Accent: {theme_config['accent_color']}
+- Background: {theme_config['background']}
+- Text: {theme_config['text_color']}
+- Button: {theme_config['button_color']}
+- Button Text: {theme_config['button_text']}
 
-## Page Sections to Create:
-1. Hero section with campaign headline, a compelling tagline, and a stunning animated gradient background using the primary and secondary colors
-2. Campaign details section explaining the offer with elegant typography and decorative dividers
-3. Display the campaign dates prominently: **{start_date} to {end_date}** — style these as an eye-catching banner or countdown-style element
-4. Benefits/features section with 3-4 visual cards (use Unicode icons like ★ ◆ ♠ ♦ or CSS-drawn icons)
-5. Call-to-action section with a large, animated button with hover glow effects
-6. QR code section with: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:160px;height:160px;border-radius:12px;">
-7. Footer with {hotel_name} branding, address, and a "Contact Us" link
+## Required Sections:
+1. **Sticky Nav** — translucent top bar with "{hotel_name}" branding and a "Request Access" CTA button
+2. **Hero Section** — Large editorial headline with "{campaign_name}" and a compelling one-line value proposition beneath. Use an animated gradient or geometric pattern background with the theme colors.
+3. **The Offer** — Single-column narrative block explaining the campaign: {campaign_description}. Use generous whitespace and elegant typography.
+4. **Campaign Dates** — Display **{start_date} to {end_date}** prominently as an exclusive "Limited Window" banner or countdown-style element.
+5. **Curated Benefits** — Multi-column grid (3-4 cards) highlighting key benefits. Use subtle icons or decorative elements.
+6. **Invitation Tier / Exclusivity** — A section conveying urgency and prestige (e.g., "Limited to Select Members", "By Invitation Only").
+7. **Call to Action** — Large, prominent CTA button with hover animation.
+8. **QR Code** — Mobile access section with: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code">
+9. **Footer** — {hotel_name} branding, address line, and contact link.
 
 ## Language:
-- Primary text in English with elegant luxury copywriting
-- Include Chinese (中文) translations for key headings and the CTA
-- Hotel name: {hotel_name}
-
-## Style Notes:
-- Make it feel like a 5-star resort invitation — luxurious, exclusive, premium
-- Use CSS animations: fade-ins on scroll, animated gradient backgrounds, hover transforms
-- Glass-morphism cards with backdrop-filter where appropriate
-- Gold/metallic accents if the theme supports it
-- Minimum 800 lines of polished HTML/CSS/JS
+- Primary text in English with luxury editorial copywriting
+- Include Chinese (中文) translations for the hero headline and CTA button
+- Use the ACTUAL campaign dates ({start_date} to {end_date}), never placeholders
 
 Generate the complete HTML file now:"""
 
