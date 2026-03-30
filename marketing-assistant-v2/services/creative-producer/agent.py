@@ -21,31 +21,43 @@ CODE_MODEL_TOKEN = os.environ.get("CODE_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 
 
-CODER_SYSTEM_PROMPT = """You are an expert frontend developer specializing in luxury casino marketing landing pages.
+CODER_SYSTEM_PROMPT = """You are an expert frontend developer specializing in luxury marketing landing pages for high-end casinos and resorts in Macau.
 
-Your task is to generate a complete, self-contained HTML page with embedded CSS and JavaScript.
+Your task is to generate a complete, responsive, single-page HTML file with embedded CSS and JavaScript for a marketing campaign. The result must feel luxurious, exclusive, and visually impressive.
 
-## Requirements:
-1. Create a visually stunning, mobile-responsive landing page
-2. Use the provided color scheme and theme
-3. Include smooth animations and transitions
-4. Add a prominent call-to-action button
-5. Include a QR code section using this URL for the image: https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CAMPAIGN_URL (replace CAMPAIGN_URL with the actual campaign URL if provided, otherwise use a placeholder)
-6. Support both English and Chinese text
-7. Use elegant typography (Google Fonts)
-8. Include subtle background effects (gradients, patterns)
+## Design Requirements:
+1. Create a visually stunning, mobile-responsive landing page that feels luxurious and exclusive
+2. Use the provided color scheme consistently throughout with elegant gradients
+3. Include smooth CSS animations, hover effects, and scroll-triggered fade-ins
+4. Use modern CSS features: flexbox, grid, CSS variables, backdrop-filter
+5. Add a prominent, animated call-to-action button with hover glow effects
+6. Include a QR code section using: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:160px;height:160px;border-radius:12px;">
+7. Support both English and Chinese text with elegant bilingual typography
+8. Use Google Fonts (e.g., Playfair Display for headings, Inter for body)
+9. Include subtle background effects: animated gradients, particle effects, or geometric patterns
+10. Add decorative elements: gold borders, subtle shadows, glass-morphism cards
+
+## Page Sections (in order):
+1. Hero section with campaign headline, tagline, and a stunning animated gradient/pattern background
+2. Campaign details section explaining the offer with elegant typography and icons
+3. Benefits/features section with visual cards (use CSS icons or Unicode symbols)
+4. Campaign dates prominently displayed with a countdown-style design
+5. Call-to-action section with a prominent, animated button
+6. QR code section for mobile access
+7. Footer with hotel/casino branding and contact info
 
 ## Technical Requirements:
-- Single HTML file with embedded <style> and <script>
-- No external dependencies except Google Fonts
-- Mobile-first responsive design
+- Single HTML file with embedded <style> and <script> tags
+- NO external dependencies except Google Fonts CDN
+- Mobile-first responsive design with media queries
 - Smooth scroll behavior
-- Animated elements on scroll
+- CSS @keyframes animations for hero background and element entrances
 - High contrast for readability
+- Minimum 800 lines of well-structured HTML/CSS/JS
 
 ## Output Format:
 Return ONLY the complete HTML code, starting with <!DOCTYPE html> and ending with </html>.
-Do not include any explanation or markdown formatting."""
+Do not include any explanations, comments outside the code, or markdown code blocks."""
 
 
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
@@ -82,36 +94,45 @@ async def generate_html_with_streaming(
     if start_date and end_date:
         date_info = f"\n- Campaign Period: {start_date} to {end_date}"
 
-    user_prompt = f"""Create a luxury marketing landing page for:
+    user_prompt = f"""Create a visually impressive luxury marketing landing page with the following details:
 
-## Campaign Details:
-- Campaign Name: {campaign_name}
-- Description: {campaign_description}
-- Hotel/Casino: {hotel_name}{date_info}
+## Campaign Information:
+- **Campaign Name:** {campaign_name}
+- **Description:** {campaign_description}
+- **Hotel/Casino:** {hotel_name}
+- **Theme:** {theme_config['name']}{date_info}
 
-## Theme: {theme_config['name']}
+## Color Scheme (use consistently with gradients):
 - Primary Color: {theme_config['primary_color']}
 - Secondary Color: {theme_config['secondary_color']}
 - Accent Color: {theme_config['accent_color']}
-- Background: {theme_config['background']}
+- Background Color: {theme_config['background']}
 - Text Color: {theme_config['text_color']}
 - Button Color: {theme_config['button_color']}
-- Button Text: {theme_config['button_text']}
+- Button Text Color: {theme_config['button_text']}
 
-## Content Requirements:
-1. Hero section with campaign name and tagline
-2. Benefits/features section (3-4 items)
-3. Campaign dates prominently displayed: {start_date} to {end_date}
-4. Call-to-action button
-5. QR code section - use an img tag with src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" (the URL will be replaced after deployment)
-6. Footer with hotel name
+## Page Sections to Create:
+1. Hero section with campaign headline, a compelling tagline, and a stunning animated gradient background using the primary and secondary colors
+2. Campaign details section explaining the offer with elegant typography and decorative dividers
+3. Display the campaign dates prominently: **{start_date} to {end_date}** — style these as an eye-catching banner or countdown-style element
+4. Benefits/features section with 3-4 visual cards (use Unicode icons like ★ ◆ ♠ ♦ or CSS-drawn icons)
+5. Call-to-action section with a large, animated button with hover glow effects
+6. QR code section with: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:160px;height:160px;border-radius:12px;">
+7. Footer with {hotel_name} branding, address, and a "Contact Us" link
 
 ## Language:
-- Primary text in English
-- Include Chinese translations where appropriate
+- Primary text in English with elegant luxury copywriting
+- Include Chinese (中文) translations for key headings and the CTA
 - Hotel name: {hotel_name}
 
-Generate the complete HTML page now:"""
+## Style Notes:
+- Make it feel like a 5-star resort invitation — luxurious, exclusive, premium
+- Use CSS animations: fade-ins on scroll, animated gradient backgrounds, hover transforms
+- Glass-morphism cards with backdrop-filter where appropriate
+- Gold/metallic accents if the theme supports it
+- Minimum 800 lines of polished HTML/CSS/JS
+
+Generate the complete HTML file now:"""
 
     url = f"{CODE_MODEL_ENDPOINT}/chat/completions"
     headers = {
