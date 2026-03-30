@@ -37,10 +37,14 @@ Thumbs.db
 
 # Kubernetes secrets
 k8s/secret.yaml
+**/k8s/secret.yaml
+**/secret.yaml
 
 # Build artifacts
 *.tar
 *.gz
+build/
+**/build/
 
 # Temporary files
 tmp/
