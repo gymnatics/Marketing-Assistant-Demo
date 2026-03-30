@@ -2,11 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Copy and install requirements
+COPY services/delivery-manager/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ../../shared /app/shared
-COPY agent.py .
+# Copy shared models
+COPY shared/ /app/shared/
+
+# Copy agent code
+COPY services/delivery-manager/agent.py .
 
 EXPOSE 8083
 

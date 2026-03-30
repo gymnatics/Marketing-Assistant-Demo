@@ -2,10 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Copy and install requirements
+COPY services/mongodb-mcp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py .
+# Copy server code
+COPY services/mongodb-mcp/server.py .
 
 EXPOSE 8090
 
