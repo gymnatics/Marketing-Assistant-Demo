@@ -673,13 +673,23 @@ export default function CampaignCreate() {
                     <h3 className="font-headline font-extrabold text-2xl mb-4">Landing Page Generated</h3>
                     <p className="text-on-surface-variant max-w-md mx-auto leading-relaxed">Your campaign environment is ready. Access it via the link below.</p>
                   </div>
-                  <div className="w-full max-w-xl">
+                  <div className="w-full max-w-xl space-y-6">
                     <div className="flex items-center gap-3 p-4 bg-surface rounded-xl border border-outline-variant/30">
                       <span className="material-symbols-outlined text-primary">link</span>
                       <span className="font-mono text-sm flex-grow text-left truncate">{state.preview_url}</span>
                       <a href={state.preview_url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-primary hover:text-white rounded-lg transition-all">
                         <span className="material-symbols-outlined text-sm">open_in_new</span>
                       </a>
+                    </div>
+                    <div className="flex flex-col items-center gap-4 pt-4">
+                      <div className="p-4 bg-white rounded-2xl shadow-xl border border-outline-variant/10">
+                        <img
+                          alt="Campaign QR Code"
+                          className="w-40 h-40"
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(state.preview_url || '')}`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Scan for Mobile Access</span>
                     </div>
                   </div>
                 </>
@@ -911,8 +921,21 @@ export default function CampaignCreate() {
           </div>
         </div>
 
-        {/* Right side - Achievement */}
+        {/* Right side - QR Code + Achievement */}
         <div className="col-span-12 lg:col-span-5 space-y-8">
+          {campaignState.production_url && (
+            <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-black/[0.03] flex flex-col items-center justify-center">
+              <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-6 font-headline">Campaign QR Code</h3>
+              <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
+                <img
+                  alt="Production QR Code"
+                  className="w-48 h-48"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(campaignState.production_url)}`}
+                />
+              </div>
+              <p className="text-sm text-center text-on-surface-variant font-medium leading-relaxed max-w-[200px]">Scan for instant mobile access</p>
+            </div>
+          )}
           <div className="bg-surface-container-high p-8 rounded-xl text-center">
             <span className="text-[10px] font-bold uppercase text-on-surface-variant/60 tracking-widest block mb-4">Milestone Achieved</span>
             <div className="flex justify-center mb-4">

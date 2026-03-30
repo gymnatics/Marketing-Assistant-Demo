@@ -30,7 +30,7 @@ Your task is to generate a complete, self-contained HTML page with embedded CSS 
 2. Use the provided color scheme and theme
 3. Include smooth animations and transitions
 4. Add a prominent call-to-action button
-5. Include QR code placeholder area
+5. Include a QR code section using this URL for the image: https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CAMPAIGN_URL (replace CAMPAIGN_URL with the actual campaign URL if provided, otherwise use a placeholder)
 6. Support both English and Chinese text
 7. Use elegant typography (Google Fonts)
 8. Include subtle background effects (gradients, patterns)
@@ -103,7 +103,7 @@ async def generate_html_with_streaming(
 2. Benefits/features section (3-4 items)
 3. Campaign dates prominently displayed: {start_date} to {end_date}
 4. Call-to-action button
-5. QR code placeholder section
+5. QR code section - use an img tag with src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" (the URL will be replaced after deployment)
 6. Footer with hotel name
 
 ## Language:
