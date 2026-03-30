@@ -22,6 +22,7 @@ export interface CampaignState {
   email_subject_zh?: string;
   email_body_zh?: string;
   customer_count?: number;
+  customer_list?: Array<{name: string; name_en?: string; email: string; tier: string}>;
   error?: string;
 }
 
@@ -734,19 +735,17 @@ export default function CampaignCreate() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/10 flex flex-col justify-between">
-                  <div>
-                    <p className="text-[10px] font-label text-on-surface-variant uppercase mb-1 tracking-wider">Subject Line</p>
-                    <p className="text-sm font-semibold leading-relaxed">
-                      {emailLang === 'en' ? (campaignState.email_subject_en || 'Loading...') : (campaignState.email_subject_zh || 'Loading...')}
-                    </p>
-                  </div>
-                </div>
+              <div className="space-y-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/10">
-                  <p className="text-[10px] font-label text-on-surface-variant uppercase mb-2 tracking-wider">Email Body (Preview)</p>
+                  <p className="text-[10px] font-label text-on-surface-variant uppercase mb-1 tracking-wider">Subject Line</p>
+                  <p className="text-base font-semibold leading-relaxed">
+                    {emailLang === 'en' ? (campaignState.email_subject_en || 'Loading...') : (campaignState.email_subject_zh || 'Loading...')}
+                  </p>
+                </div>
+                <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10">
+                  <p className="text-[10px] font-label text-on-surface-variant uppercase mb-3 tracking-wider">Email Body</p>
                   <div
-                    className="text-xs text-on-surface-variant leading-relaxed"
+                    className="text-sm text-on-surface leading-relaxed prose prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ __html: emailLang === 'en' ? (campaignState.email_body_en || 'Loading...') : (campaignState.email_body_zh || 'Loading...') }}
                   />
                 </div>
@@ -764,7 +763,29 @@ export default function CampaignCreate() {
                 <h3 className="font-headline font-bold text-lg">Recipient Pool</h3>
                 <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-[0.75rem] text-xs font-bold">{campaignState.customer_count} Total</span>
               </div>
-              <button className="w-full py-2 text-xs font-bold border-2 border-outline-variant/30 rounded-xl hover:bg-surface-container-high transition-colors">Edit Audience</button>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {(campaignState.customer_list || []).slice(0, 10).map((customer, i) => (
+                  <div key={i} className={`flex items-center justify-between p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/10 ${i >= 5 ? 'opacity-70' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold">
+                        {(customer.name_en || customer.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">{customer.name_en || customer.name}</p>
+                        <p className="text-[10px] text-on-surface-variant">{customer.email}</p>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter ${
+                      customer.tier === 'platinum' ? 'text-tertiary-fixed-dim bg-primary-container' :
+                      customer.tier === 'diamond' ? 'text-blue-500 bg-blue-50' :
+                      'text-slate-500 bg-slate-200'
+                    }`}>{customer.tier}</span>
+                  </div>
+                ))}
+                {(campaignState.customer_count || 0) > 10 && (
+                  <p className="text-center text-[10px] text-on-surface-variant pt-1">+{(campaignState.customer_count || 0) - 10} more recipients</p>
+                )}
+              </div>
             </div>
           )}
 

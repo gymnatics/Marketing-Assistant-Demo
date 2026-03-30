@@ -14,7 +14,10 @@ const TopNavBar: React.FC = () => {
   return (
     <header className="bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl font-headline antialiased fixed top-0 z-50 w-full px-12 h-20 border-b border-slate-200/50 dark:border-slate-800/50 flex justify-between items-center">
       <div className="flex items-center gap-8">
-        <Link to="/" className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">Marketing Assistant</Link>
+        <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
+          <img src="/logo.png" alt="Logo" className="h-7 w-7" />
+          Marketing Assistant
+        </Link>
         <nav className="hidden md:flex gap-6">
           <Link 
             to="/" 
@@ -57,7 +60,7 @@ const SideNavBar: React.FC<SideNavBarProps> = ({ activeStep = '', campaignName }
   return (
     <aside className="fixed left-0 top-0 h-full w-72 bg-slate-100 dark:bg-slate-900 border-r border-slate-200/50 dark:border-slate-800/50 flex flex-col p-6 gap-8 z-40 pt-28">
       <div className="flex flex-col gap-1">
-        <h2 className="text-slate-900 dark:text-slate-50 font-bold text-xl leading-none font-headline">Marketing Assistant</h2>
+        <h2 className="text-slate-900 dark:text-slate-50 font-bold text-xl leading-none font-headline">Campaign Wizard</h2>
         <p className="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">
           {campaignName ? `Current: ${campaignName}` : 'Campaign Manager'}
         </p>
