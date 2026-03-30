@@ -185,7 +185,8 @@ export default function Dashboard() {
           return (
             <div 
               key={campaign.id} 
-              className="bg-surface-container-lowest rounded-[2rem] overflow-hidden flex flex-col group transition-all duration-300 hover:scale-[1.01]"
+              onClick={() => navigate(`/campaign/${campaign.id}`)}
+              className="bg-surface-container-lowest rounded-[2rem] overflow-hidden flex flex-col group transition-all duration-300 hover:scale-[1.01] cursor-pointer"
             >
               <div className="h-48 w-full relative">
                 <img 
@@ -231,32 +232,25 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    {campaign.preview_url && (
-                      <a 
-                        href={campaign.preview_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95"
-                      >
-                        Preview
-                      </a>
-                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/campaign/${campaign.id}`); }}
+                      className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all active:scale-95"
+                    >
+                      {campaign.status === 'live' ? 'View Campaign' : 
+                       campaign.status === 'preview_ready' || campaign.status === 'email_ready' ? 'Continue' :
+                       campaign.status === 'generating' ? 'View Progress' : 'Manage'}
+                    </button>
                     {campaign.production_url && (
                       <a 
                         href={campaign.production_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-all active:scale-95"
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-surface-container-high transition-all active:scale-95 flex items-center gap-1"
                       >
-                        View Live
+                        <span className="material-symbols-outlined text-[16px]">open_in_new</span> Live
                       </a>
                     )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/campaign/${campaign.id}`); }}
-                      className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95"
-                    >
-                      Manage
-                    </button>
                   </div>
                 </div>
               </div>
