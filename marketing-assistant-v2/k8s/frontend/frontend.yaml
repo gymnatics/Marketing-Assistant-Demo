@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-frontend:latest
+          image: quay.io/rh-ee-dayeo/marketing-assistant:frontend
           ports:
             - containerPort: 8080
           resources:
@@ -47,6 +47,8 @@ kind: Route
 metadata:
   name: marketing-assistant-v2
   namespace: marketing-assistant-v2
+  annotations:
+    haproxy.router.openshift.io/timeout: 300s
 spec:
   to:
     kind: Service

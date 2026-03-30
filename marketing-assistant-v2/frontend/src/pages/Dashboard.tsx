@@ -251,11 +251,12 @@ export default function Dashboard() {
                         View Live
                       </a>
                     )}
-                    {!campaign.preview_url && !campaign.production_url && (
-                      <button className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95">
-                        Manage
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/campaign/${campaign.id}`); }}
+                      className="bg-surface-container px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary hover:text-on-primary transition-all active:scale-95"
+                    >
+                      Manage
+                    </button>
                   </div>
                 </div>
               </div>

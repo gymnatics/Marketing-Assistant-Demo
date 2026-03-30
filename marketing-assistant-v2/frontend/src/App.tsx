@@ -16,6 +16,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/campaign/create" element={<CampaignCreate />} />
+        <Route path="/campaign/:campaignId" element={<CampaignCreate />} />
         <Route path="/create" element={<Navigate to="/campaign/create" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

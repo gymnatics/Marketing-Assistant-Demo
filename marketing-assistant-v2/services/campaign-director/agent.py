@@ -6,9 +6,10 @@ with specialized agents (Creative Producer, Customer Analyst, Delivery Manager).
 """
 import os
 import uuid
+import asyncio
 import httpx
 from typing import TypedDict, Annotated, List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import operator
@@ -425,6 +426,109 @@ def build_go_live_workflow():
     return workflow.compile()
 
 
+async def _run_landing_page_workflow(campaign_id: str, campaign):
+    """Background task: generate landing page and deploy preview."""
+    try:
+        initial_state: CampaignState = {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.campaign_name,
+            "campaign_description": campaign.campaign_description,
+            "hotel_name": campaign.hotel_name,
+            "target_audience": campaign.target_audience,
+            "theme": campaign.theme,
+            "start_date": campaign.start_date,
+            "end_date": campaign.end_date,
+            "status": "generating",
+            "landing_page_html": "", "preview_url": "", "production_url": "",
+            "email_subject_en": "", "email_body_en": "",
+            "email_subject_zh": "", "email_body_zh": "",
+            "customer_list": [], "customer_count": 0,
+            "error_message": "", "messages": []
+        }
+        workflow = build_landing_page_workflow()
+        final_state = await workflow.ainvoke(initial_state)
+        campaign.landing_page_html = final_state.get("landing_page_html", "")
+        campaign.preview_url = final_state.get("preview_url", "")
+        campaign.status = CampaignStatus(final_state.get("status", "preview_ready"))
+        campaign.error_message = final_state.get("error_message")
+    except Exception as e:
+        print(f"[Campaign Director] Landing page workflow error: {e}")
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = str(e)
+
+
+async def _run_email_preview_workflow(campaign_id: str, campaign):
+    """Background task: retrieve customers and generate emails."""
+    try:
+        initial_state: CampaignState = {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.campaign_name,
+            "campaign_description": campaign.campaign_description,
+            "hotel_name": campaign.hotel_name,
+            "target_audience": campaign.target_audience,
+            "theme": campaign.theme,
+            "start_date": campaign.start_date,
+            "end_date": campaign.end_date,
+            "status": campaign.status.value,
+            "landing_page_html": campaign.landing_page_html or "",
+            "preview_url": campaign.preview_url or "",
+            "production_url": campaign.production_url or "",
+            "email_subject_en": "", "email_body_en": "",
+            "email_subject_zh": "", "email_body_zh": "",
+            "customer_list": [], "customer_count": 0,
+            "error_message": "", "messages": []
+        }
+        workflow = build_email_preview_workflow()
+        final_state = await workflow.ainvoke(initial_state)
+        campaign.email_subject_en = final_state.get("email_subject_en", "")
+        campaign.email_body_en = final_state.get("email_body_en", "")
+        campaign.email_subject_zh = final_state.get("email_subject_zh", "")
+        campaign.email_body_zh = final_state.get("email_body_zh", "")
+        campaign.customer_list = [CustomerProfile(**c) for c in final_state.get("customer_list", [])]
+        campaign.customer_count = final_state.get("customer_count", 0)
+        campaign.status = CampaignStatus(final_state.get("status", "email_ready"))
+        campaign.error_message = final_state.get("error_message")
+    except Exception as e:
+        print(f"[Campaign Director] Email preview workflow error: {e}")
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = str(e)
+
+
+async def _run_go_live_workflow(campaign_id: str, campaign):
+    """Background task: deploy to production and send emails."""
+    try:
+        initial_state: CampaignState = {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.campaign_name,
+            "campaign_description": campaign.campaign_description,
+            "hotel_name": campaign.hotel_name,
+            "target_audience": campaign.target_audience,
+            "theme": campaign.theme,
+            "start_date": campaign.start_date,
+            "end_date": campaign.end_date,
+            "status": "approved",
+            "landing_page_html": campaign.landing_page_html or "",
+            "preview_url": campaign.preview_url or "",
+            "production_url": "",
+            "email_subject_en": campaign.email_subject_en or "",
+            "email_body_en": campaign.email_body_en or "",
+            "email_subject_zh": campaign.email_subject_zh or "",
+            "email_body_zh": campaign.email_body_zh or "",
+            "customer_list": [c.model_dump() for c in campaign.customer_list],
+            "customer_count": campaign.customer_count,
+            "error_message": "", "messages": []
+        }
+        workflow = build_go_live_workflow()
+        final_state = await workflow.ainvoke(initial_state)
+        campaign.production_url = final_state.get("production_url", "")
+        campaign.status = CampaignStatus(final_state.get("status", "live"))
+        campaign.error_message = final_state.get("error_message")
+    except Exception as e:
+        print(f"[Campaign Director] Go live workflow error: {e}")
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = str(e)
+
+
 @app.get("/.well-known/agent-card.json")
 async def get_agent_card():
     """Return agent capabilities for A2A discovery."""
@@ -495,42 +599,13 @@ async def invoke_skill(request: InvokeRequest):
         campaign = campaigns_store[campaign_id]
         campaign.status = CampaignStatus.GENERATING
         
-        initial_state: CampaignState = {
-            "campaign_id": campaign_id,
-            "campaign_name": campaign.campaign_name,
-            "campaign_description": campaign.campaign_description,
-            "hotel_name": campaign.hotel_name,
-            "target_audience": campaign.target_audience,
-            "theme": campaign.theme,
-            "start_date": campaign.start_date,
-            "end_date": campaign.end_date,
-            "status": "generating",
-            "landing_page_html": "",
-            "preview_url": "",
-            "production_url": "",
-            "email_subject_en": "",
-            "email_body_en": "",
-            "email_subject_zh": "",
-            "email_body_zh": "",
-            "customer_list": [],
-            "customer_count": 0,
-            "error_message": "",
-            "messages": []
-        }
-        
-        workflow = build_landing_page_workflow()
-        final_state = await workflow.ainvoke(initial_state)
-        
-        campaign.landing_page_html = final_state.get("landing_page_html", "")
-        campaign.preview_url = final_state.get("preview_url", "")
-        campaign.status = CampaignStatus(final_state.get("status", "preview_ready"))
-        campaign.error_message = final_state.get("error_message")
+        asyncio.create_task(_run_landing_page_workflow(campaign_id, campaign))
         
         return {
             "campaign_id": campaign_id,
-            "status": campaign.status.value,
-            "preview_url": campaign.preview_url,
-            "error": campaign.error_message
+            "status": "generating",
+            "preview_url": "",
+            "error": None
         }
     
     elif request.skill == "prepare_email_preview":
@@ -540,48 +615,13 @@ async def invoke_skill(request: InvokeRequest):
         
         campaign = campaigns_store[campaign_id]
         
-        initial_state: CampaignState = {
-            "campaign_id": campaign_id,
-            "campaign_name": campaign.campaign_name,
-            "campaign_description": campaign.campaign_description,
-            "hotel_name": campaign.hotel_name,
-            "target_audience": campaign.target_audience,
-            "theme": campaign.theme,
-            "start_date": campaign.start_date,
-            "end_date": campaign.end_date,
-            "status": campaign.status.value,
-            "landing_page_html": campaign.landing_page_html or "",
-            "preview_url": campaign.preview_url or "",
-            "production_url": campaign.production_url or "",
-            "email_subject_en": "",
-            "email_body_en": "",
-            "email_subject_zh": "",
-            "email_body_zh": "",
-            "customer_list": [],
-            "customer_count": 0,
-            "error_message": "",
-            "messages": []
-        }
-        
-        workflow = build_email_preview_workflow()
-        final_state = await workflow.ainvoke(initial_state)
-        
-        campaign.email_subject_en = final_state.get("email_subject_en", "")
-        campaign.email_body_en = final_state.get("email_body_en", "")
-        campaign.email_subject_zh = final_state.get("email_subject_zh", "")
-        campaign.email_body_zh = final_state.get("email_body_zh", "")
-        campaign.customer_list = [CustomerProfile(**c) for c in final_state.get("customer_list", [])]
-        campaign.customer_count = final_state.get("customer_count", 0)
-        campaign.status = CampaignStatus(final_state.get("status", "email_ready"))
-        campaign.error_message = final_state.get("error_message")
+        asyncio.create_task(_run_email_preview_workflow(campaign_id, campaign))
         
         return {
             "campaign_id": campaign_id,
-            "status": campaign.status.value,
-            "customer_count": campaign.customer_count,
-            "email_subject_en": campaign.email_subject_en,
-            "email_subject_zh": campaign.email_subject_zh,
-            "error": campaign.error_message
+            "status": "preparing_email",
+            "customer_count": 0,
+            "error": None
         }
     
     elif request.skill == "go_live":
@@ -592,42 +632,14 @@ async def invoke_skill(request: InvokeRequest):
         campaign = campaigns_store[campaign_id]
         campaign.status = CampaignStatus.APPROVED
         
-        initial_state: CampaignState = {
-            "campaign_id": campaign_id,
-            "campaign_name": campaign.campaign_name,
-            "campaign_description": campaign.campaign_description,
-            "hotel_name": campaign.hotel_name,
-            "target_audience": campaign.target_audience,
-            "theme": campaign.theme,
-            "start_date": campaign.start_date,
-            "end_date": campaign.end_date,
-            "status": "approved",
-            "landing_page_html": campaign.landing_page_html or "",
-            "preview_url": campaign.preview_url or "",
-            "production_url": "",
-            "email_subject_en": campaign.email_subject_en or "",
-            "email_body_en": campaign.email_body_en or "",
-            "email_subject_zh": campaign.email_subject_zh or "",
-            "email_body_zh": campaign.email_body_zh or "",
-            "customer_list": [c.model_dump() for c in campaign.customer_list],
-            "customer_count": campaign.customer_count,
-            "error_message": "",
-            "messages": []
-        }
-        
-        workflow = build_go_live_workflow()
-        final_state = await workflow.ainvoke(initial_state)
-        
-        campaign.production_url = final_state.get("production_url", "")
-        campaign.status = CampaignStatus(final_state.get("status", "live"))
-        campaign.error_message = final_state.get("error_message")
+        asyncio.create_task(_run_go_live_workflow(campaign_id, campaign))
         
         return {
             "campaign_id": campaign_id,
-            "status": campaign.status.value,
-            "production_url": campaign.production_url,
-            "emails_sent": campaign.customer_count,
-            "error": campaign.error_message
+            "status": "deploying",
+            "production_url": "",
+            "emails_sent": 0,
+            "error": None
         }
     
     else:

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 
 export interface CampaignData {
@@ -66,9 +66,25 @@ const SIDE_NAV_MAP: Record<number, string> = {
   5: 'launch'
 };
 
+function statusToStep(status: string): number {
+  switch (status) {
+    case 'draft': return 1;
+    case 'generating': return 1;
+    case 'preview_ready': return 2;
+    case 'email_ready': return 3;
+    case 'approved': return 4;
+    case 'deploying': return 4;
+    case 'live': return 5;
+    case 'failed': return 1;
+    default: return 0;
+  }
+}
+
 export default function CampaignCreate() {
   const navigate = useNavigate();
+  const { campaignId: urlCampaignId } = useParams<{ campaignId?: string }>();
   const [currentStep, setCurrentStep] = useState(0);
+  const [initialLoading, setInitialLoading] = useState(!!urlCampaignId);
   const [campaignData, setCampaignData] = useState<CampaignData>({
     campaign_name: '',
     campaign_description: '',
@@ -84,6 +100,136 @@ export default function CampaignCreate() {
   const [loading, setLoading] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string>('');
   const [emailLang, setEmailLang] = useState<'en' | 'zh'>('en');
+  const [progress, setProgress] = useState(0);
+  const [agentEvents, setAgentEvents] = useState<Array<{agent: string; task: string; type: string; time: string}>>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!urlCampaignId) return;
+    (async () => {
+      try {
+        const resp = await fetch(`/api/campaigns/${urlCampaignId}`);
+        if (!resp.ok) { navigate('/'); return; }
+        const data = await resp.json();
+        setCampaignData({
+          campaign_name: data.campaign_name || '',
+          campaign_description: data.campaign_description || '',
+          hotel_name: data.hotel_name || 'Grand Lisboa Palace',
+          target_audience: data.target_audience || '',
+          theme: data.theme || 'luxury_gold',
+          start_date: data.start_date || '',
+          end_date: data.end_date || ''
+        });
+        setCampaignState({
+          id: urlCampaignId,
+          status: data.status || 'draft',
+          preview_url: data.preview_url,
+          production_url: data.production_url,
+          email_subject_en: data.email_subject_en,
+          email_body_en: data.email_body_en,
+          email_subject_zh: data.email_subject_zh,
+          email_body_zh: data.email_body_zh,
+          customer_count: data.customer_count,
+          error: data.error_message
+        });
+        const step = statusToStep(data.status);
+        setCurrentStep(step);
+
+        if (data.status === 'generating' || data.status === 'preparing_email' || data.status === 'deploying') {
+          setLoading(true);
+          setAgentStatus('Resuming - agents are still working...');
+          startSSE(urlCampaignId);
+          startProgressSimulation();
+          const targetStatuses = data.status === 'generating' ? ['preview_ready'] :
+                                 data.status === 'preparing_email' ? ['email_ready'] : ['live'];
+          try {
+            const result = await pollCampaignStatus(urlCampaignId, targetStatuses);
+            stopProgressSimulation(100);
+            stopSSE();
+            setCampaignState(prev => ({ ...prev, ...result, status: result.status, error: result.error_message }));
+            setCurrentStep(statusToStep(result.status));
+          } catch (e) {
+            stopProgressSimulation(0);
+            stopSSE();
+            setCampaignState(prev => ({ ...prev, error: e instanceof Error ? e.message : 'Unknown error' }));
+          } finally {
+            setLoading(false);
+          }
+        }
+      } catch {
+        navigate('/');
+      } finally {
+        setInitialLoading(false);
+      }
+    })();
+  }, [urlCampaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startSSE = useCallback((campaignId: string) => {
+    if (eventSourceRef.current) eventSourceRef.current.close();
+    
+    const es = new EventSource(`/events/${campaignId}`);
+    eventSourceRef.current = es;
+    
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event_type === 'connected') return;
+        
+        setAgentEvents(prev => [...prev.slice(-10), {
+          agent: data.agent || 'System',
+          task: data.task || data.event_type,
+          type: data.event_type,
+          time: new Date().toLocaleTimeString()
+        }]);
+        
+        if (data.event_type === 'agent_started') {
+          setAgentStatus(`${data.agent}: ${data.task}...`);
+        } else if (data.event_type === 'agent_completed') {
+          setAgentStatus(`${data.agent}: ${data.task}`);
+          setProgress(prev => Math.min(prev + 25, 95));
+        } else if (data.event_type === 'workflow_status') {
+          setAgentStatus(`${data.agent}: ${data.task}...`);
+          setProgress(prev => Math.min(prev + 10, 90));
+        }
+      } catch (e) {}
+    };
+    
+    es.onerror = () => {};
+  }, []);
+
+  const stopSSE = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
+  const startProgressSimulation = useCallback(() => {
+    setProgress(5);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    progressTimerRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + (90 - prev) * 0.03;
+      });
+    }, 1000);
+  }, []);
+
+  const stopProgressSimulation = useCallback((final_pct: number) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgress(final_pct);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopSSE();
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, [stopSSE]);
 
   const handleDataChange = (data: Partial<CampaignData>) => {
     setCampaignData(prev => ({ ...prev, ...data }));
@@ -91,7 +237,26 @@ export default function CampaignCreate() {
 
   const totalSteps = 4;
   const displayStep = Math.min(currentStep, 3);
-  const progress = ((displayStep + 1) / totalSteps) * 100;
+  const stepProgress = ((displayStep + 1) / totalSteps) * 100;
+
+  const pollCampaignStatus = async (campaignId: string, targetStatuses: string[]): Promise<any> => {
+    const maxAttempts = 120;
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const resp = await fetch(`/api/campaigns/${campaignId}`);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (targetStatuses.includes(data.status)) return data;
+        if (data.status === 'failed') {
+          throw new Error(data.error_message || 'Workflow failed');
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('failed')) throw err;
+      }
+    }
+    throw new Error('Operation timed out');
+  };
 
   const createCampaign = async () => {
     setLoading(true);
@@ -105,6 +270,7 @@ export default function CampaignCreate() {
       if (!response.ok) throw new Error('Failed to create campaign');
       const result = await response.json();
       setCampaignState(prev => ({ ...prev, id: result.campaign_id, status: 'draft' }));
+      window.history.replaceState(null, '', `/campaign/${result.campaign_id}`);
       return result.campaign_id;
     } catch (err) {
       setCampaignState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'Unknown error' }));
@@ -117,66 +283,97 @@ export default function CampaignCreate() {
 
   const generateLandingPage = async (campaignId: string) => {
     setLoading(true);
+    setProgress(0);
+    setAgentEvents([]);
     setAgentStatus('Creative Producer: Generating landing page...');
+    startSSE(campaignId);
+    startProgressSimulation();
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/generate`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to generate landing page');
-      const result = await response.json();
-      setCampaignState(prev => ({ ...prev, status: result.status, preview_url: result.preview_url, error: result.error }));
+      if (!response.ok) throw new Error('Failed to start generation');
+      
+      const result = await pollCampaignStatus(campaignId, ['preview_ready']);
+      stopProgressSimulation(100);
+      stopSSE();
+      setCampaignState(prev => ({
+        ...prev,
+        status: result.status,
+        preview_url: result.preview_url,
+        error: result.error_message
+      }));
       if (result.status === 'preview_ready') setCurrentStep(2);
     } catch (err) {
+      stopProgressSimulation(0);
+      stopSSE();
       setCampaignState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'Unknown error' }));
     } finally {
       setLoading(false);
-      setAgentStatus('');
     }
   };
 
   const prepareEmailPreview = async () => {
     if (!campaignState.id) return;
     setLoading(true);
+    setProgress(0);
+    setAgentEvents([]);
     setAgentStatus('Customer Analyst: Retrieving customers...');
+    startSSE(campaignState.id);
+    startProgressSimulation();
     try {
       const response = await fetch(`/api/campaigns/${campaignState.id}/preview-email`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to prepare email preview');
-      const result = await response.json();
-      setAgentStatus('Delivery Manager: Generating email content...');
-      const campaignResponse = await fetch(`/api/campaigns/${campaignState.id}`);
-      const campaignDetails = await campaignResponse.json();
+      if (!response.ok) throw new Error('Failed to start email preview');
+      
+      const result = await pollCampaignStatus(campaignState.id, ['email_ready']);
+      stopProgressSimulation(100);
+      stopSSE();
       setCampaignState(prev => ({
         ...prev,
         status: result.status,
         customer_count: result.customer_count,
-        email_subject_en: campaignDetails.email_subject_en,
-        email_body_en: campaignDetails.email_body_en,
-        email_subject_zh: campaignDetails.email_subject_zh,
-        email_body_zh: campaignDetails.email_body_zh,
-        error: result.error
+        email_subject_en: result.email_subject_en,
+        email_body_en: result.email_body_en,
+        email_subject_zh: result.email_subject_zh,
+        email_body_zh: result.email_body_zh,
+        error: result.error_message
       }));
       if (result.status === 'email_ready') setCurrentStep(3);
     } catch (err) {
+      stopProgressSimulation(0);
+      stopSSE();
       setCampaignState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'Unknown error' }));
     } finally {
       setLoading(false);
-      setAgentStatus('');
     }
   };
 
   const goLive = async () => {
     if (!campaignState.id) return;
     setLoading(true);
+    setProgress(0);
+    setAgentEvents([]);
     setAgentStatus('Delivery Manager: Deploying to production...');
+    startSSE(campaignState.id);
+    startProgressSimulation();
     try {
       const response = await fetch(`/api/campaigns/${campaignState.id}/approve`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to go live');
-      const result = await response.json();
-      setCampaignState(prev => ({ ...prev, status: result.status, production_url: result.production_url, error: result.error }));
+      if (!response.ok) throw new Error('Failed to start deployment');
+      
+      const result = await pollCampaignStatus(campaignState.id, ['live']);
+      stopProgressSimulation(100);
+      stopSSE();
+      setCampaignState(prev => ({
+        ...prev,
+        status: result.status,
+        production_url: result.production_url,
+        error: result.error_message
+      }));
       if (result.status === 'live') setCurrentStep(5);
     } catch (err) {
+      stopProgressSimulation(0);
+      stopSSE();
       setCampaignState(prev => ({ ...prev, error: err instanceof Error ? err.message : 'Unknown error' }));
     } finally {
       setLoading(false);
-      setAgentStatus('');
     }
   };
 
@@ -185,8 +382,8 @@ export default function CampaignCreate() {
       setCurrentStep(1);
     } else if (currentStep === 1) {
       try {
-        const campaignId = await createCampaign();
-        await generateLandingPage(campaignId);
+        const id = campaignState.id || await createCampaign();
+        await generateLandingPage(id);
       } catch (err) {
         console.error('Error:', err);
       }
@@ -214,7 +411,7 @@ export default function CampaignCreate() {
           <h1 className="text-[3.5rem] leading-tight font-headline font-extrabold text-on-surface -ml-1">Define Campaign Identity</h1>
           <p className="text-on-surface-variant max-w-2xl mt-4 leading-relaxed font-body">Define the foundational details for your upcoming luxury initiative. Our AI agents will use these parameters to generate themes and assets.</p>
         </div>
-        <ProgressBar progress={progress} />
+        <ProgressBar progress={stepProgress} />
       </header>
 
       <div className="grid grid-cols-12 gap-10 items-start">
@@ -736,7 +933,6 @@ export default function CampaignCreate() {
 
   const activeNav = SIDE_NAV_MAP[currentStep] || 'strategy';
 
-  // Error and agent status display (shared)
   const renderStatusBanner = () => (
     <>
       {campaignState.error && (
@@ -748,8 +944,64 @@ export default function CampaignCreate() {
           </button>
         </div>
       )}
+
+      {loading && (
+        <div className="mb-8 bg-primary-container rounded-2xl p-6 shadow-xl shadow-primary-container/20 overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-tertiary-fixed-dim flex items-center justify-center">
+                <span className="material-symbols-outlined text-on-tertiary-fixed text-sm animate-spin">progress_activity</span>
+              </div>
+              <div>
+                <p className="text-white font-headline font-bold text-sm">{agentStatus || 'Processing...'}</p>
+                <p className="text-white/50 text-xs">{Math.round(progress)}% complete</p>
+              </div>
+            </div>
+            <span className="text-tertiary-fixed-dim text-[10px] font-bold uppercase tracking-widest">AI Agents Working</span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-4">
+            <div
+              className="h-full bg-gradient-to-r from-tertiary-fixed-dim to-white rounded-full transition-all duration-1000 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          {/* Agent Event Log */}
+          {agentEvents.length > 0 && (
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {agentEvents.map((evt, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    evt.type === 'agent_completed' ? 'bg-emerald-400' :
+                    evt.type === 'agent_error' ? 'bg-red-400' :
+                    'bg-tertiary-fixed-dim animate-pulse'
+                  }`} />
+                  <span className="text-white/70 font-mono">{evt.time}</span>
+                  <span className="text-white/90 font-medium">{evt.agent}:</span>
+                  <span className="text-white/60">{evt.task}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
+
+  if (initialLoading) {
+    return (
+      <Layout activeStep="strategy">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="text-on-surface-variant text-sm">Loading campaign...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout activeStep={activeNav} campaignName={campaignData.campaign_name || undefined}>

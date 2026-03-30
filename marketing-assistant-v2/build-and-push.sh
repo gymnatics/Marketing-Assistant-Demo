@@ -1,23 +1,21 @@
 #!/bin/bash
 set -e
 
-# Configuration
-REGISTRY="${REGISTRY:-quay.io/rh-ee-dayeo}"
-TAG="${TAG:-latest}"
+# Configuration - single repo, service name as tag
+REPO="${REPO:-quay.io/rh-ee-dayeo/marketing-assistant}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
 echo "=========================================="
 echo "Marketing Assistant v2 - Build & Push"
 echo "=========================================="
-echo "Registry: $REGISTRY"
-echo "Tag: $TAG"
+echo "Repository: $REPO"
 echo "Platform: $PLATFORM"
 echo ""
 
 # Change to the marketing-assistant-v2 directory
 cd "$(dirname "$0")"
 
-# Services to build (order matters for dependencies)
+# Services to build
 SERVICES=(
     "mongodb-mcp"
     "event-hub"
@@ -35,10 +33,8 @@ for SERVICE in "${SERVICES[@]}"; do
     echo "Building: $SERVICE"
     echo "----------------------------------------"
     
-    IMAGE_NAME="marketing-assistant-v2-${SERVICE}"
-    FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+    FULL_IMAGE="${REPO}:${SERVICE}"
     
-    # Build from root context using service-specific Dockerfile
     podman build \
         --platform "$PLATFORM" \
         -f "services/${SERVICE}/Dockerfile" \
@@ -51,13 +47,13 @@ for SERVICE in "${SERVICES[@]}"; do
     echo "✓ $SERVICE complete"
 done
 
-# Build frontend separately (different build process)
+# Build frontend separately
 echo ""
 echo "----------------------------------------"
 echo "Building: frontend"
 echo "----------------------------------------"
 
-FRONTEND_IMAGE="${REGISTRY}/marketing-assistant-v2-frontend:${TAG}"
+FRONTEND_IMAGE="${REPO}:frontend"
 
 podman build \
     --platform "$PLATFORM" \
@@ -77,9 +73,9 @@ echo "=========================================="
 echo ""
 echo "Images pushed:"
 for SERVICE in "${SERVICES[@]}"; do
-    echo "  - ${REGISTRY}/marketing-assistant-v2-${SERVICE}:${TAG}"
+    echo "  - ${REPO}:${SERVICE}"
 done
-echo "  - ${REGISTRY}/marketing-assistant-v2-frontend:${TAG}"
+echo "  - ${REPO}:frontend"
 echo ""
 echo "Next steps:"
 echo "  1. Update k8s/secret.yaml with your model tokens"

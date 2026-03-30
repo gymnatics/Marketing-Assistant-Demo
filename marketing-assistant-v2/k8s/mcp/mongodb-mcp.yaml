@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: mcp
-          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-mongodb-mcp:latest
+          image: quay.io/rh-ee-dayeo/marketing-assistant:mongodb-mcp
           ports:
             - containerPort: 8090
           envFrom:

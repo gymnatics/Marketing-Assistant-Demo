@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: agent
-          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-campaign-director:latest
+          image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-director
           ports:
             - containerPort: 8080
           envFrom:

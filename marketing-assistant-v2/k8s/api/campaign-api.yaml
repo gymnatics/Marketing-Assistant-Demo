@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-campaign-api:latest
+          image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-api
           ports:
             - containerPort: 5000
           envFrom:

@@ -20,7 +20,7 @@ spec:
       serviceAccountName: delivery-manager
       containers:
         - name: agent
-          image: quay.io/rh-ee-dayeo/marketing-assistant-v2-delivery-manager:latest
+          image: quay.io/rh-ee-dayeo/marketing-assistant:delivery-manager
           ports:
             - containerPort: 8083
           envFrom:
