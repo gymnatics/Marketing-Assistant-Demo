@@ -77,7 +77,7 @@ docker-compose up
 ```bash
 oc apply -f k8s/namespace.yaml
 oc apply -f k8s/configmap.yaml
-oc apply -f k8s/secret.yaml  # Edit with your tokens first
+oc apply -f k8s/secret-example.yaml  # Copy to secret.yaml and edit with your tokens first
 ```
 
 2. Deploy MCP server:
@@ -112,13 +112,14 @@ oc apply -f k8s/frontend/
 
 ## Technology Stack
 
-- **Frontend**: React 18, TypeScript, Tailwind CSS
-- **API Gateway**: Flask 3.0
-- **Agent Protocol**: A2A SDK 0.3.25
-- **Orchestration**: LangGraph 0.2+
-- **MCP Server**: FastMCP 2.12+
-- **LLM Inference**: vLLM on RHOAI (Qwen models)
-- **Database**: MongoDB
+- **Frontend**: React 18, TypeScript, Headless UI, Heroicons
+- **API Gateway**: Flask 3.0, Flask-CORS
+- **Agent Protocol**: A2A SDK 0.3.25 (`a2a-sdk[http-server]`)
+- **Agent Servers**: Starlette + Uvicorn (via `A2AStarletteApplication`)
+- **Orchestration**: LangGraph 0.2+, LangChain 0.2+
+- **MCP Server**: FastMCP 2.12+ (custom Starlette REST wrapper)
+- **LLM Inference**: vLLM on RHOAI (Qwen2.5-Coder-32B, Qwen3-32B)
+- **Database**: MongoDB 7
 
 ## Key Improvements from v1
 
