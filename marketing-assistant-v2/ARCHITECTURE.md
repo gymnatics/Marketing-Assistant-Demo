@@ -59,58 +59,66 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 
 ## 3. High-Level Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                                BROWSER                                            │
-│                          React SPA (static)                                       │
-└────────────────────┬─────────────────────────────┬───────────────────────────────┘
-                     │ /api/*                       │ /events/*
-                     ▼                              ▼
-┌──────────────────────────────────┐  ┌──────────────────────────────┐
-│         Campaign API             │  │         Event Hub             │
-│       (Flask, port 5000)         │  │    (Flask SSE, port 5001)     │
-│                                  │  │                               │
-│  A2A Client → Director           │  │  POST /events/{id}/publish    │
-│  REST proxy → /campaigns         │  │  GET  /events/{id} (SSE)      │
-└──────────────┬───────────────────┘  └───────────────────────────────┘
-               │ A2A (JSON-RPC 2.0)           ▲ SSE publish
-               ▼                              │ (from all agents)
-┌──────────────────────────────────────────────────────────────────────┐
-│                    Campaign Director (port 8080)                      │
-│              A2A Server + LangGraph Orchestrator                      │
-│                                                                       │
-│  Skills: create_campaign, generate_landing_page,                      │
-│          prepare_email_preview, go_live                                │
-│                                                                       │
-│  3 LangGraph Workflows:                                               │
-│    Landing:  generate_landing_page → deploy_preview                   │
-│    Email:    retrieve_customers → generate_email                      │
-│    GoLive:   deploy_production → send_emails                          │
-└──────┬────────────────┬────────────────────┬─────────────────────────┘
-       │ A2A            │ A2A                │ A2A
-       ▼                ▼                    ▼
-┌──────────────┐ ┌──────────────┐ ┌───────────────────┐
-│  Creative    │ │  Customer    │ │  Delivery          │
-│  Producer    │ │  Analyst     │ │  Manager           │
-│  (8081)      │ │  (8082)      │ │  (8083)            │
-│              │ │              │ │                     │
-│  1 skill     │ │  1 skill     │ │  4 skills           │
-└──────┬───────┘ └──────┬───────┘ └──────┬──────────────┘
-       │ MCP            │ MCP + LLM       │ LLM + K8s API
-       ▼                ▼                 ▼
-┌──────────────┐ ┌──────────────┐ ┌───────────────────┐
-│  ImageGen    │ │  MongoDB     │ │  Qwen3-32B        │
-│  MCP (8091)  │ │  MCP (8090)  │ │  (vLLM, L40S #2)  │
-│  /mcp        │ │  /mcp        │ │                     │
-│  /images/*   │ │              │ │  + OpenShift K8s    │
-└──────┬───────┘ └──────┬───────┘ │  API (deploy)       │
-       │                │         └─────────────────────┘
-       ▼                ▼
-┌──────────────┐ ┌──────────────┐
-│  FLUX.2      │ │  MongoDB     │
-│  klein-4B    │ │  (mongo:7)   │
-│  (L40S #3)   │ │  casino_crm  │
-└──────────────┘ └──────────────┘
+```mermaid
+flowchart TD
+    subgraph browser [Browser]
+        ReactSPA["React SPA (static nginx)"]
+    end
+
+    subgraph apiLayer [API Layer]
+        CampaignAPI["Campaign API\n(Flask :5000)"]
+        EventHub["Event Hub\n(Flask SSE :5001)"]
+    end
+
+    subgraph orchestrator [Orchestrator]
+        Director["Campaign Director\n(A2A + LangGraph :8080)"]
+    end
+
+    subgraph agents [A2A Agents]
+        CreativeProducer["Creative Producer\n(:8081)"]
+        CustomerAnalyst["Customer Analyst\n(:8082)"]
+        DeliveryManager["Delivery Manager\n(:8083)"]
+    end
+
+    subgraph mcpServers [MCP Servers]
+        ImageGenMCP["ImageGen MCP\n(:8091 /mcp + /images/)"]
+        MongoMCP["MongoDB MCP\n(:8090 /mcp)"]
+    end
+
+    subgraph models [GPU Models]
+        QwenCoder["Qwen2.5-Coder-32B\n(L40S #1)"]
+        Qwen3["Qwen3-32B\n(L40S #2)"]
+        FLUX2["FLUX.2-klein-4B\n(L40S #3)"]
+    end
+
+    subgraph storage [Storage]
+        MongoDB[(MongoDB\ncasino_crm)]
+    end
+
+    subgraph k8sTarget [OpenShift Namespaces]
+        DevNS["Dev Namespace\n(preview deployments)"]
+        ProdNS["Prod Namespace\n(live deployments)"]
+    end
+
+    ReactSPA -->|"/api/*"| CampaignAPI
+    ReactSPA -->|"/events/*"| EventHub
+    CampaignAPI -->|"A2A JSON-RPC"| Director
+    Director -->|"A2A"| CreativeProducer
+    Director -->|"A2A"| CustomerAnalyst
+    Director -->|"A2A"| DeliveryManager
+    CreativeProducer -->|"MCP"| ImageGenMCP
+    CreativeProducer -->|"streaming"| QwenCoder
+    CustomerAnalyst -->|"tool calling"| Qwen3
+    CustomerAnalyst -->|"MCP"| MongoMCP
+    DeliveryManager -->|"streaming"| Qwen3
+    DeliveryManager -->|"K8s API"| DevNS
+    DeliveryManager -->|"K8s API"| ProdNS
+    ImageGenMCP -->|"OpenAI API"| FLUX2
+    MongoMCP -->|"PyMongo"| MongoDB
+    CreativeProducer -.->|"SSE publish"| EventHub
+    CustomerAnalyst -.->|"SSE publish"| EventHub
+    DeliveryManager -.->|"SSE publish"| EventHub
+    Director -.->|"SSE publish"| EventHub
 ```
 
 ---
@@ -119,74 +127,124 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 
 ### Step-by-Step Flow
 
-```
-USER creates campaign in browser
+```mermaid
+flowchart TD
+    Step0["Step 0: Define Campaign\n(form only, no API)"]
+    Step1["Step 1: Theme + Generate"]
+    Step2["Step 2: Preview Landing Page"]
+    Step3["Step 3: Prepare Emails"]
+    Step4["Step 4: Confirmation + Go Live"]
+    Step5["Step 5: Success"]
 
-  ┌─── Step 0: Define Campaign Identity (frontend only, no API) ──┐
-  │  Form: name, description, hotel, audience, dates               │
-  └───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-  ┌─── Step 1: Theme Selection + Generate ────────────────────────┐
-  │  Browser: POST /api/campaigns (create)                         │
-  │  Browser: POST /api/campaigns/{id}/generate                    │
-  │                                                                │
-  │  Campaign API → A2A → Director.create_campaign                 │
-  │  Campaign API → A2A → Director.generate_landing_page           │
-  │                                                                │
-  │  Director (LangGraph landing workflow):                        │
-  │    1. generate_landing_page_node                               │
-  │       → A2A → Creative Producer                                │
-  │         → MCP → ImageGen MCP → FLUX.2 (generate hero image)   │
-  │         → Qwen Coder (generate HTML with image placeholder)    │
-  │         → Replace placeholder with public image URL            │
-  │    2. deploy_preview_node                                      │
-  │       → A2A → Delivery Manager                                 │
-  │         → K8s API: ConfigMap + Deployment + Service + Route    │
-  │         → Returns preview URL                                  │
-  │                                                                │
-  │  Status: generating → preview_ready                            │
-  └───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-  ┌─── Step 2: Preview Landing Page ──────────────────────────────┐
-  │  Browser shows preview URL + QR code                           │
-  │  User can click "Regenerate" for a different layout            │
-  └───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-  ┌─── Step 3: Prepare Emails ────────────────────────────────────┐
-  │  Browser: POST /api/campaigns/{id}/preview-email               │
-  │                                                                │
-  │  Director (LangGraph email workflow):                          │
-  │    1. retrieve_customers_node                                  │
-  │       → A2A → Customer Analyst                                 │
-  │         → Qwen3 LLM (tool selection with function calling)     │
-  │         → MCP → MongoDB MCP → MongoDB (real query)             │
-  │    2. generate_email_node                                      │
-  │       → A2A → Delivery Manager                                 │
-  │         → Qwen3 LLM (email content EN + ZH, streaming)        │
-  │                                                                │
-  │  Status: email_ready                                           │
-  └───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-  ┌─── Step 4: Confirmation + Go Live ────────────────────────────┐
-  │  Browser: POST /api/campaigns/{id}/approve                     │
-  │                                                                │
-  │  Director (LangGraph go-live workflow):                        │
-  │    1. deploy_production_node                                   │
-  │       → A2A → Delivery Manager → K8s API (prod namespace)     │
-  │    2. send_emails_node                                         │
-  │       → A2A → Delivery Manager (simulated send)               │
-  │                                                                │
-  │  Status: live                                                  │
-  └───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-  ┌─── Step 5: Success ───────────────────────────────────────────┐
-  │  Browser shows production URL, QR code, recipient count        │
-  └───────────────────────────────────────────────────────────────┘
+    Step0 --> Step1
+    Step1 --> Step2
+    Step2 -->|"Regenerate (optional)"| Step1
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step5
+```
+
+### Step 1: Landing Page Generation (detail)
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant API as Campaign API
+    participant Dir as Campaign Director
+    participant CP as Creative Producer
+    participant IMG as ImageGen MCP
+    participant FLUX as FLUX.2-klein-4B
+    participant Coder as Qwen Coder
+    participant DM as Delivery Manager
+    participant K8s as OpenShift K8s API
+
+    B->>API: POST /api/campaigns (create)
+    API->>Dir: A2A: create_campaign
+    Dir-->>API: {campaign_id, status: created}
+
+    B->>API: POST /api/campaigns/{id}/generate
+    API->>Dir: A2A: generate_landing_page
+
+    Note over Dir: LangGraph Landing Workflow
+
+    Dir->>CP: A2A: generate_landing_page
+    CP->>IMG: MCP: generate_campaign_image
+    IMG->>FLUX: POST /v1/images/generations
+    FLUX-->>IMG: base64 PNG
+    IMG-->>CP: {image_url: public URL}
+    CP->>Coder: POST /v1/chat/completions (streaming)
+    Coder-->>CP: HTML with HERO_IMAGE_PLACEHOLDER
+    Note over CP: Replace placeholder with image URL
+    CP-->>Dir: {html, status: success}
+
+    Dir->>DM: A2A: deploy_preview
+    DM->>K8s: Create ConfigMap + Deployment + Service + Route
+    K8s-->>DM: preview URL
+    DM-->>Dir: {preview_url}
+
+    Dir-->>API: {status: preview_ready, preview_url}
+```
+
+### Step 3: Email Preparation (detail)
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant API as Campaign API
+    participant Dir as Campaign Director
+    participant CA as Customer Analyst
+    participant LLM as Qwen3 LLM
+    participant MCP as MongoDB MCP
+    participant DB as MongoDB
+    participant DM as Delivery Manager
+
+    B->>API: POST /api/campaigns/{id}/preview-email
+    API->>Dir: A2A: prepare_email_preview
+
+    Note over Dir: LangGraph Email Workflow
+
+    Dir->>CA: A2A: get_target_customers
+    CA->>LLM: "Retrieve Platinum members" + tool definitions
+    LLM-->>CA: tool_call: get_customers_by_tier(tier=platinum)
+    CA->>MCP: MCP: call_tool(get_customers_by_tier)
+    MCP->>DB: db.customers.find(tier: platinum)
+    DB-->>MCP: customer documents
+    MCP-->>CA: customer list
+    CA-->>Dir: {customers, count, status}
+
+    Dir->>DM: A2A: generate_email
+    DM->>LLM: Email prompt (streaming)
+    LLM-->>DM: Email content EN + ZH
+    DM-->>Dir: {email_subject_en, email_body_en, ...}
+
+    Dir-->>API: {status: email_ready}
+```
+
+### Step 4: Go Live (detail)
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant API as Campaign API
+    participant Dir as Campaign Director
+    participant DM as Delivery Manager
+    participant K8s as OpenShift K8s API
+
+    B->>API: POST /api/campaigns/{id}/approve
+    API->>Dir: A2A: go_live
+
+    Note over Dir: LangGraph Go-Live Workflow
+
+    Dir->>DM: A2A: deploy_production
+    DM->>K8s: Create resources in prod namespace
+    K8s-->>DM: production URL
+    DM-->>Dir: {production_url}
+
+    Dir->>DM: A2A: send_emails
+    Note over DM: Simulated email send
+    DM-->>Dir: {sent_count}
+
+    Dir-->>API: {status: live, production_url}
 ```
 
 ---
@@ -197,14 +255,10 @@ USER creates campaign in browser
 
 Every A2A agent follows this structure:
 
-```
-__main__.py                    agent_executor.py              agent.py
-┌─────────────────────┐       ┌─────────────────────┐       ┌─────────────────────┐
-│ AgentCard            │       │ AgentExecutor        │       │ Pure Business Logic  │
-│ A2AStarletteApp      │──────▶│ execute()            │──────▶│ skill methods         │
-│ Uvicorn server       │       │ JSON parse → dispatch│       │ LLM calls, MCP calls │
-│ Health check route   │       │ Artifact → response  │       │ Event publishing      │
-└─────────────────────┘       └─────────────────────┘       └─────────────────────┘
+```mermaid
+flowchart LR
+    MainPy["__main__.py\nAgentCard\nA2AStarletteApp\nUvicorn + /health"] --> Executor["agent_executor.py\nAgentExecutor.execute()\nJSON parse → dispatch\nArtifact → response"]
+    Executor --> Agent["agent.py\nPure Business Logic\nSkill methods\nLLM/MCP calls\nEvent publishing"]
 ```
 
 ### Message Format
@@ -226,27 +280,31 @@ __main__.py                    agent_executor.py              agent.py
 
 ### Call Chain
 
-```
-Campaign API                    Campaign Director              Downstream Agent
-     │                               │                              │
-     │  A2AClient.send_message()     │                              │
-     │  ─────────────────────────▶   │                              │
-     │  POST / (JSON-RPC 2.0)       │                              │
-     │                               │  CampaignDirectorExecutor    │
-     │                               │  .execute()                  │
-     │                               │  → handle_skill(skill, params) │
-     │                               │  → LangGraph workflow        │
-     │                               │                              │
-     │                               │  call_a2a_agent(url, skill)  │
-     │                               │  ─────────────────────────▶  │
-     │                               │  POST / (JSON-RPC 2.0)      │
-     │                               │                              │  AgentExecutor
-     │                               │                              │  .execute()
-     │                               │                              │  → business logic
-     │                               │  ◀─────────────────────────  │
-     │                               │  artifact: JSON result       │
-     │  ◀─────────────────────────   │                              │
-     │  artifact: JSON result        │                              │
+```mermaid
+sequenceDiagram
+    participant API as Campaign API
+    participant Dir as Campaign Director
+    participant Agent as Downstream Agent
+
+    API->>Dir: A2AClient.send_message()
+    Note right of API: POST / (JSON-RPC 2.0)
+
+    activate Dir
+    Note over Dir: CampaignDirectorExecutor.execute()
+    Note over Dir: handle_skill(skill, params)
+    Note over Dir: LangGraph workflow
+
+    Dir->>Agent: call_a2a_agent(url, skill)
+    Note right of Dir: POST / (JSON-RPC 2.0)
+
+    activate Agent
+    Note over Agent: AgentExecutor.execute()
+    Note over Agent: Business logic
+    Agent-->>Dir: artifact: JSON result
+    deactivate Agent
+
+    Dir-->>API: artifact: JSON result
+    deactivate Dir
 ```
 
 ---
@@ -255,74 +313,64 @@ Campaign API                    Campaign Director              Downstream Agent
 
 ### Transport: Streamable-HTTP
 
-Both MCP servers use FastMCP's `streamable-http` transport, which serves the MCP protocol at `/mcp`:
+Both MCP servers use FastMCP's `streamable-http` transport at `/mcp`.
 
-```
-Customer Analyst                    MongoDB MCP Server
-     │                                   │
-     │  FastMCP Client                   │
-     │  Client("http://mongodb-mcp:8090/mcp") │
-     │  ─────────────────────────────▶   │
-     │  POST /mcp (JSON-RPC: initialize) │
-     │  ◀─────────────────────────────   │
-     │  capabilities, tools              │
-     │                                   │
-     │  call_tool("get_customers_by_tier", │
-     │            {"tier": "platinum"})   │
-     │  ─────────────────────────────▶   │
-     │  POST /mcp (JSON-RPC: tools/call) │
-     │                                   │  → PyMongo query
-     │                                   │  → MongoDB (casino_crm)
-     │  ◀─────────────────────────────   │
-     │  result: [{customer_id, name...}] │
+### MCP Client-Server Communication
+
+```mermaid
+sequenceDiagram
+    participant Client as FastMCP Client
+    participant MCP as MCP Server (/mcp)
+    participant DB as Backend
+
+    Client->>MCP: POST /mcp (JSON-RPC: initialize)
+    MCP-->>Client: capabilities, tools list
+
+    Client->>MCP: call_tool(name, args)
+    MCP->>DB: Execute query/action
+    DB-->>MCP: Result data
+    MCP-->>Client: JSON result
 ```
 
 ### Customer Analyst: LLM-Driven Tool Selection
 
-```
-Customer Analyst                  Qwen3 LLM                   MongoDB MCP
-     │                               │                              │
-     │  "Retrieve Platinum members"  │                              │
-     │  + tool definitions           │                              │
-     │  ─────────────────────────▶   │                              │
-     │  POST /v1/chat/completions    │                              │
-     │  (streaming, tools=[...])     │                              │
-     │                               │                              │
-     │  ◀─────────────────────────   │                              │
-     │  tool_call: get_customers_by_tier │                          │
-     │  args: {"tier": "platinum"}   │                              │
-     │                               │                              │
-     │  FastMCP Client.call_tool()   │                              │
-     │  ─────────────────────────────────────────────────────────▶  │
-     │                               │                              │  → MongoDB query
-     │  ◀─────────────────────────────────────────────────────────  │
-     │  [VIP-001, VIP-002, VIP-004, VIP-006]                       │
+```mermaid
+sequenceDiagram
+    participant CA as Customer Analyst
+    participant LLM as Qwen3 LLM
+    participant MCP as MongoDB MCP
+    participant DB as MongoDB
+
+    CA->>LLM: "Retrieve Platinum members" + tool definitions
+    Note over LLM: Streaming response with tool_calls
+    LLM-->>CA: tool_call: get_customers_by_tier(tier=platinum)
+
+    CA->>MCP: FastMCP Client: call_tool(get_customers_by_tier)
+    MCP->>DB: db.customers.find(tier: platinum)
+    DB-->>MCP: Customer documents
+    MCP-->>CA: [VIP-001, VIP-002, VIP-004, VIP-006]
 ```
 
 ### ImageGen MCP: Hybrid Architecture
 
-```
-Creative Producer                 ImageGen MCP Server           FLUX.2 Model
-     │                                   │                          │
-     │  FastMCP Client                   │                          │
-     │  Client("http://imagegen-mcp:8091/mcp") │                   │
-     │  call_tool("generate_campaign_image") │                     │
-     │  ─────────────────────────────▶   │                          │
-     │  POST /mcp (MCP protocol)         │                          │
-     │                                   │  POST /v1/images/generations
-     │                                   │  ────────────────────▶   │
-     │                                   │                          │  FLUX.2
-     │                                   │  ◀────────────────────   │  diffusion
-     │                                   │  base64 PNG              │
-     │                                   │                          │
-     │                                   │  Store in memory         │
-     │  ◀─────────────────────────────   │  (image_store[id])       │
-     │  {image_url: "https://...         │                          │
-     │   /images/img-xxx.png"}           │                          │
-     │                                   │                          │
-BROWSER ─── GET /images/img-xxx.png ────▶│                          │
-     │  ◀─────────────────────────────   │                          │
-     │  PNG bytes (via public Route)     │                          │
+```mermaid
+sequenceDiagram
+    participant CP as Creative Producer
+    participant MCP as ImageGen MCP
+    participant FLUX as FLUX.2-klein-4B
+    participant Browser as Browser
+
+    CP->>MCP: FastMCP Client: call_tool(generate_campaign_image)
+    Note over MCP: POST /mcp (MCP protocol)
+    MCP->>FLUX: POST /v1/images/generations
+    FLUX-->>MCP: base64 PNG
+    Note over MCP: Store in image_store[id]
+    MCP-->>CP: {image_url: "https://.../images/img-xxx.png"}
+
+    Note over CP: URL injected into HTML via placeholder
+
+    Browser->>MCP: GET /images/img-xxx.png (via public Route)
+    MCP-->>Browser: PNG bytes
 ```
 
 ---
@@ -333,10 +381,13 @@ The Campaign Director orchestrates three sequential workflows using LangGraph `S
 
 ### Workflow 1: Landing Page Generation
 
-```
-START → generate_landing_page_node ──┬── (failed) ──→ END
-                                     │
-                                     └── (continue) → deploy_preview_node → END
+```mermaid
+flowchart LR
+    Start((START)) --> GenLP[generate_landing_page_node]
+    GenLP -->|"_check_failed"| Decision1{failed?}
+    Decision1 -->|yes| End1((END))
+    Decision1 -->|no| DeployPreview[deploy_preview_node]
+    DeployPreview --> End2((END))
 ```
 
 - `generate_landing_page_node`: A2A → Creative Producer → ImageGen MCP (hero image) + Qwen Coder (HTML)
@@ -344,10 +395,13 @@ START → generate_landing_page_node ──┬── (failed) ──→ END
 
 ### Workflow 2: Email Preview
 
-```
-START → retrieve_customers_node ──┬── (failed) ──→ END
-                                  │
-                                  └── (continue) → generate_email_node → END
+```mermaid
+flowchart LR
+    Start((START)) --> GetCust[retrieve_customers_node]
+    GetCust -->|"_check_failed"| Decision2{failed?}
+    Decision2 -->|yes| End3((END))
+    Decision2 -->|no| GenEmail[generate_email_node]
+    GenEmail --> End4((END))
 ```
 
 - `retrieve_customers_node`: A2A → Customer Analyst → Qwen3 LLM (tool selection) → MCP → MongoDB
@@ -355,10 +409,13 @@ START → retrieve_customers_node ──┬── (failed) ──→ END
 
 ### Workflow 3: Go Live
 
-```
-START → deploy_production_node ──┬── (failed) ──→ END
-                                 │
-                                 └── (continue) → send_emails_node → END
+```mermaid
+flowchart LR
+    Start((START)) --> DeployProd[deploy_production_node]
+    DeployProd -->|"_check_failed"| Decision3{failed?}
+    Decision3 -->|yes| End5((END))
+    Decision3 -->|no| SendEmails[send_emails_node]
+    SendEmails --> End6((END))
 ```
 
 - `deploy_production_node`: A2A → Delivery Manager → K8s API (prod namespace)
@@ -402,22 +459,21 @@ class CampaignState(TypedDict):
 
 ### Event Hub Architecture
 
-```
-Agents (publish)                    Event Hub                   Browser (subscribe)
-     │                                   │                          │
-     │  POST /events/{id}/publish        │                          │
-     │  ─────────────────────────────▶   │                          │
-     │  {event_type, agent, task, data}  │                          │
-     │                                   │  broadcast_event()       │
-     │                                   │  → all queues for {id}   │
-     │                                   │                          │
-     │                                   │  GET /events/{id} (SSE)  │
-     │                                   │  ◀────────────────────   │
-     │                                   │  EventSource connection  │
-     │                                   │                          │
-     │                                   │  data: {event_type,      │
-     │                                   │         agent, task}      │
-     │                                   │  ─────────────────────▶  │
+```mermaid
+sequenceDiagram
+    participant Agents as All Agents
+    participant Hub as Event Hub
+    participant Browser as Browser
+
+    Browser->>Hub: GET /events/{id} (SSE)
+    Hub-->>Browser: event: connected
+
+    Agents->>Hub: POST /events/{id}/publish
+    Note over Agents: {event_type, agent, task, data}
+    Hub-->>Browser: data: {event_type, agent, task}
+
+    Agents->>Hub: POST /events/{id}/publish
+    Hub-->>Browser: data: {event_type, agent, task}
 ```
 
 ### Event Types
@@ -450,30 +506,14 @@ Agents (publish)                    Event Hub                   Browser (subscri
 
 When the Delivery Manager deploys a campaign landing page:
 
-```
-Delivery Manager
-     │
-     │  deploy_campaign_to_k8s(campaign_id, html_content, namespace)
-     │
-     ├── 1. init_k8s_client() (in-cluster or kubeconfig)
-     │
-     ├── 2. Create/Replace ConfigMap: {deployment}-html
-     │       key: "index.html" = campaign HTML content
-     │
-     ├── 3. Create/Replace ConfigMap: {deployment}-nginx
-     │       key: "default.conf" = nginx config (port 8080, SPA)
-     │
-     ├── 4. Create/Replace Deployment: campaign-{id[:8]}-preview
-     │       image: nginxinc/nginx-unprivileged:alpine
-     │       mounts: html + nginx ConfigMaps
-     │
-     ├── 5. Create/Replace Service: campaign-{id[:8]}-preview
-     │       port 80 → targetPort 8080
-     │
-     └── 6. Create/Replace Route (OpenShift)
-             host: campaign-{id[:8]}-preview-{namespace}.{CLUSTER_DOMAIN}
-             TLS: edge termination
-             → Returns: https://campaign-{id[:8]}-preview-{namespace}.{CLUSTER_DOMAIN}/
+```mermaid
+flowchart TD
+    DM["deploy_campaign_to_k8s()"] --> Init["1. init_k8s_client()\n(in-cluster config)"]
+    Init --> CM1["2. ConfigMap: {name}-html\nkey: index.html = HTML content"]
+    CM1 --> CM2["3. ConfigMap: {name}-nginx\nkey: default.conf = nginx config"]
+    CM2 --> Deploy["4. Deployment: campaign-{id}-preview\nnginxinc/nginx-unprivileged:alpine\nmounts both ConfigMaps"]
+    Deploy --> Svc["5. Service: campaign-{id}-preview\nport 80 → targetPort 8080"]
+    Svc --> Route["6. Route (OpenShift)\nhttps://campaign-{id}-{ns}.{domain}/\nTLS: edge termination"]
 ```
 
 ### Namespace Layout
@@ -495,12 +535,12 @@ Delivery Manager
 
 ### Nginx Proxy Configuration
 
-```
-Browser
-  │
-  ├── /              → static React build (build/)
-  ├── /api/*         → proxy_pass http://campaign-api:5000
-  └── /events/*      → proxy_pass http://event-hub:5001 (buffering off, SSE)
+```mermaid
+flowchart LR
+    Browser --> nginx["nginx :8080"]
+    nginx -->|"/"| Static["Static React build\n(build/)"]
+    nginx -->|"/api/*"| API["campaign-api:5000"]
+    nginx -->|"/events/*"| SSE["event-hub:5001\n(buffering off)"]
 ```
 
 ### React Routes
