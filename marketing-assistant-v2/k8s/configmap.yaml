@@ -18,6 +18,6 @@ data:
   DELIVERY_MANAGER_URL: "http://delivery-manager:8083"
   MONGODB_MCP_URL: "http://mongodb-mcp:8090"
   IMAGEGEN_MCP_URL: "http://imagegen-mcp:8091"
-  IMAGEGEN_MCP_SELF_URL: "http://imagegen-mcp:8091"
+  IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-marketing-assistant-v2.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
   IMAGEGEN_MODEL_NAME: "flux2-klein-4b"
   EVENT_HUB_URL: "http://event-hub:5001"

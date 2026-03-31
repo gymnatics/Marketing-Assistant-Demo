@@ -90,11 +90,11 @@ No explanations, no comments outside code, no markdown blocks."""
 
 
 async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
-    """Call Image Gen MCP to generate a hero banner image. Returns base64 data URI or None on failure."""
+    """Call Image Gen MCP to generate a hero banner image. Returns a public URL or None on failure."""
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image_b64",
+                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image",
                 json={
                     "campaign_name": campaign_name,
                     "hotel_name": hotel_name,
@@ -106,10 +106,10 @@ async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, d
             )
             if response.status_code == 200:
                 result = response.json()
-                data_uri = result.get("data_uri")
-                if data_uri:
-                    print(f"[Creative Producer] Hero image generated ({len(data_uri)} chars)")
-                    return data_uri
+                image_url = result.get("image_url")
+                if image_url:
+                    print(f"[Creative Producer] Hero image generated: {image_url}")
+                    return image_url
             print(f"[Creative Producer] Image gen failed: {response.status_code} - {response.text[:200]}")
             return None
     except Exception as e:
@@ -154,11 +154,11 @@ async def generate_html_with_streaming(
 
     hero_image_section = ""
     if hero_image_url:
-        hero_image_section = f"""
+        hero_image_section = """
 ## AI-Generated Hero Image (MUST USE):
-- **Image Data URI:** provided below (base64 encoded PNG)
-- You MUST use this as the hero section background image. It is an AI-generated artwork that matches the campaign theme.
-- Apply it as: `background-image: url('{hero_image_url}'); background-size: cover; background-position: center;`
+- An AI-generated hero banner image has been created for this campaign.
+- You MUST use it as the hero section background: `background-image: url('HERO_IMAGE_PLACEHOLDER'); background-size: cover; background-position: center;`
+- Use EXACTLY the string `HERO_IMAGE_PLACEHOLDER` as the URL — it will be replaced with the actual image after generation.
 - Add a semi-transparent dark overlay (rgba(0,0,0,0.4)) on top for text readability
 - Make the hero section full-viewport height (100vh) to showcase the image prominently
 - The image is the visual centerpiece — design the page around it
@@ -251,7 +251,13 @@ Generate the complete HTML file now:"""
     if html_content.endswith("```"):
         html_content = html_content[:-3]
 
-    return html_content.strip()
+    html_content = html_content.strip()
+
+    if hero_image_url and "HERO_IMAGE_PLACEHOLDER" in html_content:
+        html_content = html_content.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
+        print(f"[Creative Producer] Injected hero image URL into HTML: {hero_image_url[:80]}")
+
+    return html_content
 
 
 class CreativeProducerAgent:
