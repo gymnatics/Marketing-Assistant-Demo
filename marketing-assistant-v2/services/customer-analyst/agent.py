@@ -1,11 +1,13 @@
 """
-Customer Analyst Agent - Pure business logic for retrieving VIP customer profiles.
+Customer Analyst Agent - Retrieves VIP customer profiles using LLM tool calling + MCP.
 
-Uses MCP to query MongoDB customer database for campaign targeting.
+Uses Qwen3 LLM to reason about which MCP tools to call based on the target audience,
+then executes those tools against the MongoDB MCP server via proper MCP protocol.
 """
 import os
+import json
 import httpx
-from typing import List, Optional
+from typing import List
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -18,89 +20,176 @@ from shared.models import (
 
 MONGODB_MCP_URL = os.environ.get("MONGODB_MCP_URL", "http://mongodb-mcp:8090")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
+LANG_MODEL_ENDPOINT = os.environ.get(
+    "LANG_MODEL_ENDPOINT",
+    "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
+)
+LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+LANG_MODEL_TOKEN = os.environ.get("LANG_MODEL_TOKEN", "")
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_customers_by_tier",
+            "description": "Retrieve VIP customers by membership tier (platinum, gold, diamond)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tier": {"type": "string", "description": "Membership tier: platinum, gold, or diamond"},
+                    "limit": {"type": "integer", "description": "Max customers to return", "default": 50}
+                },
+                "required": ["tier"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_prospects",
+            "description": "Retrieve prospect list — potential customers who are not yet members",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max prospects to return", "default": 50}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_high_spend_customers",
+            "description": "Retrieve customers with total spend above a threshold (whales/VVIPs)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "min_spend": {"type": "integer", "description": "Minimum total spend amount", "default": 500000},
+                    "limit": {"type": "integer", "description": "Max customers to return", "default": 50}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_all_vip_customers",
+            "description": "Retrieve all VIP customers regardless of tier",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max customers to return", "default": 100}
+                }
+            }
+        }
+    },
+]
+
+SYSTEM_PROMPT = """You are a customer data analyst for a luxury casino resort. Given a target audience description, decide which database tool to call to retrieve the right customer segment. You have access to the following tools:
+
+- get_customers_by_tier: For specific tier queries (platinum, gold, diamond members)
+- get_prospects: For new/potential customers who aren't members yet
+- get_high_spend_customers: For high-spending VIP/whale customers
+- get_all_vip_customers: For broad targeting across all VIP tiers
+
+Call exactly ONE tool based on the target audience description. Do not call multiple tools."""
 
 
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
-    """Publish event to Event Hub for UI updates."""
     try:
         async with httpx.AsyncClient() as client:
             await client.post(
                 f"{EVENT_HUB_URL}/events/{campaign_id}/publish",
-                json={
-                    "event_type": event_type,
-                    "agent": agent,
-                    "task": task,
-                    "data": data or {}
-                },
+                json={"event_type": event_type, "agent": agent, "task": task, "data": data or {}},
                 timeout=5.0
             )
     except Exception as e:
         print(f"[Customer Analyst] Failed to publish event: {e}")
 
 
-async def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
-    """Call a tool on the MongoDB MCP server."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{MONGODB_MCP_URL}/tools/{tool_name}",
-            json=arguments
-        )
-        if response.status_code != 200:
-            raise Exception(f"MCP tool error: {response.status_code} - {response.text}")
-        return response.json()
+async def call_mcp_tool(tool_name: str, arguments: dict) -> list:
+    """Call a tool on the MongoDB MCP server via proper MCP protocol."""
+    from fastmcp import Client
+    async with Client(f"{MONGODB_MCP_URL}/mcp") as mcp_client:
+        result = await mcp_client.call_tool(tool_name, arguments)
+        if result and result.content:
+            return json.loads(result.content[0].text)
+        return []
 
 
-async def get_customers_by_audience(target_audience: str, limit: int = 50) -> tuple[List[dict], str]:
-    """
-    Retrieve customers based on target audience description.
+async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tuple[list, str]:
+    """Use Qwen3 LLM to decide which MCP tool to call, then execute it."""
+    url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if LANG_MODEL_TOKEN:
+        headers["Authorization"] = f"Bearer {LANG_MODEL_TOKEN}"
 
-    Returns tuple of (customers, recipient_type)
-    """
-    audience_lower = target_audience.lower()
+    payload = {
+        "model": LANG_MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Retrieve customers for this target audience: {target_audience} (limit: {limit})"}
+        ],
+        "tools": TOOLS,
+        "tool_choice": "auto",
+        "temperature": 0.1,
+        "max_tokens": 256,
+        "stream": True,
+    }
+
+    tool_call_name = None
+    tool_call_args = ""
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as response:
+            if response.status_code != 200:
+                error_text = await response.aread()
+                raise Exception(f"LLM API error: {response.status_code} - {error_text}")
+
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:]
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    if "tool_calls" in delta:
+                        tc = delta["tool_calls"][0]
+                        if "function" in tc:
+                            if "name" in tc["function"]:
+                                tool_call_name = tc["function"]["name"]
+                            if "arguments" in tc["function"]:
+                                tool_call_args += tc["function"]["arguments"]
+                except json.JSONDecodeError:
+                    continue
+
+    if not tool_call_name:
+        print(f"[Customer Analyst] LLM did not select a tool, falling back to get_all_vip_customers")
+        tool_call_name = "get_all_vip_customers"
+        tool_call_args = json.dumps({"limit": limit})
 
     try:
-        if "new" in audience_lower or "prospect" in audience_lower:
-            result = await call_mcp_tool("get_prospects", {"limit": limit})
-            return result, "prospects"
+        arguments = json.loads(tool_call_args) if tool_call_args else {}
+    except json.JSONDecodeError:
+        arguments = {}
 
-        elif "platinum" in audience_lower:
-            result = await call_mcp_tool("get_customers_by_tier", {"tier": "platinum", "limit": limit})
-            return result, "customers"
+    if "limit" not in arguments:
+        arguments["limit"] = limit
 
-        elif "diamond" in audience_lower:
-            result = await call_mcp_tool("get_customers_by_tier", {"tier": "diamond", "limit": limit})
-            return result, "customers"
+    print(f"[Customer Analyst] LLM selected tool: {tool_call_name}({json.dumps(arguments)})")
 
-        elif "gold" in audience_lower:
-            result = await call_mcp_tool("get_customers_by_tier", {"tier": "gold", "limit": limit})
-            return result, "customers"
+    result = await call_mcp_tool(tool_call_name, arguments)
 
-        elif "high spend" in audience_lower or "high-spend" in audience_lower or "vvip" in audience_lower:
-            result = await call_mcp_tool("get_high_spend_customers", {"min_spend": 500000, "limit": limit})
-            return result, "customers"
-
-        else:
-            result = await call_mcp_tool("get_all_vip_customers", {"limit": limit})
-            return result, "customers"
-
-    except Exception as e:
-        print(f"[Customer Analyst] MCP call failed: {e}")
-        raise
+    recipient_type = "prospects" if tool_call_name == "get_prospects" else "customers"
+    return result, recipient_type
 
 
 class CustomerAnalystAgent:
-    """Retrieves VIP customer profiles for marketing campaign targeting via MCP."""
+    """Retrieves VIP customer profiles using LLM reasoning + MCP tools."""
 
     async def get_customers(self, params: dict) -> dict:
-        """
-        Retrieve customers matching target audience criteria.
-
-        Args:
-            params: dict with keys campaign_id, target_audience, limit
-
-        Returns:
-            dict with customers, count, recipient_type, status, and optional error
-        """
         campaign_id = params.get("campaign_id", "unknown")
         target_audience = params.get("target_audience", "all VIP")
         limit = params.get("limit", 50)
@@ -109,11 +198,18 @@ class CustomerAnalystAgent:
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Customer Analyst",
-            task=f"Retrieving {target_audience} customers"
+            task=f"Analyzing audience: {target_audience}"
         )
 
         try:
-            customers_data, recipient_type = await get_customers_by_audience(
+            await publish_event(
+                campaign_id=campaign_id,
+                event_type="workflow_status",
+                agent="Customer Analyst",
+                task="Consulting LLM for tool selection"
+            )
+
+            customers_data, recipient_type = await llm_select_and_call_tool(
                 target_audience=target_audience,
                 limit=limit
             )
@@ -138,7 +234,7 @@ class CustomerAnalystAgent:
                 campaign_id=campaign_id,
                 event_type="agent_completed",
                 agent="Customer Analyst",
-                task=f"Retrieved {len(customers)} {recipient_type}",
+                task=f"Retrieved {len(customers)} {recipient_type} via MCP",
                 data={"count": len(customers), "recipient_type": recipient_type}
             )
 

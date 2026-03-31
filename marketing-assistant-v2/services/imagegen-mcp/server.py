@@ -165,29 +165,13 @@ if __name__ == "__main__":
     import argparse
     import uvicorn
     from starlette.applications import Starlette
-    from starlette.routing import Route
+    from starlette.routing import Route, Mount
     from starlette.responses import JSONResponse, Response
     from starlette.requests import Request
 
     parser = argparse.ArgumentParser(description="Image Generation MCP Server")
     parser.add_argument("--port", type=int, default=8091)
     args = parser.parse_args()
-
-    TOOL_MAP = {
-        "generate_campaign_image": generate_campaign_image,
-        "generate_campaign_image_b64": generate_campaign_image_b64,
-    }
-
-    async def tool_handler(request: Request):
-        tool_name = request.path_params["tool_name"]
-        if tool_name not in TOOL_MAP:
-            return JSONResponse({"error": f"Unknown tool: {tool_name}"}, status_code=404)
-        try:
-            body = await request.json()
-            result = await TOOL_MAP[tool_name](**body)
-            return JSONResponse(result)
-        except Exception as e:
-            return JSONResponse({"error": str(e)}, status_code=500)
 
     async def serve_image(request: Request):
         filename = request.path_params["filename"]
@@ -208,12 +192,17 @@ if __name__ == "__main__":
             "stored_images": len(image_store),
         })
 
+    from starlette.routing import Mount
+    mcp_asgi = mcp.http_app(path="/mcp")
+
     app = Starlette(routes=[
         Route("/health", health, methods=["GET"]),
-        Route("/tools/{tool_name}", tool_handler, methods=["POST"]),
         Route("/images/{filename}", serve_image, methods=["GET"]),
+        Mount("/mcp", app=mcp_asgi),
     ])
 
     print(f"[ImageGen MCP] Starting server on 0.0.0.0:{args.port}")
+    print(f"[ImageGen MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
+    print(f"[ImageGen MCP] Image serving: http://0.0.0.0:{args.port}/images/")
     print(f"[ImageGen MCP] Model endpoint: {IMAGEGEN_MODEL_ENDPOINT}")
     uvicorn.run(app, host="0.0.0.0", port=args.port)

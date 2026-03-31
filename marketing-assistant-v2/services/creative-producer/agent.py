@@ -92,25 +92,24 @@ No explanations, no comments outside code, no markdown blocks."""
 async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
     """Call Image Gen MCP to generate a hero banner image. Returns a public URL or None on failure."""
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image",
-                json={
-                    "campaign_name": campaign_name,
-                    "hotel_name": hotel_name,
-                    "theme": theme,
-                    "description": description,
-                    "width": 1024,
-                    "height": 576,
-                },
-            )
-            if response.status_code == 200:
-                result = response.json()
-                image_url = result.get("image_url")
+        from fastmcp import Client
+        async with Client(f"{IMAGEGEN_MCP_URL}/mcp") as mcp_client:
+            result = await mcp_client.call_tool("generate_campaign_image", {
+                "campaign_name": campaign_name,
+                "hotel_name": hotel_name,
+                "theme": theme,
+                "description": description,
+                "width": 1024,
+                "height": 576,
+            })
+            if result and result.content:
+                import json as _json
+                data = _json.loads(result.content[0].text)
+                image_url = data.get("image_url")
                 if image_url:
                     print(f"[Creative Producer] Hero image generated: {image_url}")
                     return image_url
-            print(f"[Creative Producer] Image gen failed: {response.status_code} - {response.text[:200]}")
+            print(f"[Creative Producer] Image gen returned empty result")
             return None
     except Exception as e:
         print(f"[Creative Producer] Image gen error (non-fatal): {e}")

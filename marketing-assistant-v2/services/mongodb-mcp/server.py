@@ -8,7 +8,6 @@ from typing import List, Optional
 from fastmcp import FastMCP
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-from pydantic import BaseModel
 
 
 # Initialize FastMCP server
@@ -388,43 +387,11 @@ def get_customer_count_by_tier() -> dict:
 
 if __name__ == "__main__":
     import argparse
-    import uvicorn
-    from starlette.applications import Starlette
-    from starlette.routing import Route, Mount
-    from starlette.responses import JSONResponse
-    from starlette.requests import Request
 
     parser = argparse.ArgumentParser(description="MongoDB MCP Server")
     parser.add_argument("--port", type=int, default=8090)
     args = parser.parse_args()
 
-    TOOL_MAP = {
-        "get_customers_by_tier": get_customers_by_tier,
-        "get_high_spend_customers": get_high_spend_customers,
-        "get_all_vip_customers": get_all_vip_customers,
-        "get_prospects": get_prospects,
-        "search_customers": search_customers,
-        "get_customer_count_by_tier": get_customer_count_by_tier,
-    }
-
-    async def tool_handler(request: Request):
-        tool_name = request.path_params["tool_name"]
-        if tool_name not in TOOL_MAP:
-            return JSONResponse({"error": f"Unknown tool: {tool_name}"}, status_code=404)
-        try:
-            body = await request.json()
-            result = TOOL_MAP[tool_name](**body)
-            return JSONResponse(result)
-        except Exception as e:
-            return JSONResponse({"error": str(e)}, status_code=500)
-
-    async def health(request: Request):
-        return JSONResponse({"status": "healthy", "service": "MongoDB MCP"})
-
-    app = Starlette(routes=[
-        Route("/health", health, methods=["GET"]),
-        Route("/tools/{tool_name}", tool_handler, methods=["POST"]),
-    ])
-
-    print(f"[MongoDB MCP] Starting server on 0.0.0.0:{args.port}")
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    print(f"[MongoDB MCP] Starting streamable-http MCP server on 0.0.0.0:{args.port}")
+    print(f"[MongoDB MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=args.port)

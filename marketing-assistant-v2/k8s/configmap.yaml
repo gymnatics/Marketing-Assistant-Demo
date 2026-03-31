@@ -9,6 +9,7 @@ data:
   CLUSTER_DOMAIN: "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
   DEV_NAMESPACE: "0-marketing-assistant-demo-dev"
   PROD_NAMESPACE: "0-marketing-assistant-demo-prod"
+  MONGODB_URI: "mongodb://mongodb:27017"
   MONGODB_DATABASE: "casino_crm"
   
   # Internal service URLs
