@@ -7,6 +7,7 @@
 
 # PRD and sensitive docs
 PRD-*.md
+**/PRD.md
 *Draft*.md
 
 # Python cache
@@ -37,11 +38,23 @@ Thumbs.db
 
 # Kubernetes secrets
 k8s/secret.yaml
+**/k8s/secret.yaml
+**/secret.yaml
 
 # Build artifacts
 *.tar
 *.gz
+build/
+**/build/
 
 # Temporary files
 tmp/
 temp/
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Stitch template (reference only)
+stitch.zip
+stitch-template/

@@ -1,82 +1,87 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="0-marketing-assistant-demo"
-APP_NAME="marketing-assistant"
+# Configuration
+NAMESPACE="${NAMESPACE:-marketing-assistant-v2}"
 
 echo "=========================================="
-echo "Deploying Marketing Assistant to OpenShift"
+echo "Marketing Assistant v2 - Deploy to OpenShift"
 echo "=========================================="
+echo "Namespace: $NAMESPACE"
+echo ""
 
-# Check if logged in
+# Change to the marketing-assistant-v2 directory
+cd "$(dirname "$0")"
+
+# Check if logged in to OpenShift
 if ! oc whoami &> /dev/null; then
-    echo "ERROR: Not logged into OpenShift. Please run 'oc login' first."
+    echo "Error: Not logged in to OpenShift. Please run 'oc login' first."
     exit 1
 fi
 
 echo "Logged in as: $(oc whoami)"
-echo "Namespace: $NAMESPACE"
 echo ""
 
-# Step 1: Create ImageStream and BuildConfig
-echo "[1/6] Creating ImageStream and BuildConfig..."
-oc apply -f k8s/buildconfig.yaml
+# Create namespace if it doesn't exist
+echo "Creating namespace..."
+oc apply -f k8s/namespace.yaml
 
-# Step 2: Create ServiceAccount and RBAC
-echo "[2/6] Creating ServiceAccount and RBAC..."
-oc apply -f k8s/serviceaccount.yaml
-
-# Step 3: Create ConfigMap
-echo "[3/6] Creating ConfigMap..."
+# Apply ConfigMap
+echo "Applying ConfigMap..."
 oc apply -f k8s/configmap.yaml
 
-# Step 4: Create Secret with model tokens
-echo "[4/6] Creating Secret with model tokens..."
-CODE_TOKEN=$(oc get secret default-token-qwen25-coder-32b-fp8-sa -n $NAMESPACE -o jsonpath='{.data.token}' | base64 -d)
-LANG_TOKEN=$(oc get secret default-token-qwen3-32b-fp8-dynamic-sa -n $NAMESPACE -o jsonpath='{.data.token}' | base64 -d)
+# Check if secret exists, warn if not configured
+echo "Applying Secret..."
+if grep -q 'CODE_MODEL_TOKEN: ""' k8s/secret.yaml; then
+    echo "WARNING: k8s/secret.yaml has empty tokens. Please edit before deploying."
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+oc apply -f k8s/secret.yaml
 
-cat <<EOF | oc apply -f -
-apiVersion: v1
-kind: Secret
-metadata:
-  name: marketing-assistant-secrets
-  namespace: $NAMESPACE
-  labels:
-    app: marketing-assistant
-type: Opaque
-stringData:
-  CODE_MODEL_TOKEN: "$CODE_TOKEN"
-  LANG_MODEL_TOKEN: "$LANG_TOKEN"
-EOF
-
-# Step 5: Build the container image
-echo "[5/6] Building container image (this may take a few minutes)..."
-oc start-build $APP_NAME --from-dir=. --follow -n $NAMESPACE
-
-# Step 6: Deploy the application
-echo "[6/6] Deploying application..."
-oc apply -f k8s/service.yaml
-oc apply -f k8s/deployment.yaml
-oc apply -f k8s/route.yaml
-
-# Wait for deployment
+# Deploy MCP server
 echo ""
-echo "Waiting for deployment to be ready..."
-oc rollout status deployment/$APP_NAME -n $NAMESPACE --timeout=300s
+echo "Deploying MCP server..."
+oc apply -f k8s/mcp/
 
-# Get the route URL
-ROUTE_URL=$(oc get route $APP_NAME -n $NAMESPACE -o jsonpath='{.spec.host}')
+# Deploy agents
+echo ""
+echo "Deploying agents..."
+oc apply -f k8s/agents/
 
+# Deploy API layer
+echo ""
+echo "Deploying API layer..."
+oc apply -f k8s/api/
+
+# Deploy frontend
+echo ""
+echo "Deploying frontend..."
+oc apply -f k8s/frontend/
+
+# Wait for deployments
+echo ""
+echo "Waiting for deployments to be ready..."
+oc rollout status deployment/mongodb-mcp -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/event-hub -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/creative-producer -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/customer-analyst -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/delivery-manager -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/campaign-director -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/campaign-api -n $NAMESPACE --timeout=120s || true
+oc rollout status deployment/frontend -n $NAMESPACE --timeout=120s || true
+
+# Get routes
 echo ""
 echo "=========================================="
-echo "Deployment Complete!"
+echo "Deployment complete!"
 echo "=========================================="
 echo ""
-echo "Application URL: https://$ROUTE_URL"
+echo "Routes:"
+oc get routes -n $NAMESPACE -o custom-columns=NAME:.metadata.name,HOST:.spec.host
 echo ""
-echo "To check status:"
-echo "  oc get pods -n $NAMESPACE -l app=$APP_NAME"
-echo ""
-echo "To view logs:"
-echo "  oc logs -f deployment/$APP_NAME -n $NAMESPACE"
-echo ""
+echo "Frontend URL:"
+oc get route marketing-assistant-v2 -n $NAMESPACE -o jsonpath='https://{.spec.host}{"\n"}' 2>/dev/null || echo "Route not found"
