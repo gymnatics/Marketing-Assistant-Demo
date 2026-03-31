@@ -19,4 +19,5 @@ data:
   MONGODB_MCP_URL: "http://mongodb-mcp:8090"
   IMAGEGEN_MCP_URL: "http://imagegen-mcp:8091"
   IMAGEGEN_MCP_SELF_URL: "http://imagegen-mcp:8091"
+  IMAGEGEN_MODEL_NAME: "flux2-klein-4b"
   EVENT_HUB_URL: "http://event-hub:5001"
