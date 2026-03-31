@@ -195,11 +195,14 @@ if __name__ == "__main__":
     from starlette.routing import Mount
     mcp_asgi = mcp.http_app(path="/mcp")
 
-    app = Starlette(routes=[
-        Route("/health", health, methods=["GET"]),
-        Route("/images/{filename}", serve_image, methods=["GET"]),
-        Mount("/mcp", app=mcp_asgi),
-    ])
+    app = Starlette(
+        routes=[
+            Route("/health", health, methods=["GET"]),
+            Route("/images/{filename}", serve_image, methods=["GET"]),
+            Mount("/", app=mcp_asgi),
+        ],
+        lifespan=mcp_asgi.lifespan,
+    )
 
     print(f"[ImageGen MCP] Starting server on 0.0.0.0:{args.port}")
     print(f"[ImageGen MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
