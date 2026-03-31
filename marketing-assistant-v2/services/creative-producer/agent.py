@@ -22,52 +22,79 @@ EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
 
-CODER_SYSTEM_PROMPT = """You are a world-class UI/UX Designer and Frontend Engineer specializing in "The Editorial Architect" aesthetic — a design style that prioritizes high-end typography, sophisticated whitespace, and a luxury brand feel. Your goal is to generate high-fidelity, responsive HTML/CSS for marketing landing pages that cater to C-suite executives.
+CODER_SYSTEM_PROMPT = """You are an award-winning Creative Director and Frontend Engineer who creates show-stopping, one-of-a-kind luxury marketing landing pages. Every page you build should make executives say "WOW — AI made THIS?!"
 
-## Visual Identity Principles:
-1. **Typography First**: Use 'Manrope' for headlines and 'Inter' for body text via Google Fonts CDN. Headlines should be bold, high-contrast, and have tight letter-spacing. Body text should be airy and legible.
-2. **The Power of Negative Space**: Use generous margins and padding to create a sense of exclusivity and focus. Never cram content.
-3. **Controlled Color Palette**: Use the provided theme colors consistently. Accents should be used sparingly for high impact.
-4. **Imagery as Architecture**: Use CSS gradients and geometric patterns to create sophisticated visual depth. Include subtle parallax or scale-in effects via CSS animations.
-5. **Interactive Precision**: Buttons should have slightly rounded corners (4-8px border-radius). Use subtle hover states (opacity changes, slight tonal shifts, scale transforms) rather than heavy shadows.
+Your pages are NEVER generic or template-like. Each one is a unique creative vision with bold layout choices, dramatic visual storytelling, and immersive interactivity. You push boundaries while maintaining luxury brand standards.
 
-## Structural Requirements:
-- **Sticky Navigation**: A slim, translucent top bar with the hotel/casino name and a primary CTA button.
-- **Hero Section**: A powerful large headline with the campaign name, followed by a concise value proposition. If an AI-generated hero image URL is provided, use it as the hero background with `background-image: url(...)` and `background-size: cover`. Otherwise use an animated gradient or geometric pattern background.
-- **Narrative Flow**: Use single-column text blocks for the campaign philosophy and multi-column grids for details/benefits.
-- **Social Proof/Exclusivity**: A dedicated section for "Invitation Tiers" or "Limited Availability" to create urgency and prestige.
-- **QR Code Section**: Include a QR code for mobile access using: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
-- **Footer**: Hotel/casino branding with contact information.
+## Creative Philosophy — BE BOLD, BE DIFFERENT:
+- **Every page must have a unique layout** — never repeat the same section order or grid structure. Surprise the viewer.
+- **Dramatic visual impact** — full-bleed hero images, bold asymmetric layouts, oversized typography, cinematic compositions.
+- **Motion and life** — use CSS animations everywhere: floating elements, parallax scroll hints, shimmer effects on gold accents, text reveal animations, pulsing CTAs, gradient animations.
+- **Immersive storytelling** — the page should feel like an experience, not a brochure. Guide the eye with scroll-driven visual narratives.
 
-## Theme Presets (Apply based on the theme provided):
-- **Luxury Gold**: Dark (#0a0a0a) background, Gold (#D4AF37) accents, warm amber tones.
-- **Festive Red**: Deep Maroon (#2a0a0a) background, Crimson (#C41E3A) and Silver accents.
-- **Modern Black**: Pure Black (#000000) background, White/Gray accents, ultra-minimalist.
-- **Classic Casino**: Deep Forest Green (#0a2a1a) background, Gold (#D4AF37) and Emerald accents.
+## Typography:
+- Use 'Manrope' for headlines and 'Inter' for body via Google Fonts CDN.
+- Headlines: MASSIVE (clamp(3rem, 8vw, 7rem)), ultra-bold, tight letter-spacing (-0.03em).
+- Experiment with: vertical text, rotated labels, split-color headlines, gradient text fills.
+
+## Hero Section (MOST IMPORTANT):
+- If an AI-generated hero image is provided: make it the FULL VIEWPORT hero background (100vh, background-size: cover). Layer a dramatic gradient overlay. The headline should float over the image with a cinematic composition.
+- If no image: create a stunning animated gradient background with geometric SVG patterns, floating particle effects, or morphing shapes.
+- The hero must be breathtaking and immediately impressive.
+
+## Layout Variations — RANDOMIZE between these approaches:
+1. **Cinematic Scroll**: Full-bleed hero → floating card sections → horizontal scroll gallery → full-width CTA
+2. **Magazine Editorial**: Asymmetric two-column hero → pull quotes → mosaic grid → sticky sidebar
+3. **Immersive Story**: Overlapping layers with z-index depth → cards that "emerge" from dark backgrounds → timeline flow
+4. **Bold Geometric**: Angular section dividers (clip-path, skew) → overlapping circles/diamonds → brutalist-meets-luxury
+5. **Vertical Rhythm**: Alternating full-width and constrained sections → dramatic whitespace breaks → numbered journey steps
+
+## Must-Have Sections (in ANY creative order):
+- Hero with campaign headline + value prop (EN + ZH)
+- Campaign narrative/offer details
+- Benefits grid or feature showcase (use creative card designs — glass morphism, neon borders, gradient cards)
+- Exclusivity / urgency element ("Limited to Select Members", countdown-style, or tier badges)
+- CTA with animated button (glow effect, shimmer, or pulse)
+- QR code: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
+- Footer with hotel branding
+
+## CSS Techniques to Use Liberally:
+- `backdrop-filter: blur()` for glass morphism effects
+- `clip-path` for angular/diagonal section dividers
+- `mix-blend-mode` for overlay effects
+- CSS `@keyframes` for: shimmer, float, fadeInUp, gradientShift, pulse, scaleIn
+- `background: linear-gradient()` animated with `background-size: 200%`
+- `box-shadow` with colored glows (e.g., `0 0 60px rgba(212,175,55,0.3)`)
+- `transform: perspective()` for 3D card tilts
+- `scroll-snap` sections for a polished feel
+- SVG inline patterns for geometric backgrounds
+
+## Theme Presets:
+- **Luxury Gold**: Deep dark (#050510) base, Gold (#D4AF37) accents, warm amber glows, champagne shimmer effects.
+- **Festive Red**: Rich maroon (#1a0008) base, Crimson (#C41E3A) + Gold (#FFD700), lantern-glow effects, celebration energy.
+- **Modern Black**: True black (#000) base, white/silver accents, neon-edge highlights, ultra-minimal with dramatic contrast.
+- **Classic Casino**: Deep emerald (#001a0a) base, Gold + Green accents, felt-texture hints, classic glamour meets modern.
 
 ## Technical Constraints (CRITICAL):
-- Single self-contained HTML file with ALL styling in an embedded <style> tag.
+- Single self-contained HTML file with ALL CSS in an embedded <style> tag.
 - Do NOT use Tailwind CSS or any CSS framework. Write all CSS directly.
-- Use CSS flexbox and grid for layouts.
-- Use CSS variables (custom properties) for the color palette.
-- Include Google Fonts CDN link for Manrope and Inter only.
-- Use CSS @keyframes for animations (gradient shifts, fade-ins, hover effects).
-- Mobile-responsive using @media queries.
-- Use Semantic HTML5 tags.
-- Support both English and Chinese text.
-- The page must look polished and professional with NO unstyled elements.
+- CSS flexbox and grid for layouts. CSS variables for the color palette.
+- Google Fonts CDN for Manrope and Inter only.
+- Mobile-responsive with @media queries.
+- Semantic HTML5. Support English and Chinese text.
+- Every element must be styled — NO unstyled or placeholder elements.
 
 ## Output Format:
 Return ONLY the complete HTML code, starting with <!DOCTYPE html> and ending with </html>.
-Do not include any explanations, comments outside the code, or markdown code blocks."""
+No explanations, no comments outside code, no markdown blocks."""
 
 
 async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
-    """Call Image Gen MCP to generate a hero banner image. Returns image URL or None on failure."""
+    """Call Image Gen MCP to generate a hero banner image. Returns base64 data URI or None on failure."""
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image",
+                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image_b64",
                 json={
                     "campaign_name": campaign_name,
                     "hotel_name": hotel_name,
@@ -79,8 +106,11 @@ async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, d
             )
             if response.status_code == 200:
                 result = response.json()
-                return result.get("image_url")
-            print(f"[Creative Producer] Image gen failed: {response.status_code} - {response.text}")
+                data_uri = result.get("data_uri")
+                if data_uri:
+                    print(f"[Creative Producer] Hero image generated ({len(data_uri)} chars)")
+                    return data_uri
+            print(f"[Creative Producer] Image gen failed: {response.status_code} - {response.text[:200]}")
             return None
     except Exception as e:
         print(f"[Creative Producer] Image gen error (non-fatal): {e}")
@@ -125,23 +155,24 @@ async def generate_html_with_streaming(
     hero_image_section = ""
     if hero_image_url:
         hero_image_section = f"""
-## AI-Generated Hero Image:
-- **Image URL:** {hero_image_url}
-- Use this image as the hero section background: `background-image: url('{hero_image_url}'); background-size: cover; background-position: center;`
-- Layer a semi-transparent dark overlay on top for text readability
-- This is an AI-generated banner that matches the campaign theme
+## AI-Generated Hero Image (MUST USE):
+- **Image Data URI:** provided below (base64 encoded PNG)
+- You MUST use this as the hero section background image. It is an AI-generated artwork that matches the campaign theme.
+- Apply it as: `background-image: url('{hero_image_url}'); background-size: cover; background-position: center;`
+- Add a semi-transparent dark overlay (rgba(0,0,0,0.4)) on top for text readability
+- Make the hero section full-viewport height (100vh) to showcase the image prominently
+- The image is the visual centerpiece — design the page around it
 """
 
-    user_prompt = f"""Create an Editorial Architect-style landing page for a luxury casino marketing campaign.
+    user_prompt = f"""Create a STUNNING, one-of-a-kind luxury landing page for this campaign. Make it visually breathtaking — this is for a C-suite demo showcasing AI creativity.
 
-## Campaign Details:
-- **Campaign Name:** {campaign_name}
-- **Description:** {campaign_description}
-- **Hotel/Casino:** {hotel_name}
-- **Selected Theme:** {theme_config['name']}{date_info}
+## Campaign Brief:
+- **Campaign:** {campaign_name}
+- **Story:** {campaign_description}
+- **Venue:** {hotel_name}
+- **Theme:** {theme_config['name']}{date_info}
 {hero_image_section}
-
-## Theme Colors:
+## Color Palette:
 - Primary: {theme_config['primary_color']}
 - Secondary: {theme_config['secondary_color']}
 - Accent: {theme_config['accent_color']}
@@ -150,21 +181,25 @@ async def generate_html_with_streaming(
 - Button: {theme_config['button_color']}
 - Button Text: {theme_config['button_text']}
 
-## Required Sections:
-1. **Sticky Nav** — translucent top bar with "{hotel_name}" branding and a "Request Access" CTA button
-2. **Hero Section** — Large editorial headline with "{campaign_name}" and a compelling one-line value proposition beneath. Use an animated gradient or geometric pattern background with the theme colors.
-3. **The Offer** — Single-column narrative block explaining the campaign: {campaign_description}. Use generous whitespace and elegant typography.
-4. **Campaign Dates** — Display **{start_date} to {end_date}** prominently as an exclusive "Limited Window" banner or countdown-style element.
-5. **Curated Benefits** — Multi-column grid (3-4 cards) highlighting key benefits. Use subtle icons or decorative elements.
-6. **Invitation Tier / Exclusivity** — A section conveying urgency and prestige (e.g., "Limited to Select Members", "By Invitation Only").
-7. **Call to Action** — Large, prominent CTA button with hover animation.
-8. **QR Code** — Mobile access section with: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code">
-9. **Footer** — {hotel_name} branding, address line, and contact link.
+## Creative Direction:
+Create something UNIQUE and IMPRESSIVE. Choose a bold layout approach — asymmetric grids, overlapping sections, cinematic hero, diagonal dividers, floating cards, anything that says "an AI designed this and it's amazing."
+
+Include these elements (in any creative order — surprise me with the arrangement):
+- **Epic Hero** — Full-viewport (100vh), {campaign_name} as a massive headline with Chinese translation, compelling value prop
+- **Campaign Story** — {campaign_description} — present it as an immersive narrative, not a boring text block
+- **Date Showcase** — {start_date} to {end_date} — make the dates feel exclusive (countdown style, "Limited Window", or elegant badge)
+- **Benefits/Features** — 3-4 cards with creative designs (glassmorphism, gradient borders, 3D tilt, neon glow — pick one style)
+- **Exclusivity** — urgency element ("By Invitation Only", "Limited to Select Members", tier badges)
+- **CTA** — animated button with glow/shimmer/pulse effect
+- **QR Code** — <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code">
+- **Footer** — {hotel_name} branding
 
 ## Language:
-- Primary text in English with luxury editorial copywriting
-- Include Chinese (中文) translations for the hero headline and CTA button
-- Use the ACTUAL campaign dates ({start_date} to {end_date}), never placeholders
+- Primary: English with luxury editorial copywriting (think Ritz-Carlton meets Apple)
+- Hero headline + CTA: include Chinese (中文) translations
+- Use actual dates ({start_date} to {end_date}), never placeholders
+
+## IMPORTANT: Make this page dramatically different from a standard corporate template. Use creative CSS animations, bold typography, and a layout that showcases AI creativity.
 
 Generate the complete HTML file now:"""
 
@@ -181,8 +216,8 @@ Generate the complete HTML file now:"""
             {"role": "system", "content": CODER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.7,
-        "max_tokens": 8000,
+        "temperature": 0.85,
+        "max_tokens": 12000,
         "stream": True
     }
 
