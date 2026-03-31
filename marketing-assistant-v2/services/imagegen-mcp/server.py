@@ -37,11 +37,12 @@ THEME_PROMPTS = {
 def _build_prompt(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str:
     theme_style = THEME_PROMPTS.get(theme, THEME_PROMPTS["luxury_gold"])
     return (
-        f"Professional luxury casino marketing banner for '{campaign_name}' at {hotel_name}. "
-        f"{theme_style}. "
-        f"Night cityscape of Macau skyline backdrop, premium VIP experience, "
+        f"Professional luxury casino hotel interior and exterior photography, {theme_style}. "
+        f"Night cityscape of Macau skyline backdrop, premium VIP atmosphere, "
         f"cinematic lighting, photorealistic, ultra high quality, 4K resolution, "
-        f"wide banner composition, no text overlays"
+        f"wide banner composition. "
+        f"ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO LOGOS, NO WATERMARKS, NO TYPOGRAPHY in the image. "
+        f"Pure photography only, no graphic design elements."
     )
 
 
