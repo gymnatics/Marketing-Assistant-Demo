@@ -1,13 +1,13 @@
-FROM python:3.11-slim
+FROM registry.access.redhat.com/ubi9/python-311:latest
 
-WORKDIR /app
+WORKDIR /opt/app-root/src
 
 # Copy and install requirements
 COPY services/campaign-api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared models
-COPY shared/ /app/shared/
+COPY shared/ /opt/app-root/src/shared/
 
 # Copy app code
 COPY services/campaign-api/app.py .

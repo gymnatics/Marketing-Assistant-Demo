@@ -1,11 +1,11 @@
-FROM python:3.11-slim
+FROM registry.access.redhat.com/ubi9/python-311:latest
 
-WORKDIR /app
+WORKDIR /opt/app-root/src
 
 COPY services/campaign-director/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY shared/ /app/shared/
+COPY shared/ /opt/app-root/src/shared/
 
 COPY services/campaign-director/agent.py .
 COPY services/campaign-director/agent_executor.py .
