@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: marketing-assistant-v2
   labels:
     app: frontend
     component: ui
@@ -35,7 +34,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: marketing-assistant-v2
 spec:
   selector:
     app: frontend
@@ -47,7 +45,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: marketing-assistant-v2
-  namespace: marketing-assistant-v2
   annotations:
     haproxy.router.openshift.io/timeout: 300s
 spec:

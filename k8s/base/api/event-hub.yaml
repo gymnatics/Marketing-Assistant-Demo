@@ -1,31 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: campaign-api
-  namespace: marketing-assistant-v2
+  name: event-hub
   labels:
-    app: campaign-api
+    app: event-hub
     component: api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: campaign-api
+      app: event-hub
   template:
     metadata:
       labels:
-        app: campaign-api
+        app: event-hub
         component: api
     spec:
       containers:
-        - name: api
-          image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-api
-          imagePullPolicy: Always
+        - name: hub
+          image: quay.io/rh-ee-dayeo/marketing-assistant:event-hub
           ports:
-            - containerPort: 5000
-          envFrom:
-            - configMapRef:
-                name: marketing-assistant-config
+            - containerPort: 5001
           resources:
             requests:
               memory: "128Mi"
@@ -36,38 +31,38 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 5000
+              port: 5001
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /health
-              port: 5000
+              port: 5001
             initialDelaySeconds: 5
             periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: campaign-api
-  namespace: marketing-assistant-v2
+  name: event-hub
 spec:
   selector:
-    app: campaign-api
+    app: event-hub
   ports:
-    - port: 5000
-      targetPort: 5000
+    - port: 5001
+      targetPort: 5001
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: campaign-api
-  namespace: marketing-assistant-v2
+  name: event-hub
+  annotations:
+    haproxy.router.openshift.io/timeout: 300s
 spec:
   to:
     kind: Service
-    name: campaign-api
+    name: event-hub
   port:
-    targetPort: 5000
+    targetPort: 5001
   tls:
     termination: edge

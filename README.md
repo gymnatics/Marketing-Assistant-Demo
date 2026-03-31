@@ -76,26 +76,24 @@ docker-compose up
 
 Access: http://localhost:3000
 
-### OpenShift Deployment
+### OpenShift Deployment (Kustomize)
 
 ```bash
-# 1. Namespace and RBAC
-oc apply -f k8s/namespace.yaml
-oc apply -f k8s/rbac.yaml
+# 1. Copy and edit the overlay secret with your model tokens
+cp k8s/overlays/dev/secret.yaml k8s/overlays/dev/secret-local.yaml
+# Edit secret-local.yaml with your actual endpoints and tokens
 
-# 2. Config (edit secret with your tokens first)
-oc apply -f k8s/configmap.yaml
-oc apply -f k8s/secret-example.yaml
+# 2. Deploy everything in one command
+oc apply -k k8s/overlays/dev
 
-# 3. Deploy services
-oc apply -f k8s/mcp/
-oc apply -f k8s/agents/
-oc apply -f k8s/api/
-oc apply -f k8s/frontend/
-
-# 4. Seed MongoDB
+# 3. Seed MongoDB with customer data
 oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
+
+# 4. Import vLLM-Omni ServingRuntime (for image generation)
+oc apply -f k8s/imagegen/serving-runtime.yaml
 ```
+
+**For a different cluster:** Copy `k8s/overlays/dev/` to `k8s/overlays/<your-name>/`, edit `configmap-patch.yaml` (cluster domain, namespaces) and `secret.yaml` (model endpoints, tokens).
 
 ## Workflow
 

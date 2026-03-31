@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: marketing-assistant-v2
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - rbac.yaml
+  # MCP servers + database
+  - mcp/mongodb.yaml
+  - mcp/mongodb-mcp.yaml
+  - mcp/imagegen-mcp.yaml
+  - mcp/imagegen-mcp-route.yaml
+  # A2A agents
+  - agents/campaign-director.yaml
+  - agents/creative-producer.yaml
+  - agents/customer-analyst.yaml
+  - agents/delivery-manager.yaml
+  # API layer
+  - api/campaign-api.yaml
+  - api/event-hub.yaml
+  # Frontend
+  - frontend/frontend.yaml
