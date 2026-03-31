@@ -36,10 +36,9 @@ Thumbs.db
 # Logs
 *.log
 
-# Kubernetes secrets
+# Kubernetes secrets (actual values, not templates)
 k8s/secret.yaml
-**/k8s/secret.yaml
-**/secret.yaml
+**/secret-local.yaml
 
 # Build artifacts
 *.tar
