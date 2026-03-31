@@ -643,6 +643,18 @@ export default function CampaignCreate() {
           <button onClick={handleBack} className="px-6 py-3 rounded-xl font-semibold text-on-surface-variant hover:bg-surface-container-high transition-all flex items-center gap-2">
             <span className="material-symbols-outlined">arrow_back</span>Back to Edits
           </button>
+          {currentStep === 2 && !loading && (
+            <button
+              onClick={async () => {
+                if (!campaignState.id || busyRef.current) return;
+                busyRef.current = true;
+                try { await generateLandingPage(campaignState.id); } finally { busyRef.current = false; }
+              }}
+              className="px-6 py-3 rounded-xl font-semibold text-on-surface-variant border border-outline-variant/30 hover:bg-surface-container-high transition-all flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined">refresh</span>Regenerate
+            </button>
+          )}
           <button
             onClick={handleNext}
             disabled={loading || (!state_has_emails && currentStep === 3)}

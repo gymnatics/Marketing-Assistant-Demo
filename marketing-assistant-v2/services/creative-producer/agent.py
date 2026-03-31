@@ -19,6 +19,7 @@ CODE_MODEL_ENDPOINT = os.environ.get(
 CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
 CODE_MODEL_TOKEN = os.environ.get("CODE_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
+IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
 
 CODER_SYSTEM_PROMPT = """You are a world-class UI/UX Designer and Frontend Engineer specializing in "The Editorial Architect" aesthetic — a design style that prioritizes high-end typography, sophisticated whitespace, and a luxury brand feel. Your goal is to generate high-fidelity, responsive HTML/CSS for marketing landing pages that cater to C-suite executives.
@@ -32,7 +33,7 @@ CODER_SYSTEM_PROMPT = """You are a world-class UI/UX Designer and Frontend Engin
 
 ## Structural Requirements:
 - **Sticky Navigation**: A slim, translucent top bar with the hotel/casino name and a primary CTA button.
-- **Hero Section**: A powerful large headline with the campaign name, followed by a concise value proposition. Use an animated gradient or geometric pattern background.
+- **Hero Section**: A powerful large headline with the campaign name, followed by a concise value proposition. If an AI-generated hero image URL is provided, use it as the hero background with `background-image: url(...)` and `background-size: cover`. Otherwise use an animated gradient or geometric pattern background.
 - **Narrative Flow**: Use single-column text blocks for the campaign philosophy and multi-column grids for details/benefits.
 - **Social Proof/Exclusivity**: A dedicated section for "Invitation Tiers" or "Limited Availability" to create urgency and prestige.
 - **QR Code Section**: Include a QR code for mobile access using: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
@@ -61,6 +62,31 @@ Return ONLY the complete HTML code, starting with <!DOCTYPE html> and ending wit
 Do not include any explanations, comments outside the code, or markdown code blocks."""
 
 
+async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
+    """Call Image Gen MCP to generate a hero banner image. Returns image URL or None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{IMAGEGEN_MCP_URL}/tools/generate_campaign_image",
+                json={
+                    "campaign_name": campaign_name,
+                    "hotel_name": hotel_name,
+                    "theme": theme,
+                    "description": description,
+                    "width": 1024,
+                    "height": 576,
+                },
+            )
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("image_url")
+            print(f"[Creative Producer] Image gen failed: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"[Creative Producer] Image gen error (non-fatal): {e}")
+        return None
+
+
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
     """Publish event to Event Hub for UI updates."""
     try:
@@ -85,7 +111,8 @@ async def generate_html_with_streaming(
     hotel_name: str,
     theme: str,
     start_date: str,
-    end_date: str
+    end_date: str,
+    hero_image_url: str | None = None
 ) -> str:
     """Generate landing page HTML using streaming to avoid timeout."""
 
@@ -95,6 +122,16 @@ async def generate_html_with_streaming(
     if start_date and end_date:
         date_info = f"\n- Campaign Period: {start_date} to {end_date}"
 
+    hero_image_section = ""
+    if hero_image_url:
+        hero_image_section = f"""
+## AI-Generated Hero Image:
+- **Image URL:** {hero_image_url}
+- Use this image as the hero section background: `background-image: url('{hero_image_url}'); background-size: cover; background-position: center;`
+- Layer a semi-transparent dark overlay on top for text readability
+- This is an AI-generated banner that matches the campaign theme
+"""
+
     user_prompt = f"""Create an Editorial Architect-style landing page for a luxury casino marketing campaign.
 
 ## Campaign Details:
@@ -102,6 +139,7 @@ async def generate_html_with_streaming(
 - **Description:** {campaign_description}
 - **Hotel/Casino:** {hotel_name}
 - **Selected Theme:** {theme_config['name']}{date_info}
+{hero_image_section}
 
 ## Theme Colors:
 - Primary: {theme_config['primary_color']}
@@ -200,17 +238,48 @@ class CreativeProducerAgent:
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Creative Producer",
-            task="Generating landing page"
+            task="Generating hero image with AI"
         )
 
         try:
+            hero_image_url = await generate_hero_image(
+                campaign_name=params["campaign_name"],
+                hotel_name=params["hotel_name"],
+                theme=params["theme"],
+                description=params["campaign_description"],
+            )
+
+            if hero_image_url:
+                await publish_event(
+                    campaign_id=campaign_id,
+                    event_type="agent_completed",
+                    agent="Creative Producer",
+                    task="Hero image generated",
+                    data={"image_url": hero_image_url}
+                )
+            else:
+                await publish_event(
+                    campaign_id=campaign_id,
+                    event_type="workflow_status",
+                    agent="Creative Producer",
+                    task="Image gen unavailable, using CSS gradients"
+                )
+
+            await publish_event(
+                campaign_id=campaign_id,
+                event_type="agent_started",
+                agent="Creative Producer",
+                task="Generating landing page HTML"
+            )
+
             html = await generate_html_with_streaming(
                 campaign_name=params["campaign_name"],
                 campaign_description=params["campaign_description"],
                 hotel_name=params["hotel_name"],
                 theme=params["theme"],
                 start_date=params["start_date"],
-                end_date=params["end_date"]
+                end_date=params["end_date"],
+                hero_image_url=hero_image_url,
             )
 
             await publish_event(

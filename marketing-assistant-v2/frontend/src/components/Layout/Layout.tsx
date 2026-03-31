@@ -15,8 +15,8 @@ const TopNavBar: React.FC = () => {
     <header className="bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl font-headline antialiased fixed top-0 z-50 w-full px-12 h-20 border-b border-slate-200/50 dark:border-slate-800/50 flex justify-between items-center">
       <div className="flex items-center gap-8">
         <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
-          <img src="/logo.png" alt="Logo" className="h-7 w-7" />
-          Marketing Assistant
+          <img src="/logo.png" alt="Grand Lisboa Palace" className="h-7 w-7 rounded" />
+          Grand Lisboa Palace
         </Link>
         <nav className="hidden md:flex gap-6">
           <Link 

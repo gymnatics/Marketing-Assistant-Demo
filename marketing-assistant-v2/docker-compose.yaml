@@ -32,6 +32,19 @@ services:
     ports:
       - "5001:5001"
 
+  # Image Generation MCP Server
+  imagegen-mcp:
+    build:
+      context: .
+      dockerfile: ./services/imagegen-mcp/Dockerfile
+    ports:
+      - "8091:8091"
+    environment:
+      IMAGEGEN_MODEL_ENDPOINT: ${IMAGEGEN_MODEL_ENDPOINT:-http://localhost:8091/v1}
+      IMAGEGEN_MODEL_NAME: ${IMAGEGEN_MODEL_NAME:-flux1-schnell}
+      IMAGEGEN_MODEL_TOKEN: ${IMAGEGEN_MODEL_TOKEN:-}
+      IMAGEGEN_MCP_SELF_URL: http://imagegen-mcp:8091
+
   # Creative Producer Agent
   creative-producer:
     build:
@@ -44,8 +57,10 @@ services:
       CODE_MODEL_NAME: ${CODE_MODEL_NAME:-qwen25-coder-32b-fp8}
       CODE_MODEL_TOKEN: ${CODE_MODEL_TOKEN}
       EVENT_HUB_URL: http://event-hub:5001
+      IMAGEGEN_MCP_URL: http://imagegen-mcp:8091
     depends_on:
       - event-hub
+      - imagegen-mcp
 
   # Customer Analyst Agent
   customer-analyst:

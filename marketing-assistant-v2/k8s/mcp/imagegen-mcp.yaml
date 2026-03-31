@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagegen-mcp
+  namespace: marketing-assistant-v2
+  labels:
+    app: imagegen-mcp
+    component: mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagegen-mcp
+  template:
+    metadata:
+      labels:
+        app: imagegen-mcp
+        component: mcp
+    spec:
+      containers:
+        - name: mcp
+          image: quay.io/rh-ee-dayeo/marketing-assistant:imagegen-mcp
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8091
+          envFrom:
+            - configMapRef:
+                name: marketing-assistant-config
+            - secretRef:
+                name: marketing-assistant-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imagegen-mcp
+  namespace: marketing-assistant-v2
+spec:
+  selector:
+    app: imagegen-mcp
+  ports:
+    - port: 8091
+      targetPort: 8091
