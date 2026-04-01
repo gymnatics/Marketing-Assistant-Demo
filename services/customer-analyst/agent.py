@@ -166,9 +166,26 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tup
                     continue
 
     if not tool_call_name:
-        print(f"[Customer Analyst] LLM did not select a tool, falling back to get_all_vip_customers")
-        tool_call_name = "get_all_vip_customers"
-        tool_call_args = json.dumps({"limit": limit})
+        print(f"[Customer Analyst] LLM did not select a tool, using keyword fallback for: {target_audience}")
+        audience_lower = target_audience.lower()
+        if "new" in audience_lower or "prospect" in audience_lower:
+            tool_call_name = "get_prospects"
+            tool_call_args = json.dumps({"limit": limit})
+        elif "platinum" in audience_lower:
+            tool_call_name = "get_customers_by_tier"
+            tool_call_args = json.dumps({"tier": "platinum", "limit": limit})
+        elif "diamond" in audience_lower:
+            tool_call_name = "get_customers_by_tier"
+            tool_call_args = json.dumps({"tier": "diamond", "limit": limit})
+        elif "gold" in audience_lower:
+            tool_call_name = "get_customers_by_tier"
+            tool_call_args = json.dumps({"tier": "gold", "limit": limit})
+        elif "high" in audience_lower or "spend" in audience_lower or "whale" in audience_lower:
+            tool_call_name = "get_high_spend_customers"
+            tool_call_args = json.dumps({"min_spend": 500000, "limit": limit})
+        else:
+            tool_call_name = "get_all_vip_customers"
+            tool_call_args = json.dumps({"limit": limit})
 
     try:
         arguments = json.loads(tool_call_args) if tool_call_args else {}
