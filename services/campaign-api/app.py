@@ -8,9 +8,11 @@ Campaign Director's A2A skills (create, generate, email, golive) are called via 
 import os
 import uuid
 import json
+import time
 import httpx
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -20,6 +22,12 @@ app = Flask(__name__)
 CORS(app)
 
 CAMPAIGN_DIRECTOR_URL = os.environ.get("CAMPAIGN_DIRECTOR_URL", "http://campaign-director:8080")
+
+CAMPAIGNS_CREATED = Counter("campaigns_created_total", "Total campaigns created")
+CAMPAIGNS_LIVE = Counter("campaigns_live_total", "Total campaigns that went live")
+AGENT_CALLS = Counter("agent_calls_total", "A2A calls to Campaign Director", ["skill"])
+STEP_DURATION = Histogram("campaign_step_duration_seconds", "Duration of campaign workflow steps", ["step"])
+ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 
 
 def call_director_a2a_sync(skill: str, params: dict) -> dict:
@@ -71,9 +79,18 @@ def call_director_a2a_sync(skill: str, params: dict) -> dict:
         loop.close()
 
 
-@app.route("/health", methods=["GET"])
+@app.route("/healthz", methods=["GET"])
 def health_check():
     return jsonify({"status": "healthy", "service": "Campaign API"})
+
+@app.route("/readyz")
+def readiness_check():
+    return health_check()
+
+
+@app.route("/metrics")
+def metrics():
+    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
 @app.route("/api/themes", methods=["GET"])
@@ -112,9 +129,12 @@ def get_campaign(campaign_id: str):
 def create_campaign():
     try:
         data = request.get_json()
+        AGENT_CALLS.labels(skill="create_campaign").inc()
         result = call_director_a2a_sync("create_campaign", data)
         if "error" in result and result["error"]:
             return jsonify(result), 500
+        CAMPAIGNS_CREATED.inc()
+        ACTIVE_CAMPAIGNS.inc()
         return jsonify(result), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -123,7 +143,10 @@ def create_campaign():
 @app.route("/api/campaigns/<campaign_id>/generate", methods=["POST"])
 def generate_landing_page(campaign_id: str):
     try:
+        AGENT_CALLS.labels(skill="generate_landing_page").inc()
+        start = time.time()
         result = call_director_a2a_sync("generate_landing_page", {"campaign_id": campaign_id})
+        STEP_DURATION.labels(step="generate").observe(time.time() - start)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -132,7 +155,10 @@ def generate_landing_page(campaign_id: str):
 @app.route("/api/campaigns/<campaign_id>/preview-email", methods=["POST"])
 def preview_email(campaign_id: str):
     try:
+        AGENT_CALLS.labels(skill="prepare_email_preview").inc()
+        start = time.time()
         result = call_director_a2a_sync("prepare_email_preview", {"campaign_id": campaign_id})
+        STEP_DURATION.labels(step="email_preview").observe(time.time() - start)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -141,7 +167,12 @@ def preview_email(campaign_id: str):
 @app.route("/api/campaigns/<campaign_id>/approve", methods=["POST"])
 def approve_campaign(campaign_id: str):
     try:
+        AGENT_CALLS.labels(skill="go_live").inc()
+        start = time.time()
         result = call_director_a2a_sync("go_live", {"campaign_id": campaign_id})
+        STEP_DURATION.labels(step="go_live").observe(time.time() - start)
+        CAMPAIGNS_LIVE.inc()
+        ACTIVE_CAMPAIGNS.dec()
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: delivery-manager
   labels:
     app: delivery-manager
     component: agent
+    kagenti.io/framework: custom
     kagenti.io/type: agent
-    protocol.kagenti.io/a2a: ""
-    kagenti.io/framework: Custom
+    protocol.kagenti.io/a2a: ''
+  name: delivery-manager
 spec:
   replicas: 1
   selector:
@@ -15,54 +15,55 @@ spec:
       app: delivery-manager
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: 'true'
+        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: delivery-manager
         component: agent
-        kagenti.io/type: agent
-        protocol.kagenti.io/a2a: ""
     spec:
-      serviceAccountName: delivery-manager
       containers:
-        - name: agent
-          image: quay.io/rh-ee-dayeo/marketing-assistant:delivery-manager
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8083
-          envFrom:
-            - configMapRef:
-                name: marketing-assistant-config
-            - secretRef:
-                name: marketing-assistant-secrets
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8083
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8083
-            initialDelaySeconds: 5
-            periodSeconds: 10
+      - envFrom:
+        - configMapRef:
+            name: marketing-assistant-config
+        - secretRef:
+            name: marketing-assistant-secrets
+        image: quay.io/rh-ee-dayeo/marketing-assistant:delivery-manager
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8083
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        name: agent
+        ports:
+        - containerPort: 8083
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8083
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      serviceAccountName: delivery-manager
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: delivery-manager
 spec:
+  ports:
+  - port: 8083
+    targetPort: 8083
   selector:
     app: delivery-manager
-  ports:
-    - port: 8083
-      targetPort: 8083
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -74,24 +75,49 @@ kind: ClusterRole
 metadata:
   name: delivery-manager-deployer
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps", "services"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
-  - apiGroups: ["route.openshift.io"]
-    resources: ["routes"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - patch
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: delivery-manager-deployer-binding
-subjects:
-  - kind: ServiceAccount
-    name: delivery-manager
 roleRef:
+  apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: delivery-manager-deployer
-  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: delivery-manager

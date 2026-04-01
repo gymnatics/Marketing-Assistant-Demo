@@ -82,9 +82,10 @@ async def get_campaign(request: Request):
     return JSONResponse(campaigns_store[campaign_id].model_dump(mode="json"))
 
 
-app.routes.insert(0, Route("/health", health_check, methods=["GET"]))
-app.routes.insert(1, Route("/campaigns", list_campaigns, methods=["GET"]))
-app.routes.insert(2, Route("/campaigns/{campaign_id}", get_campaign, methods=["GET"]))
+app.routes.insert(0, Route("/healthz", health_check, methods=["GET"]))
+app.routes.insert(1, Route("/readyz", health_check, methods=["GET"]))
+app.routes.insert(2, Route("/campaigns", list_campaigns, methods=["GET"]))
+app.routes.insert(3, Route("/campaigns/{campaign_id}", get_campaign, methods=["GET"]))
 
 if __name__ == "__main__":
     uvicorn.run(app, host=host, port=port)

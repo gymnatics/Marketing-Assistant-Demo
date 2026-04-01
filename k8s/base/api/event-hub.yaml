@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: event-hub
   labels:
     app: event-hub
     component: api
+  name: event-hub
 spec:
   replicas: 1
   selector:
@@ -12,57 +12,60 @@ spec:
       app: event-hub
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: 'true'
+        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: event-hub
         component: api
     spec:
       containers:
-        - name: hub
-          image: quay.io/rh-ee-dayeo/marketing-assistant:event-hub
-          ports:
-            - containerPort: 5001
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "50m"
-            limits:
-              memory: "256Mi"
-              cpu: "200m"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 5001
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 5001
-            initialDelaySeconds: 5
-            periodSeconds: 10
+      - image: quay.io/rh-ee-dayeo/marketing-assistant:event-hub
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        name: hub
+        ports:
+        - containerPort: 5001
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: event-hub
 spec:
+  ports:
+  - port: 5001
+    targetPort: 5001
   selector:
     app: event-hub
-  ports:
-    - port: 5001
-      targetPort: 5001
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: event-hub
   annotations:
     haproxy.router.openshift.io/timeout: 300s
+  name: event-hub
 spec:
-  to:
-    kind: Service
-    name: event-hub
   port:
     targetPort: 5001
   tls:
     termination: edge
+  to:
+    kind: Service
+    name: event-hub

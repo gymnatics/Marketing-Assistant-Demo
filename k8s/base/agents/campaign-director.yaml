@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: campaign-director
   labels:
     app: campaign-director
     component: agent
-    kagenti.io/type: agent
-    protocol.kagenti.io/a2a: ""
     kagenti.io/framework: LangGraph
+    kagenti.io/type: agent
+    protocol.kagenti.io/a2a: ''
+  name: campaign-director
 spec:
   replicas: 1
   selector:
@@ -15,50 +15,51 @@ spec:
       app: campaign-director
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: 'true'
+        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: campaign-director
         component: agent
-        kagenti.io/type: agent
-        protocol.kagenti.io/a2a: ""
     spec:
       containers:
-        - name: agent
-          image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-director
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: marketing-assistant-config
-            - secretRef:
-                name: marketing-assistant-secrets
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
+      - envFrom:
+        - configMapRef:
+            name: marketing-assistant-config
+        - secretRef:
+            name: marketing-assistant-secrets
+        image: quay.io/rh-ee-dayeo/marketing-assistant:campaign-director
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        name: agent
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: campaign-director
 spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
   selector:
     app: campaign-director
-  ports:
-    - port: 8080
-      targetPort: 8080

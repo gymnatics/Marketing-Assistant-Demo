@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
   labels:
     app: frontend
     component: ui
+  name: frontend
 spec:
   replicas: 1
   selector:
@@ -12,46 +12,49 @@ spec:
       app: frontend
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: 'true'
+        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: frontend
         component: ui
     spec:
       containers:
-        - name: frontend
-          image: quay.io/rh-ee-dayeo/marketing-assistant:frontend
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "25m"
-            limits:
-              memory: "128Mi"
-              cpu: "100m"
+      - image: quay.io/rh-ee-dayeo/marketing-assistant:frontend
+        imagePullPolicy: Always
+        name: frontend
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 64Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
 spec:
+  ports:
+  - port: 80
+    targetPort: 8080
   selector:
     app: frontend
-  ports:
-    - port: 80
-      targetPort: 8080
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: marketing-assistant-v2
   annotations:
     haproxy.router.openshift.io/timeout: 300s
+  name: marketing-assistant-v2
 spec:
-  to:
-    kind: Service
-    name: frontend
   port:
     targetPort: 8080
   tls:
     termination: edge
+  to:
+    kind: Service
+    name: frontend

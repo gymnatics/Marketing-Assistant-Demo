@@ -48,7 +48,8 @@ async def health_check(request):
     return JSONResponse({"status": "healthy", "agent": "Customer Analyst"})
 
 
-app.routes.insert(0, Route("/health", health_check, methods=["GET"]))
+app.routes.insert(0, Route("/healthz", health_check, methods=["GET"]))
+app.routes.insert(1, Route("/readyz", health_check, methods=["GET"]))
 
 if __name__ == "__main__":
     uvicorn.run(app, host=host, port=port)

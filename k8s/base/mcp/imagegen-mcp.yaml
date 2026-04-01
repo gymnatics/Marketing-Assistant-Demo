@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: imagegen-mcp
   labels:
     app: imagegen-mcp
-    component: mcp
-    kagenti.io/type: tool
-    protocol.kagenti.io/mcp: ""
-    kagenti.io/transport: streamable_http
     app.kubernetes.io/name: imagegen-mcp
+    component: mcp
+    kagenti.io/transport: streamable_http
+    kagenti.io/type: tool
+    protocol.kagenti.io/mcp: ''
+  name: imagegen-mcp
 spec:
   replicas: 1
   selector:
@@ -16,40 +16,43 @@ spec:
       app: imagegen-mcp
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: 'true'
+        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: imagegen-mcp
-        component: mcp
-        kagenti.io/type: tool
-        protocol.kagenti.io/mcp: ""
-        kagenti.io/transport: streamable_http
         app.kubernetes.io/name: imagegen-mcp
+        component: mcp
+        kagenti.io/transport: streamable_http
+        kagenti.io/type: tool
+        protocol.kagenti.io/mcp: ''
     spec:
       containers:
-        - name: mcp
-          image: quay.io/rh-ee-dayeo/marketing-assistant:imagegen-mcp
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8091
-          envFrom:
-            - configMapRef:
-                name: marketing-assistant-config
-            - secretRef:
-                name: marketing-assistant-secrets
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
+      - envFrom:
+        - configMapRef:
+            name: marketing-assistant-config
+        - secretRef:
+            name: marketing-assistant-secrets
+        image: quay.io/rh-ee-dayeo/marketing-assistant:imagegen-mcp
+        imagePullPolicy: Always
+        name: mcp
+        ports:
+        - containerPort: 8091
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: imagegen-mcp
 spec:
+  ports:
+  - port: 8091
+    targetPort: 8091
   selector:
     app: imagegen-mcp
-  ports:
-    - port: 8091
-      targetPort: 8091

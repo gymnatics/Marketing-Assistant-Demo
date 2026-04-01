@@ -60,10 +60,15 @@ def broadcast_event(campaign_id: str, event_data: dict):
             pass
 
 
-@app.route("/health", methods=["GET"])
+@app.route("/healthz", methods=["GET"])
 def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy", "service": "Event Hub"})
+
+@app.route("/readyz")
+def readiness_check():
+    return health_check()
+
 
 
 @app.route("/events/<campaign_id>/publish", methods=["POST"])

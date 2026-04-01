@@ -198,7 +198,8 @@ if __name__ == "__main__":
 
     app = Starlette(
         routes=[
-            Route("/health", health, methods=["GET"]),
+            Route("/healthz", health, methods=["GET"]),
+        Route("/readyz", health, methods=["GET"]),
             Route("/images/{filename}", serve_image, methods=["GET"]),
             Mount("/", app=mcp_asgi),
         ],
