@@ -89,7 +89,7 @@ export default function CampaignCreate() {
   const [campaignData, setCampaignData] = useState<CampaignData>({
     campaign_name: '',
     campaign_description: '',
-    hotel_name: 'Grand Lisboa Palace',
+    hotel_name: 'Simon Casino Resort',
     target_audience: '',
     theme: 'luxury_gold',
     start_date: '',
@@ -119,7 +119,7 @@ export default function CampaignCreate() {
         setCampaignData({
           campaign_name: data.campaign_name || '',
           campaign_description: data.campaign_description || '',
-          hotel_name: data.hotel_name || 'Grand Lisboa Palace',
+          hotel_name: data.hotel_name || 'Simon Casino Resort',
           target_audience: data.target_audience || '',
           theme: data.theme || 'luxury_gold',
           start_date: data.start_date || '',

@@ -69,7 +69,7 @@ function personalize(html, customer, campaign) {
     "{{CUSTOMER_INTERESTS}}": interests,
     "{{CUSTOMER_LANGUAGE}}": lang,
     "{{CAMPAIGN_NAME}}": campaign.campaign_name || "",
-    "{{HOTEL_NAME}}": campaign.hotel_name || "Grand Lisboa Palace",
+    "{{HOTEL_NAME}}": campaign.hotel_name || "Simon Casino Resort",
   };
 
   let result = html;
@@ -107,7 +107,7 @@ app.get("/", (req, res) => {
       .split("{{CUSTOMER_INTERESTS}}").join("")
       .split("{{CUSTOMER_LANGUAGE}}").join("en")
       .split("{{CAMPAIGN_NAME}}").join("")
-      .split("{{HOTEL_NAME}}").join("Grand Lisboa Palace");
+      .split("{{HOTEL_NAME}}").join("Simon Casino Resort");
     res.setHeader("Content-Type", "text/html");
     res.setHeader("X-Frame-Options", "");
     res.setHeader("Content-Security-Policy", "");
@@ -129,7 +129,7 @@ app.get("/", (req, res) => {
       .split("{{CUSTOMER_INTERESTS}}").join("")
       .split("{{CUSTOMER_LANGUAGE}}").join("en")
       .split("{{CAMPAIGN_NAME}}").join(campaign.campaign_name || "")
-      .split("{{HOTEL_NAME}}").join(campaign.hotel_name || "Grand Lisboa Palace");
+      .split("{{HOTEL_NAME}}").join(campaign.hotel_name || "Simon Casino Resort");
     res.setHeader("Content-Type", "text/html");
     res.setHeader("X-Frame-Options", "");
     res.setHeader("Content-Security-Policy", "");

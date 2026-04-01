@@ -80,7 +80,7 @@ async def _call_imagegen_api(prompt: str, width: int = 1024, height: int = 576) 
 @mcp.tool
 async def generate_campaign_image(
     campaign_name: str,
-    hotel_name: str = "Grand Lisboa Palace",
+    hotel_name: str = "Simon Casino Resort",
     theme: str = "luxury_gold",
     description: str = "",
     width: int = 1024,
@@ -122,7 +122,7 @@ async def generate_campaign_image(
 @mcp.tool
 async def generate_campaign_image_b64(
     campaign_name: str,
-    hotel_name: str = "Grand Lisboa Palace",
+    hotel_name: str = "Simon Casino Resort",
     theme: str = "luxury_gold",
     description: str = "",
     width: int = 1024,

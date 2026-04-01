@@ -91,7 +91,7 @@ class CustomerProfile(BaseModel):
 class CampaignRequest(BaseModel):
     campaign_name: str
     campaign_description: str
-    hotel_name: str = "Grand Lisboa Palace"
+    hotel_name: str = "Simon Casino Resort"
     target_audience: str
     theme: CampaignTheme = CampaignTheme.LUXURY_GOLD
     start_date: str

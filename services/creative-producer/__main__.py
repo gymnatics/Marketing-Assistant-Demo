@@ -30,7 +30,7 @@ agent_card = AgentCard(
             name="Generate Landing Page",
             description="Create a luxury marketing landing page for casino campaigns",
             tags=["html", "landing-page", "marketing"],
-            examples=["Generate a Luxury Gold themed landing page for Grand Lisboa Palace"],
+            examples=["Generate a Luxury Gold themed landing page for Simon Casino Resort"],
         )
     ],
 )
