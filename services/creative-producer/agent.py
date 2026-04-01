@@ -274,6 +274,10 @@ Generate the complete HTML file now:"""
         print(f"[Creative Producer] Injected hero image URL into HTML: {hero_image_url[:80]}")
 
     nav_button_fix = """<style>
+header, nav, .nav {
+  overflow: visible !important;
+  padding-right: 2rem !important;
+}
 header button, header .cta-button, nav button, nav .cta-button {
   background: var(--button-color, var(--primary-color, #C41E3A)) !important;
   color: var(--button-text-color, #fff) !important;
@@ -282,6 +286,9 @@ header button, header .cta-button, nav button, nav .cta-button {
   border-radius: 8px !important;
   font-weight: 600 !important;
   cursor: pointer;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  margin-right: 0.5rem !important;
 }
 </style>"""
     html_content = html_content.replace("</head>", f"{nav_button_fix}\n</head>")
