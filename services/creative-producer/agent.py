@@ -87,6 +87,10 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
   nav a, nav button, .nav a, .nav button, header a, header button { white-space: nowrap; flex-shrink: 0; }
   ```
 
+## PROOFREADING:
+- Fix any obvious typos or capitalization errors in the campaign name (e.g., "CNy" should be "CNY", "promo" should be "Promo")
+- Ensure proper title case for the campaign name in all headings
+
 ## Output:
 Return ONLY the complete HTML, starting with <!DOCTYPE html> and ending with </html>. No explanations, no markdown."""
 
