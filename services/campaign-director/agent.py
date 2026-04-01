@@ -231,6 +231,26 @@ async def generate_email_node(state: CampaignState) -> CampaignState:
         state["status"] = "email_ready"
         state["messages"] = [{"role": "assistant", "agent": "Delivery Manager",
                               "content": "Email content generated in English and Chinese"}]
+
+        # Update the preview deployment with customer data for personalization
+        if state.get("customer_list") and state.get("preview_url", "").startswith("https"):
+            try:
+                await call_a2a_agent(DELIVERY_MANAGER_URL, "deploy_preview", {
+                    "campaign_id": state["campaign_id"],
+                    "html_content": state["landing_page_html"],
+                    "namespace": DEV_NAMESPACE,
+                    "customers_json": json.dumps(state["customer_list"]),
+                    "campaign_json": json.dumps({
+                        "campaign_name": state["campaign_name"],
+                        "hotel_name": state["hotel_name"],
+                        "theme": state["theme"],
+                    }),
+                })
+                await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                                    "Updated landing page with personalization data")
+            except Exception as e:
+                print(f"[Campaign Director] Failed to update personalization data: {e}")
+
     return state
 
 

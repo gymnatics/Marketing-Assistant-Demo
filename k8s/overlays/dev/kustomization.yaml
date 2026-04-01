@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../base
-  - secret.yaml
+  # secret.yaml is applied separately (contains real tokens, not included in oc apply -k)
 
 namespace: marketing-assistant-v2
 

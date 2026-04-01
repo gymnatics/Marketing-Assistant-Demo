@@ -26,7 +26,7 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 
 ## STRICT STRUCTURE (follow this exact section order):
 
-1. **Sticky Nav** — Translucent top bar with hotel name + "Book Now 立即预订" CTA button
+1. **Sticky Nav** — Translucent top bar with hotel name on the left + "Book Now 立即预订" CTA button on the right. Use `overflow: visible`, `padding: 0 2rem`, and ensure the button has `white-space: nowrap` so it is NEVER cut off.
 2. **Personalized Welcome Banner** — Show `{{GREETING}}` and `{{CUSTOMER_TIER_BADGE}}` badge prominently. This makes the visitor feel recognized.
 3. **Hero Section** (100vh) — Full-viewport with massive headline, value proposition, and Chinese translation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
 4. **Campaign Story** — Centered text block explaining the offer with generous padding
