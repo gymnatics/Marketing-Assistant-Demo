@@ -101,6 +101,7 @@ export default function CampaignCreate() {
   const [loading, setLoading] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string>('');
   const [emailLang, setEmailLang] = useState<'en' | 'zh'>('en');
+  const [selectedVip, setSelectedVip] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const [agentEvents, setAgentEvents] = useState<Array<{agent: string; task: string; type: string; time: string}>>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -699,16 +700,16 @@ export default function CampaignCreate() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={() => window.open(state.preview_url, '_blank')}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50`}
+                            onClick={() => { setSelectedVip(''); window.open(state.preview_url, '_blank'); }}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${selectedVip === '' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
                           >
                             Generic View
                           </button>
                           {(campaignState.customer_list || []).slice(0, 8).map((customer) => (
                             <button
                               key={customer.email}
-                              onClick={() => window.open(`${state.preview_url}?c=${customer.customer_id || ''}`, '_blank')}
-                              className="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5 flex items-center gap-1.5"
+                              onClick={() => { setSelectedVip(customer.customer_id || ''); window.open(`${state.preview_url}?c=${customer.customer_id || ''}`, '_blank'); }}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1.5 ${selectedVip === customer.customer_id ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5'}`}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${
                                 customer.tier === 'diamond' ? 'bg-blue-400' :
@@ -734,7 +735,7 @@ export default function CampaignCreate() {
                         <img
                           alt="Campaign QR Code"
                           className="w-40 h-40"
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(state.preview_url || '')}`}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent((state.preview_url || '') + (selectedVip ? `?c=${selectedVip}` : ''))}`}
                         />
                       </div>
                       <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Scan for Mobile Access</span>
@@ -1000,16 +1001,16 @@ export default function CampaignCreate() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => window.open(campaignState.production_url, '_blank')}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50"
+                  onClick={() => { setSelectedVip(''); window.open(campaignState.production_url, '_blank'); }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${selectedVip === '' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
                 >
                   Generic
                 </button>
                 {(campaignState.customer_list || []).slice(0, 6).map((customer) => (
                   <button
                     key={customer.email}
-                    onClick={() => window.open(`${campaignState.production_url}?c=${customer.customer_id || ''}`, '_blank')}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 flex items-center gap-1.5"
+                    onClick={() => { setSelectedVip(customer.customer_id || ''); window.open(`${campaignState.production_url}?c=${customer.customer_id || ''}`, '_blank'); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1.5 ${selectedVip === customer.customer_id ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${
                       customer.tier === 'diamond' ? 'bg-blue-400' :
@@ -1029,7 +1030,7 @@ export default function CampaignCreate() {
                 <img
                   alt="Production QR Code"
                   className="w-48 h-48"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(campaignState.production_url)}`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(campaignState.production_url + (selectedVip ? `?c=${selectedVip}` : ''))}`}
                 />
               </div>
               <p className="text-sm text-center text-on-surface-variant font-medium leading-relaxed max-w-[200px]">Scan for instant mobile access</p>
