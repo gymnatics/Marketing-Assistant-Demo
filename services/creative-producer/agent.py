@@ -27,8 +27,8 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 ## STRICT STRUCTURE (follow this exact section order):
 
 1. **Sticky Nav** — Translucent top bar with hotel name on the left + "Book Now 立即预订" CTA button on the right. Use `overflow: visible`, `padding: 0 2rem`, and ensure the button has `white-space: nowrap` so it is NEVER cut off.
-2. **Hero Section** (100vh) — Full-viewport with massive campaign headline + Chinese translation. Below the headline, show `{{GREETING}}` (renders as "Your Exclusive Experience Awaits, John / 约翰，您的专属体验已就绪") and a `{{CUSTOMER_TIER_BADGE}}` badge. The greeting should feel natural and warm — like the page was crafted just for them, NOT like a letter salutation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
-3. **Personalized Offer** — English line: "{{CUSTOMER_FIRST_NAME}}, as a {{CUSTOMER_TIER_BADGE}}, you have exclusive access to..." Chinese subtitle below: "作为{{CUSTOMER_TIER_BADGE_ZH}}，您享有专属特权..." — this section introduces what benefits the customer gets. It comes BEFORE the benefits grid to set the context.
+2. **Hero Section** (100vh) — Full-viewport with massive campaign headline + Chinese translation. Below the headline, show the placeholder `{{GREETING}}` exactly as written — do NOT put any example names like "John" in the HTML. The server replaces it at runtime. and a `{{CUSTOMER_TIER_BADGE}}` badge. The greeting should feel natural and warm — like the page was crafted just for them, NOT like a letter salutation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
+3. **Personalized Offer** — Use placeholders exactly: English line with `{{CUSTOMER_FIRST_NAME}}` and `{{CUSTOMER_TIER_BADGE}}`, Chinese subtitle with `{{CUSTOMER_TIER_BADGE_ZH}}`. Do NOT write example names — only use the curly-brace placeholders. This section introduces what benefits the customer gets and comes BEFORE the benefits grid.
 4. **Benefits Grid** — 3-4 cards in a responsive grid showing the specific benefits mentioned in the offer above. Use glassmorphism (backdrop-filter: blur, semi-transparent backgrounds, subtle borders)
 5. **Campaign Story** — Centered text block explaining the campaign/offer with generous padding
 6. **Campaign Dates** — Prominent date display as a styled banner or badge ("Limited Window" urgency)
@@ -72,7 +72,7 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 - Use the theme accent color for button backgrounds (gold, crimson, white, or green depending on theme).
 
 ## PERSONALIZATION PLACEHOLDERS (use these EXACTLY as written):
-- `{{GREETING}}` — personalized welcome (e.g., "Your Exclusive Experience Awaits, John / 约翰，您的专属体验已就绪") — NOT "Dear X"
+- `{{GREETING}}` — personalized welcome. Server replaces at runtime. Use the placeholder EXACTLY as `{{GREETING}}` in the HTML — do NOT write example names.
 - `{{CUSTOMER_NAME}}` — full name
 - `{{CUSTOMER_FIRST_NAME}}` — first name only
 - `{{CUSTOMER_TIER_BADGE}}` — English tier label (e.g., "Platinum VIP", "Diamond Elite")
@@ -92,6 +92,11 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
   nav, .nav, header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; overflow: visible !important; }
   nav a, nav button, .nav a, .nav button, header a, header button { white-space: nowrap; flex-shrink: 0; }
   ```
+
+## PLACEHOLDER RULES (CRITICAL):
+- Use placeholders EXACTLY as written: `{{GREETING}}`, `{{CUSTOMER_FIRST_NAME}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_TIER_BADGE_ZH}}`
+- Do NOT replace them with example text like "John", "Wei", "Platinum VIP" — the server does this at runtime
+- If you see `{{GREETING}}` in your output, that is CORRECT — do not expand it
 
 ## PROOFREADING:
 - Fix any obvious typos or capitalization errors in the campaign name (e.g., "CNy" should be "CNY", "promo" should be "Promo")
