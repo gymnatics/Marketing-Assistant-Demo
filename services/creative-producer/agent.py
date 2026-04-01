@@ -268,6 +268,19 @@ Generate the complete HTML file now:"""
         html_content = html_content.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
         print(f"[Creative Producer] Injected hero image URL into HTML: {hero_image_url[:80]}")
 
+    nav_button_fix = """<style>
+header button, header .cta-button, nav button, nav .cta-button {
+  background: var(--button-color, var(--primary-color, #C41E3A)) !important;
+  color: var(--button-text-color, #fff) !important;
+  border: none !important;
+  padding: 0.6rem 1.5rem !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
+</style>"""
+    html_content = html_content.replace("</head>", f"{nav_button_fix}\n</head>")
+
     return html_content
 
 
