@@ -52,19 +52,19 @@ function personalize(html, customer, campaign) {
   const tier = (customer.tier || "VIP").charAt(0).toUpperCase() + (customer.tier || "vip").slice(1);
   const interests = (customer.interests || []).join(", ");
 
-  const greetingEn = `Dear ${customer.name_en || customer.name || "Valued Guest"}`;
-  const greetingZh = `尊敬的${customer.name || customer.name_en || "贵宾"}`;
+  const greetingEn = `Your Exclusive Experience Awaits, ${firstName}`;
+  const greetingZh = `${customer.name || firstName}，您的专属体验已就绪`;
   const greeting = `${greetingEn}<br><span style="font-size:0.6em;opacity:0.7">${greetingZh}</span>`;
 
   const tierEn = { diamond: "Diamond Elite", platinum: "Platinum VIP", gold: "Gold Member", prospect: "Exclusive Invitee" }[customer.tier] || "VIP Guest";
   const tierZh = { diamond: "钻石尊享会员", platinum: "铂金贵宾", gold: "金卡会员", prospect: "特邀嘉宾" }[customer.tier] || "贵宾";
-  const tierBadge = `${tierEn} | ${tierZh}`;
 
   const replacements = {
     "{{CUSTOMER_NAME}}": name,
     "{{CUSTOMER_FIRST_NAME}}": firstName,
     "{{CUSTOMER_TIER}}": tier,
-    "{{CUSTOMER_TIER_BADGE}}": tierBadge,
+    "{{CUSTOMER_TIER_BADGE}}": tierEn,
+    "{{CUSTOMER_TIER_BADGE_ZH}}": tierZh,
     "{{GREETING}}": greeting,
     "{{CUSTOMER_INTERESTS}}": interests,
     "{{CUSTOMER_LANGUAGE}}": lang,
