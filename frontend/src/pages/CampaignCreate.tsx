@@ -22,7 +22,7 @@ export interface CampaignState {
   email_subject_zh?: string;
   email_body_zh?: string;
   customer_count?: number;
-  customer_list?: Array<{name: string; name_en?: string; email: string; tier: string}>;
+  customer_list?: Array<{customer_id?: string; name: string; name_en?: string; email: string; tier: string}>;
   error?: string;
 }
 
@@ -690,6 +690,38 @@ export default function CampaignCreate() {
                     <p className="text-on-surface-variant max-w-md mx-auto leading-relaxed">Your campaign environment is ready. Access it via the link below.</p>
                   </div>
                   <div className="w-full max-w-xl space-y-6">
+                    {/* VIP Personalization Toggle */}
+                    {(campaignState.customer_list || []).length > 0 && (
+                      <div className="bg-primary-container/10 border border-primary/20 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                          <span className="material-symbols-outlined text-sm text-tertiary-fixed-dim">person_search</span>
+                          Preview as VIP Customer
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => window.open(state.preview_url, '_blank')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50`}
+                          >
+                            Generic View
+                          </button>
+                          {(campaignState.customer_list || []).slice(0, 8).map((customer) => (
+                            <button
+                              key={customer.email}
+                              onClick={() => window.open(`${state.preview_url}?c=${customer.customer_id || ''}`, '_blank')}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5 flex items-center gap-1.5"
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                customer.tier === 'diamond' ? 'bg-blue-400' :
+                                customer.tier === 'platinum' ? 'bg-tertiary-fixed-dim' :
+                                'bg-slate-400'
+                              }`} />
+                              {customer.name_en || customer.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 p-4 bg-surface rounded-xl border border-outline-variant/30">
                       <span className="material-symbols-outlined text-primary">link</span>
                       <span className="font-mono text-sm flex-grow text-left truncate">{state.preview_url}</span>
@@ -957,8 +989,39 @@ export default function CampaignCreate() {
           </div>
         </div>
 
-        {/* Right side - QR Code + Achievement */}
+        {/* Right side - VIP Preview + QR Code + Achievement */}
         <div className="col-span-12 lg:col-span-5 space-y-8">
+          {/* VIP Personalization Toggle */}
+          {(campaignState.customer_list || []).length > 0 && campaignState.production_url && (
+            <div className="bg-surface-container-lowest p-6 rounded-xl ring-1 ring-black/[0.03] space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                <span className="material-symbols-outlined text-sm text-tertiary-fixed-dim">person_search</span>
+                Preview as VIP Customer
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => window.open(campaignState.production_url, '_blank')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50"
+                >
+                  Generic
+                </button>
+                {(campaignState.customer_list || []).slice(0, 6).map((customer) => (
+                  <button
+                    key={customer.email}
+                    onClick={() => window.open(`${campaignState.production_url}?c=${customer.customer_id || ''}`, '_blank')}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 flex items-center gap-1.5"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      customer.tier === 'diamond' ? 'bg-blue-400' :
+                      customer.tier === 'platinum' ? 'bg-tertiary-fixed-dim' :
+                      'bg-slate-400'
+                    }`} />
+                    {customer.name_en || customer.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {campaignState.production_url && (
             <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-black/[0.03] flex flex-col items-center justify-center">
               <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-6 font-headline">Campaign QR Code</h3>
