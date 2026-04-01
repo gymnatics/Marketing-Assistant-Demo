@@ -44,25 +44,27 @@ function getCampaign() {
 }
 
 function personalize(html, customer, campaign) {
-  const name = customer.name_en || customer.name || "Valued Guest";
-  const firstName = name.split(" ")[0];
-  const tier = (customer.tier || "VIP").charAt(0).toUpperCase() + (customer.tier || "vip").slice(1);
   const lang = customer.preferred_language || "en";
+  const isZh = lang.startsWith("zh");
+
+  const name = isZh
+    ? (customer.name || customer.name_en || "贵宾")
+    : (customer.name_en || customer.name || "Valued Guest");
+  const firstName = isZh
+    ? (customer.name || "贵宾")
+    : (customer.name_en || customer.name || "Guest").split(" ")[0];
+  const tier = (customer.tier || "VIP").charAt(0).toUpperCase() + (customer.tier || "vip").slice(1);
   const interests = (customer.interests || []).join(", ");
 
-  let greeting;
-  if (lang.startsWith("zh")) {
-    greeting = `尊敬的${customer.name || name}`;
-  } else {
-    greeting = `Dear ${name}`;
-  }
+  const greetingEn = `Dear ${customer.name_en || customer.name || "Valued Guest"}`;
+  const greetingZh = `尊敬的${customer.name || customer.name_en || "贵宾"}`;
+  const greeting = isZh
+    ? `${greetingZh}<br><span style="font-size:0.6em;opacity:0.7">${greetingEn}</span>`
+    : `${greetingEn}<br><span style="font-size:0.6em;opacity:0.7">${greetingZh}</span>`;
 
-  const tierBadge = {
-    diamond: "Diamond Elite",
-    platinum: "Platinum VIP",
-    gold: "Gold Member",
-    prospect: "Exclusive Invitee",
-  }[customer.tier] || "VIP Guest";
+  const tierEn = { diamond: "Diamond Elite", platinum: "Platinum VIP", gold: "Gold Member", prospect: "Exclusive Invitee" }[customer.tier] || "VIP Guest";
+  const tierZh = { diamond: "钻石尊享会员", platinum: "铂金贵宾", gold: "金卡会员", prospect: "特邀嘉宾" }[customer.tier] || "贵宾";
+  const tierBadge = isZh ? `${tierZh} | ${tierEn}` : `${tierEn} | ${tierZh}`;
 
   const replacements = {
     "{{CUSTOMER_NAME}}": name,

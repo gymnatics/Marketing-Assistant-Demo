@@ -691,35 +691,37 @@ export default function CampaignCreate() {
                     <p className="text-on-surface-variant max-w-md mx-auto leading-relaxed">Your campaign environment is ready. Access it via the link below.</p>
                   </div>
                   <div className="w-full max-w-xl space-y-6">
-                    {/* VIP Personalization Toggle */}
+                    {/* VIP Personalization Dropdown */}
                     {(campaignState.customer_list || []).length > 0 && (
                       <div className="bg-primary-container/10 border border-primary/20 rounded-xl p-4 space-y-3">
                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                           <span className="material-symbols-outlined text-sm text-tertiary-fixed-dim">person_search</span>
-                          Preview as VIP Customer
+                          Preview Personalized Experience
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => { setSelectedVip(''); window.open(state.preview_url, '_blank'); }}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${selectedVip === '' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
+                        <div className="flex items-center gap-3">
+                          <select
+                            value={selectedVip}
+                            onChange={(e) => setSelectedVip(e.target.value)}
+                            className="flex-grow bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                           >
-                            Generic View
+                            <option value="">Generic View (no personalization)</option>
+                            {(campaignState.customer_list || []).map((customer) => (
+                              <option key={customer.email} value={customer.customer_id || ''}>
+                                {customer.name_en || customer.name} — {(customer.tier || '').charAt(0).toUpperCase() + (customer.tier || '').slice(1)} ({customer.email})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => window.open((state.preview_url || '') + (selectedVip ? `?c=${selectedVip}` : ''), '_blank')}
+                            className="px-4 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-sm hover:opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
+                          >
+                            <span className="material-symbols-outlined text-sm">open_in_new</span>
+                            Preview
                           </button>
-                          {(campaignState.customer_list || []).slice(0, 8).map((customer) => (
-                            <button
-                              key={customer.email}
-                              onClick={() => { setSelectedVip(customer.customer_id || ''); window.open(`${state.preview_url}?c=${customer.customer_id || ''}`, '_blank'); }}
-                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1.5 ${selectedVip === customer.customer_id ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5'}`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                customer.tier === 'diamond' ? 'bg-blue-400' :
-                                customer.tier === 'platinum' ? 'bg-tertiary-fixed-dim' :
-                                'bg-slate-400'
-                              }`} />
-                              {customer.name_en || customer.name}
-                            </button>
-                          ))}
                         </div>
+                        {selectedVip && (
+                          <p className="text-xs text-on-surface-variant">QR code below is personalized for the selected customer.</p>
+                        )}
                       </div>
                     )}
 
@@ -992,35 +994,32 @@ export default function CampaignCreate() {
 
         {/* Right side - VIP Preview + QR Code + Achievement */}
         <div className="col-span-12 lg:col-span-5 space-y-8">
-          {/* VIP Personalization Toggle */}
+          {/* VIP Personalization Dropdown */}
           {(campaignState.customer_list || []).length > 0 && campaignState.production_url && (
             <div className="bg-surface-container-lowest p-6 rounded-xl ring-1 ring-black/[0.03] space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                 <span className="material-symbols-outlined text-sm text-tertiary-fixed-dim">person_search</span>
-                Preview as VIP Customer
+                Preview Personalized Experience
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => { setSelectedVip(''); window.open(campaignState.production_url, '_blank'); }}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${selectedVip === '' ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
-                >
-                  Generic
-                </button>
-                {(campaignState.customer_list || []).slice(0, 6).map((customer) => (
-                  <button
-                    key={customer.email}
-                    onClick={() => { setSelectedVip(customer.customer_id || ''); window.open(`${campaignState.production_url}?c=${customer.customer_id || ''}`, '_blank'); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center gap-1.5 ${selectedVip === customer.customer_id ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant/30 hover:border-primary/50'}`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      customer.tier === 'diamond' ? 'bg-blue-400' :
-                      customer.tier === 'platinum' ? 'bg-tertiary-fixed-dim' :
-                      'bg-slate-400'
-                    }`} />
-                    {customer.name_en || customer.name}
-                  </button>
+              <select
+                value={selectedVip}
+                onChange={(e) => setSelectedVip(e.target.value)}
+                className="w-full bg-surface border border-outline-variant/30 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              >
+                <option value="">Generic View (no personalization)</option>
+                {(campaignState.customer_list || []).map((customer) => (
+                  <option key={customer.email} value={customer.customer_id || ''}>
+                    {customer.name_en || customer.name} — {(customer.tier || '').charAt(0).toUpperCase() + (customer.tier || '').slice(1)} ({customer.email})
+                  </option>
                 ))}
-              </div>
+              </select>
+              <button
+                onClick={() => window.open((campaignState.production_url || '') + (selectedVip ? `?c=${selectedVip}` : ''), '_blank')}
+                className="w-full px-4 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                Open Personalized Page
+              </button>
             </div>
           )}
           {campaignState.production_url && (
