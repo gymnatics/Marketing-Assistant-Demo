@@ -81,6 +81,11 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 - Semantic HTML5. Bilingual: use English as the PRIMARY language for all text, with Chinese (中文) as a SMALLER subtitle/line below. Be CONSISTENT — every section should follow the same pattern: English headline first, Chinese translation smaller below. Never mix languages randomly within the same line.
 - EVERY element must be fully styled. NO white gaps, NO unstyled sections, NO broken layouts.
 - The page must look complete and polished from top to bottom.
+- NAV BAR CSS (MANDATORY — include this EXACTLY):
+  ```css
+  nav, .nav, header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; overflow: visible !important; }
+  nav a, nav button, .nav a, .nav button, header a, header button { white-space: nowrap; flex-shrink: 0; }
+  ```
 
 ## Output:
 Return ONLY the complete HTML, starting with <!DOCTYPE html> and ending with </html>. No explanations, no markdown."""
