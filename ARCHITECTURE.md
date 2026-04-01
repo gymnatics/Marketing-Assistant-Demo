@@ -1,8 +1,8 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 2.2  
-**Last Updated:** March 31, 2026  
+**Version:** 3.0  
+**Last Updated:** April 1, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
 ---
@@ -50,6 +50,7 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | **Delivery Manager** | 8083 | a2a-sdk, Kubernetes client | Email generation + K8s deployment |
 | **MongoDB MCP** | 8090 | FastMCP streamable-http | Customer database tools |
 | **ImageGen MCP** | 8091 | FastMCP hybrid + Starlette | AI image generation + serving |
+| **Campaign Landing** | 8080 (per-campaign) | Express.js, UBI9 Node 18 | Personalized landing pages (?c=VIP-001) |
 | **MongoDB** | 27017 | mongo:7 | Customer/prospect database |
 | **vLLM (Qwen Coder)** | KServe | vLLM, L40S #1 | HTML code generation |
 | **vLLM (Qwen3)** | KServe | vLLM, L40S #2 | Email gen + tool calling |
@@ -511,7 +512,7 @@ flowchart TD
     DM["deploy_campaign_to_k8s()"] --> Init["1. init_k8s_client()\n(in-cluster config)"]
     Init --> CM1["2. ConfigMap: {name}-html\nkey: index.html = HTML content"]
     CM1 --> CM2["3. ConfigMap: {name}-nginx\nkey: default.conf = nginx config"]
-    CM2 --> Deploy["4. Deployment: campaign-{id}-preview\nnginxinc/nginx-unprivileged:alpine\nmounts both ConfigMaps"]
+    CM2 --> Deploy["4. Deployment: campaign-{id}-preview\ncampaign-landing-v2 (Express.js)\nmounts both ConfigMaps"]
     Deploy --> Svc["5. Service: campaign-{id}-preview\nport 80 → targetPort 8080"]
     Svc --> Route["6. Route (OpenShift)\nhttps://campaign-{id}-{ns}.{domain}/\nTLS: edge termination"]
 ```
@@ -672,6 +673,122 @@ protocol.kagenti.io/mcp: ""
 kagenti.io/transport: streamable_http
 app.kubernetes.io/name: <service-name>
 ```
+
+---
+
+## 13. Personalization Architecture
+
+### How Personalized Landing Pages Work
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant ExpressJS as Campaign Landing (Express.js)
+    participant ConfigMap as K8s ConfigMap
+
+    Browser->>ExpressJS: GET /?c=VIP-001
+    ExpressJS->>ConfigMap: Read /data/customers.json
+    ExpressJS->>ConfigMap: Read /data/template.html
+    Note over ExpressJS: Replace {{GREETING}}, {{CUSTOMER_TIER_BADGE}}, etc.
+    Note over ExpressJS: Language based on preferred_language
+    ExpressJS-->>Browser: Personalized HTML
+```
+
+### Data Flow
+
+1. **Step 1-2**: Creative Producer generates HTML with placeholders (`{{GREETING}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_FIRST_NAME}}`)
+2. **Step 1-2**: Delivery Manager deploys Express.js pod with `customers.json: []` (empty, customers not yet retrieved)
+3. **Step 3**: Customer Analyst retrieves customers → Campaign Director re-deploys with populated `customers.json`
+4. **Step 3+**: Frontend polls landing page until personalization is confirmed ready (no raw `{{GREETING}}` in response)
+5. **VIP Dropdown**: User selects a customer from dropdown → opens `{url}?c=VIP-001` → sees personalized page
+
+### Personalization Placeholders
+
+| Placeholder | Example (English) | Example (Chinese) |
+|-------------|-------------------|-------------------|
+| `{{GREETING}}` | Dear John Smith | 尊敬的李明 |
+| `{{CUSTOMER_NAME}}` | John Smith | 李明 |
+| `{{CUSTOMER_FIRST_NAME}}` | John | 李明 |
+| `{{CUSTOMER_TIER_BADGE}}` | Platinum VIP \| 铂金贵宾 | 铂金贵宾 \| Platinum VIP |
+
+Bilingual: primary language first (larger), secondary below (smaller). Determined by `preferred_language` field.
+
+### Campaign Landing Service
+
+- **Image**: `quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing-v2`
+- **Base**: `registry.access.redhat.com/ubi9/nodejs-18`
+- **Port**: 8080
+- **Data mount**: `/data/` (ConfigMap with `template.html`, `customers.json`, `campaign.json`)
+- **Routes**: `GET /` (personalized page), `GET /healthz`, `GET /readyz`
+
+---
+
+## 14. Observability
+
+### OpenTelemetry
+
+All pod templates have annotations for auto-instrumentation:
+- Python services: `instrumentation.opentelemetry.io/inject-python: "true"`
+- Frontend (nginx): `instrumentation.opentelemetry.io/inject-nodejs: "true"`
+- All: `sidecar.opentelemetry.io/inject: app-sidecar`
+
+### Prometheus Metrics (Campaign API)
+
+Endpoint: `GET /metrics` on campaign-api (port 5000)
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `campaigns_created_total` | Counter | Total campaigns created |
+| `campaigns_live_total` | Counter | Total campaigns gone live |
+| `agent_calls_total{skill}` | Counter | A2A calls to director by skill |
+| `campaign_step_duration_seconds{step}` | Histogram | Duration of generate/email/golive steps |
+| `active_campaigns` | Gauge | Currently in-progress campaigns |
+
+### Health Endpoints
+
+All services expose:
+- `GET /healthz` — Liveness probe
+- `GET /readyz` — Readiness probe
+
+---
+
+## 15. Deployment (Kustomize)
+
+### Directory Structure
+
+```
+k8s/
+├── base/                    # Namespace-agnostic manifests
+│   ├── kustomization.yaml   # Lists all 15 resources
+│   ├── configmap.yaml       # Generic config (service URLs, model names)
+│   ├── namespace.yaml
+│   ├── rbac.yaml
+│   ├── agents/
+│   ├── api/
+│   ├── frontend/
+│   └── mcp/
+├── overlays/
+│   └── dev/                 # Cluster-specific
+│       ├── kustomization.yaml
+│       ├── configmap-patch.yaml   # CLUSTER_DOMAIN, namespaces, SELF_URL
+│       └── secret.yaml            # Model endpoints + tokens (template)
+└── imagegen/
+    └── serving-runtime.yaml       # vLLM-Omni runtime (imported via RHOAI UI)
+```
+
+### Deploy Command
+
+```bash
+# Edit secret.yaml with your model tokens first
+oc apply -k k8s/overlays/dev
+oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
+```
+
+### Base Images
+
+All Python services: `registry.access.redhat.com/ubi9/python-311:latest`
+Campaign Landing: `registry.access.redhat.com/ubi9/nodejs-18:latest`
+Frontend: `nginxinc/nginx-unprivileged:alpine` (prebuilt React)
 
 ---
 
