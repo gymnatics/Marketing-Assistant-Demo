@@ -1,19 +1,18 @@
 #!/bin/bash
 set -e
 
-# Configuration
 NAMESPACE="${NAMESPACE:-marketing-assistant-v2}"
+OVERLAY="${OVERLAY:-k8s/overlays/dev}"
 
 echo "=========================================="
-echo "Marketing Assistant v2 - Deploy to OpenShift"
+echo "Grand Lisboa Palace - Deploy to OpenShift"
 echo "=========================================="
 echo "Namespace: $NAMESPACE"
+echo "Overlay: $OVERLAY"
 echo ""
 
-# Change to the marketing-assistant-v2 directory
 cd "$(dirname "$0")"
 
-# Check if logged in to OpenShift
 if ! oc whoami &> /dev/null; then
     echo "Error: Not logged in to OpenShift. Please run 'oc login' first."
     exit 1
@@ -22,59 +21,36 @@ fi
 echo "Logged in as: $(oc whoami)"
 echo ""
 
-# Create namespace if it doesn't exist
-echo "Creating namespace..."
-oc apply -f k8s/namespace.yaml
+# Deploy everything via Kustomize
+echo "Applying Kustomize overlay..."
+oc apply -k "$OVERLAY"
 
-# Apply ConfigMap
-echo "Applying ConfigMap..."
-oc apply -f k8s/configmap.yaml
-
-# Check if secret exists, warn if not configured
-echo "Applying Secret..."
-if grep -q 'CODE_MODEL_TOKEN: ""' k8s/secret.yaml; then
-    echo "WARNING: k8s/secret.yaml has empty tokens. Please edit before deploying."
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-oc apply -f k8s/secret.yaml
-
-# Deploy MCP server
 echo ""
-echo "Deploying MCP server..."
-oc apply -f k8s/mcp/
+echo "Waiting for deployments..."
+DEPLOYMENTS=(
+    "mongodb"
+    "mongodb-mcp"
+    "imagegen-mcp"
+    "event-hub"
+    "creative-producer"
+    "customer-analyst"
+    "delivery-manager"
+    "campaign-director"
+    "campaign-api"
+    "frontend"
+)
 
-# Deploy agents
+for DEPLOY in "${DEPLOYMENTS[@]}"; do
+    echo "  Waiting for $DEPLOY..."
+    oc rollout status deployment/$DEPLOY -n $NAMESPACE --timeout=120s || true
+done
+
+# Seed MongoDB
 echo ""
-echo "Deploying agents..."
-oc apply -f k8s/agents/
+echo "Seeding MongoDB..."
+sleep 5
+oc exec deployment/mongodb-mcp -n $NAMESPACE -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py || echo "Seed failed (MongoDB may not be ready yet, try: oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py)"
 
-# Deploy API layer
-echo ""
-echo "Deploying API layer..."
-oc apply -f k8s/api/
-
-# Deploy frontend
-echo ""
-echo "Deploying frontend..."
-oc apply -f k8s/frontend/
-
-# Wait for deployments
-echo ""
-echo "Waiting for deployments to be ready..."
-oc rollout status deployment/mongodb-mcp -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/event-hub -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/creative-producer -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/customer-analyst -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/delivery-manager -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/campaign-director -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/campaign-api -n $NAMESPACE --timeout=120s || true
-oc rollout status deployment/frontend -n $NAMESPACE --timeout=120s || true
-
-# Get routes
 echo ""
 echo "=========================================="
 echo "Deployment complete!"
@@ -83,5 +59,9 @@ echo ""
 echo "Routes:"
 oc get routes -n $NAMESPACE -o custom-columns=NAME:.metadata.name,HOST:.spec.host
 echo ""
-echo "Frontend URL:"
+echo "Frontend:"
 oc get route marketing-assistant-v2 -n $NAMESPACE -o jsonpath='https://{.spec.host}{"\n"}' 2>/dev/null || echo "Route not found"
+echo ""
+echo "Remember:"
+echo "  - Apply your secret separately if not done: oc apply -f k8s/overlays/dev/secret.yaml -n $NAMESPACE"
+echo "  - Import vLLM-Omni runtime: oc apply -f k8s/imagegen/serving-runtime.yaml"

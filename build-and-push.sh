@@ -1,39 +1,39 @@
 #!/bin/bash
 set -e
 
-# Configuration - single repo, service name as tag
 REPO="${REPO:-quay.io/rh-ee-dayeo/marketing-assistant}"
 PLATFORM="${PLATFORM:-linux/amd64}"
+TAG_SUFFIX="${TAG_SUFFIX:-}"
 
 echo "=========================================="
-echo "Marketing Assistant v2 - Build & Push"
+echo "Grand Lisboa Palace - Build & Push"
 echo "=========================================="
 echo "Repository: $REPO"
 echo "Platform: $PLATFORM"
+[ -n "$TAG_SUFFIX" ] && echo "Tag suffix: $TAG_SUFFIX"
 echo ""
 
-# Change to the marketing-assistant-v2 directory
 cd "$(dirname "$0")"
 
-# Services to build
 SERVICES=(
     "mongodb-mcp"
+    "imagegen-mcp"
     "event-hub"
     "creative-producer"
     "customer-analyst"
     "delivery-manager"
     "campaign-director"
     "campaign-api"
+    "campaign-landing"
 )
 
-# Build and push each service
 for SERVICE in "${SERVICES[@]}"; do
     echo ""
     echo "----------------------------------------"
     echo "Building: $SERVICE"
     echo "----------------------------------------"
     
-    FULL_IMAGE="${REPO}:${SERVICE}"
+    FULL_IMAGE="${REPO}:${SERVICE}${TAG_SUFFIX}"
     
     podman build \
         --platform "$PLATFORM" \
@@ -47,17 +47,17 @@ for SERVICE in "${SERVICES[@]}"; do
     echo "✓ $SERVICE complete"
 done
 
-# Build frontend separately
 echo ""
 echo "----------------------------------------"
 echo "Building: frontend"
 echo "----------------------------------------"
 
-FRONTEND_IMAGE="${REPO}:frontend"
+npm run build --prefix frontend
+FRONTEND_IMAGE="${REPO}:frontend${TAG_SUFFIX}"
 
 podman build \
     --platform "$PLATFORM" \
-    -f "frontend/Dockerfile" \
+    -f "frontend/Dockerfile.prebuilt" \
     -t "$FRONTEND_IMAGE" \
     frontend/
 
@@ -68,15 +68,13 @@ echo "✓ frontend complete"
 
 echo ""
 echo "=========================================="
-echo "All images built and pushed successfully!"
+echo "All images built and pushed!"
 echo "=========================================="
 echo ""
-echo "Images pushed:"
+echo "Images:"
 for SERVICE in "${SERVICES[@]}"; do
-    echo "  - ${REPO}:${SERVICE}"
+    echo "  - ${REPO}:${SERVICE}${TAG_SUFFIX}"
 done
-echo "  - ${REPO}:frontend"
+echo "  - ${REPO}:frontend${TAG_SUFFIX}"
 echo ""
-echo "Next steps:"
-echo "  1. Update k8s/secret.yaml with your model tokens"
-echo "  2. Deploy with: ./deploy.sh"
+echo "Next: oc apply -k k8s/overlays/dev"
