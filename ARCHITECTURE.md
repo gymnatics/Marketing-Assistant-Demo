@@ -1,7 +1,7 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 3.0  
+**Version:** 3.1  
 **Last Updated:** April 1, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
@@ -706,10 +706,11 @@ sequenceDiagram
 
 | Placeholder | Example (English) | Example (Chinese) |
 |-------------|-------------------|-------------------|
-| `{{GREETING}}` | Dear John Smith | 尊敬的李明 |
+| `{{GREETING}}` | Your Exclusive Experience Awaits, John | 约翰，您的专属体验已就绪 |
 | `{{CUSTOMER_NAME}}` | John Smith | 李明 |
 | `{{CUSTOMER_FIRST_NAME}}` | John | 李明 |
-| `{{CUSTOMER_TIER_BADGE}}` | Platinum VIP \| 铂金贵宾 | 铂金贵宾 \| Platinum VIP |
+| `{{CUSTOMER_TIER_BADGE}}` | Platinum VIP | Diamond Elite |
+| `{{CUSTOMER_TIER_BADGE_ZH}}` | 铂金贵宾 | 钻石尊享会员 |
 
 Bilingual: primary language first (larger), secondary below (smaller). Determined by `preferred_language` field.
 
@@ -720,6 +721,29 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 - **Port**: 8080
 - **Data mount**: `/data/` (ConfigMap with `template.html`, `customers.json`, `campaign.json`)
 - **Routes**: `GET /` (personalized page), `GET /healthz`, `GET /readyz`
+- **Generic view** (no `?c=`): "Honored Guest" / "尊贵来宾"
+- **Prospect view** (`?c=PROSPECT-001`): "Exclusive Invitee" / "特邀嘉宾"
+
+### Bilingual Strategy
+
+- **English is always primary** (large text), Chinese is subtitle (smaller, below)
+- Greeting: "Your Exclusive Experience Awaits, John" + "约翰，您的专属体验已就绪"
+- Tier badges are split: `{{CUSTOMER_TIER_BADGE}}` = English only, `{{CUSTOMER_TIER_BADGE_ZH}}` = Chinese only
+- Never mixed within the same line
+
+### Creative Producer Post-Processing
+
+After HTML generation, the Creative Producer injects fixes before deployment:
+1. **Hero image**: `HERO_IMAGE_PLACEHOLDER` → actual public image URL
+2. **Nav button CSS**: Injects `!important` styles for `header button` to prevent white/unstyled buttons using theme CSS variables (`--button-color`, `--button-text-color`)
+3. **Proofreading**: LLM prompt instructs fixing typos/capitalization in campaign names
+
+### Frontend VIP Preview
+
+- **Dropdown selector** (not buttons) — scales to any number of customers
+- **Personalization readiness polling**: after email prep, frontend polls `{preview_url}?c=VIP-001` every 5 seconds until `{{GREETING}}` placeholder is gone (Express.js pod has restarted with customer data)
+- **Dynamic QR code**: updates when a VIP is selected from dropdown
+- **Disabled state**: dropdown is greyed out with "Syncing..." spinner until personalization is confirmed ready
 
 ---
 
