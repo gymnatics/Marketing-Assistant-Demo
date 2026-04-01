@@ -84,7 +84,7 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 - Single self-contained HTML file. ALL CSS in one embedded <style> tag.
 - NO Tailwind, NO CSS frameworks. Write all CSS directly.
 - CSS variables for colors. Mobile-responsive with @media queries.
-- Semantic HTML5. Bilingual: use English as the PRIMARY language for all text, with Chinese (中文) as a SMALLER subtitle/line below. Be CONSISTENT — every section should follow the same pattern: English headline first, Chinese translation smaller below. Never mix languages randomly within the same line.
+- Semantic HTML5. Bilingual layout: English text FIRST, then Chinese on a SEPARATE LINE below (use `<br>` or a `<p>` tag). NEVER put English and Chinese on the same line. Chinese text should always be in a smaller font size (0.8em) or lighter opacity (0.7).
 - EVERY element must be fully styled. NO white gaps, NO unstyled sections, NO broken layouts.
 - The page must look complete and polished from top to bottom.
 - NAV BAR CSS (MANDATORY — include this EXACTLY):
@@ -101,6 +101,10 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 ## PROOFREADING:
 - Fix any obvious typos or capitalization errors in the campaign name (e.g., "CNy" should be "CNY", "promo" should be "Promo")
 - Ensure proper title case for the campaign name in all headings
+
+## CREATIVITY:
+- Each generation should look DIFFERENT. Vary: section background styles, card designs, typography sizes, animation types, gradient directions, hero overlay opacity, section padding amounts.
+- Do NOT reuse the same design if regenerated — surprise the viewer with a fresh layout each time.
 
 ## Output:
 Return ONLY the complete HTML, starting with <!DOCTYPE html> and ending with </html>. No explanations, no markdown."""
@@ -232,7 +236,7 @@ Generate the complete HTML file now:"""
             {"role": "system", "content": CODER_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.75,
+        "temperature": 0.9,
         "max_tokens": 12000,
         "stream": True
     }
