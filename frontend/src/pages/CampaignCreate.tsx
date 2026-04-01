@@ -102,6 +102,7 @@ export default function CampaignCreate() {
   const [agentStatus, setAgentStatus] = useState<string>('');
   const [emailLang, setEmailLang] = useState<'en' | 'zh'>('en');
   const [selectedVip, setSelectedVip] = useState<string>('');
+  const [personalizationReady, setPersonalizationReady] = useState(false);
   const [progress, setProgress] = useState(0);
   const [agentEvents, setAgentEvents] = useState<Array<{agent: string; task: string; type: string; time: string}>>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -342,7 +343,32 @@ export default function CampaignCreate() {
         email_body_zh: result.email_body_zh,
         error: result.error_message
       }));
-      if (result.status === 'email_ready') setCurrentStep(3);
+      if (result.status === 'email_ready') {
+        setCurrentStep(3);
+        // Poll the landing page until personalization data is ready
+        if (campaignState.preview_url && !campaignState.preview_url.startsWith('local')) {
+          setPersonalizationReady(false);
+          const checkPersonalization = async () => {
+            for (let i = 0; i < 20; i++) {
+              await new Promise(r => setTimeout(r, 5000));
+              try {
+                const resp = await fetch(`${campaignState.preview_url}?c=VIP-001`);
+                if (resp.ok) {
+                  const text = await resp.text();
+                  if (!text.includes('{{GREETING}}')) {
+                    setPersonalizationReady(true);
+                    return;
+                  }
+                }
+              } catch {}
+            }
+            setPersonalizationReady(true);
+          };
+          checkPersonalization();
+        } else {
+          setPersonalizationReady(true);
+        }
+      }
     } catch (err) {
       stopProgressSimulation(0);
       stopSSE();
@@ -697,12 +723,19 @@ export default function CampaignCreate() {
                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                           <span className="material-symbols-outlined text-sm text-tertiary-fixed-dim">person_search</span>
                           Preview Personalized Experience
+                          {!personalizationReady && (
+                            <span className="ml-2 flex items-center gap-1 text-tertiary-fixed-dim">
+                              <span className="animate-spin material-symbols-outlined text-xs">progress_activity</span>
+                              Syncing...
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <select
                             value={selectedVip}
                             onChange={(e) => setSelectedVip(e.target.value)}
-                            className="flex-grow bg-surface-container-lowest border border-outline-variant/30 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            disabled={!personalizationReady}
+                            className={`flex-grow border rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${personalizationReady ? 'bg-surface-container-lowest border-outline-variant/30' : 'bg-surface-dim border-outline-variant/20 opacity-60 cursor-not-allowed'}`}
                           >
                             <option value="">Generic View (no personalization)</option>
                             {(campaignState.customer_list || []).map((customer) => (
@@ -713,7 +746,8 @@ export default function CampaignCreate() {
                           </select>
                           <button
                             onClick={() => window.open((state.preview_url || '') + (selectedVip ? `?c=${selectedVip}` : ''), '_blank')}
-                            className="px-4 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-sm hover:opacity-90 transition-all flex items-center gap-2 whitespace-nowrap"
+                            disabled={!personalizationReady && selectedVip !== ''}
+                            className={`px-4 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${personalizationReady || selectedVip === '' ? 'bg-primary text-on-primary hover:opacity-90' : 'bg-surface-dim text-on-surface-variant opacity-60 cursor-not-allowed'}`}
                           >
                             <span className="material-symbols-outlined text-sm">open_in_new</span>
                             Preview
