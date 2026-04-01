@@ -31,14 +31,14 @@ CAMPAIGN_THEMES = {
     },
     "festive_red": {
         "name": "Festive Red",
-        "description": "Vibrant red and gold for celebrations and Chinese holidays",
+        "description": "Elegant red and gold for celebrations and Chinese holidays",
         "primary_color": "#C41E3A",
         "secondary_color": "#8B0000",
-        "accent_color": "#FFD700",
+        "accent_color": "#B8860B",
         "background": "linear-gradient(135deg, #8B0000 0%, #C41E3A 50%, #DC143C 100%)",
         "text_color": "#ffffff",
-        "button_color": "#FFD700",
-        "button_text": "#8B0000"
+        "button_color": "#C41E3A",
+        "button_text": "#ffffff"
     },
     "modern_black": {
         "name": "Modern Black",

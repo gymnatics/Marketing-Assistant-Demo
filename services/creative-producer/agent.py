@@ -61,10 +61,15 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 - Diagonal section dividers using clip-path on 1-2 sections for visual interest
 
 ## Theme Presets:
-- **Luxury Gold**: Dark (#050510) base, Gold (#D4AF37) accents, warm amber glows
-- **Festive Red**: Maroon (#1a0008) base, Crimson (#C41E3A) + Gold (#FFD700), warm celebration feel
-- **Modern Black**: Black (#000) base, white/silver accents, ultra-minimal, high contrast
-- **Classic Casino**: Emerald (#001a0a) base, Gold + Green accents, classic glamour
+- **Luxury Gold**: Dark (#050510) base, Gold (#D4AF37) accents, warm amber glows. CTA button: gold background, dark text.
+- **Festive Red**: Deep maroon (#1a0008) base, Crimson (#C41E3A) primary, Rich Gold (#B8860B) accents (NOT bright yellow). CTA button: crimson background, white text. Elegant red and gold, NOT yellow.
+- **Modern Black**: Black (#000) base, white/silver accents, ultra-minimal. CTA button: white background, black text.
+- **Classic Casino**: Emerald (#001a0a) base, Gold (#D4AF37) + Green accents. CTA button: gold background, dark text.
+
+## CTA BUTTON STYLING (MANDATORY):
+- CTA buttons must ALWAYS have a visible, theme-appropriate background color — NEVER white or light gray.
+- The button must contrast with the section background. Dark section = colored button, not white.
+- Use the theme accent color for button backgrounds (gold, crimson, white, or green depending on theme).
 
 ## PERSONALIZATION PLACEHOLDERS (use these EXACTLY as written):
 - `{{GREETING}}` — personalized greeting (e.g., "Dear John Smith" or "尊敬的张伟")
