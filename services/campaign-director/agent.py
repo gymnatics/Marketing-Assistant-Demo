@@ -149,10 +149,17 @@ async def deploy_preview_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
                         "Deploying preview", {"step": "deploying_preview"})
     try:
+        campaign_info = json.dumps({
+            "campaign_name": state["campaign_name"],
+            "hotel_name": state["hotel_name"],
+            "theme": state["theme"],
+        })
         result = await call_a2a_agent(DELIVERY_MANAGER_URL, "deploy_preview", {
             "campaign_id": state["campaign_id"],
             "html_content": state["landing_page_html"],
-            "namespace": DEV_NAMESPACE
+            "namespace": DEV_NAMESPACE,
+            "customers_json": json.dumps(state.get("customer_list", [])),
+            "campaign_json": campaign_info,
         })
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")
@@ -231,10 +238,17 @@ async def deploy_production_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
                         "Deploying to production", {"step": "deploying_production"})
     try:
+        campaign_info = json.dumps({
+            "campaign_name": state["campaign_name"],
+            "hotel_name": state["hotel_name"],
+            "theme": state["theme"],
+        })
         result = await call_a2a_agent(DELIVERY_MANAGER_URL, "deploy_production", {
             "campaign_id": state["campaign_id"],
             "html_content": state["landing_page_html"],
-            "namespace": PROD_NAMESPACE
+            "namespace": PROD_NAMESPACE,
+            "customers_json": json.dumps(state.get("customer_list", [])),
+            "campaign_json": campaign_info,
         })
         if result.get("status") == "error":
             error_msg = result.get("error", "Unknown error")

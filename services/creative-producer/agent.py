@@ -26,15 +26,16 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 
 ## STRICT STRUCTURE (follow this exact section order):
 
-1. **Sticky Nav** — Translucent top bar with hotel name + "Request Access" CTA button
-2. **Hero Section** (100vh) — Full-viewport with massive headline, value proposition, and Chinese translation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
-3. **Campaign Story** — Centered text block explaining the offer with generous padding
-4. **Campaign Dates** — Prominent date display as a styled banner or badge
-5. **Benefits Grid** — 3-4 cards in a responsive grid. Use glassmorphism (backdrop-filter: blur, semi-transparent backgrounds, subtle borders)
-6. **Exclusivity Section** — "By Invitation Only" or "Limited to Select Members" urgency element
-7. **CTA Section** — Large animated button with glow/pulse effect
-8. **QR Code** — Centered: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
-9. **Footer** — Hotel branding, address, contact
+1. **Sticky Nav** — Translucent top bar with hotel name + "Book Now 立即预订" CTA button
+2. **Personalized Welcome Banner** — Show `{{GREETING}}` and `{{CUSTOMER_TIER_BADGE}}` badge prominently. This makes the visitor feel recognized.
+3. **Hero Section** (100vh) — Full-viewport with massive headline, value proposition, and Chinese translation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
+4. **Campaign Story** — Centered text block explaining the offer with generous padding
+5. **Campaign Dates** — Prominent date display as a styled banner or badge
+6. **Benefits Grid** — 3-4 cards in a responsive grid. Use glassmorphism (backdrop-filter: blur, semi-transparent backgrounds, subtle borders)
+7. **Personalized Offer** — "{{CUSTOMER_FIRST_NAME}}, as a {{CUSTOMER_TIER_BADGE}}, you have exclusive access to..." — tailor the message to the customer tier
+8. **CTA Section** — Large animated "Book Now 立即预订" button with glow/pulse effect. Make it look like a real booking button.
+9. **QR Code** — Centered: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
+10. **Footer** — Hotel branding, address, contact
 
 ## DESIGN RULES:
 
@@ -65,6 +66,14 @@ CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxu
 - **Festive Red**: Maroon (#1a0008) base, Crimson (#C41E3A) + Gold (#FFD700), warm celebration feel
 - **Modern Black**: Black (#000) base, white/silver accents, ultra-minimal, high contrast
 - **Classic Casino**: Emerald (#001a0a) base, Gold + Green accents, classic glamour
+
+## PERSONALIZATION PLACEHOLDERS (use these EXACTLY as written):
+- `{{GREETING}}` — personalized greeting (e.g., "Dear John Smith" or "尊敬的张伟")
+- `{{CUSTOMER_NAME}}` — full name
+- `{{CUSTOMER_FIRST_NAME}}` — first name only
+- `{{CUSTOMER_TIER_BADGE}}` — tier label (e.g., "Platinum VIP", "Diamond Elite")
+- `{{CUSTOMER_TIER}}` — raw tier (e.g., "Platinum")
+- These will be replaced server-side with real customer data. Use them in the HTML exactly as shown with double curly braces.
 
 ## CRITICAL TECHNICAL RULES:
 - Single self-contained HTML file. ALL CSS in one embedded <style> tag.

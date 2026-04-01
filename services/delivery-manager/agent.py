@@ -69,7 +69,10 @@ Generate email content in the following EXACT format:
 - Add a prominent call-to-action button that links to the ACTUAL campaign URL provided (NOT a placeholder)
 - Sign off with the hotel/casino name
 
-IMPORTANT: The call-to-action button href MUST use the exact campaign URL provided in the prompt. Do NOT use placeholder text like "{{campaign_url}}" - use the actual URL."""
+IMPORTANT: 
+- The call-to-action button href MUST use the exact campaign URL provided in the prompt. Do NOT use placeholder text like "{{campaign_url}}" - use the actual URL.
+- Mention that this is a personalized invitation — the landing page knows who they are.
+- Add a line like "Your personalized experience awaits" or "A page crafted exclusively for you"."""
 
 
 async def publish_event(
@@ -233,10 +236,15 @@ def init_k8s_client():
             raise Exception("Could not configure Kubernetes client")
 
 
+LANDING_IMAGE = os.environ.get(
+    "LANDING_IMAGE", "quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing-v2"
+)
+
+
 def deploy_campaign_to_k8s(
-    campaign_id: str, html_content: str, namespace: str
+    campaign_id: str, html_content: str, namespace: str, customers_json: str = "[]", campaign_json: str = "{}"
 ) -> str:
-    """Deploy campaign landing page to OpenShift."""
+    """Deploy personalized campaign landing page to OpenShift using Express.js app."""
     init_k8s_client()
 
     core_v1 = client.CoreV1Api()
@@ -244,51 +252,23 @@ def deploy_campaign_to_k8s(
 
     deployment_name = f"campaign-{campaign_id[:8]}-preview"
 
-    configmap = client.V1ConfigMap(
-        metadata=client.V1ObjectMeta(name=f"{deployment_name}-html"),
-        data={"index.html": html_content},
-    )
-
-    nginx_config = """
-server {
-    listen 8080;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
-    
-    add_header X-Frame-Options "";
-    add_header Content-Security-Policy "";
-    
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-"""
-    nginx_configmap = client.V1ConfigMap(
-        metadata=client.V1ObjectMeta(name=f"{deployment_name}-nginx"),
-        data={"default.conf": nginx_config},
+    data_configmap = client.V1ConfigMap(
+        metadata=client.V1ObjectMeta(name=f"{deployment_name}-data"),
+        data={
+            "template.html": html_content,
+            "customers.json": customers_json,
+            "campaign.json": campaign_json,
+        },
     )
 
     try:
-        core_v1.create_namespaced_config_map(namespace=namespace, body=configmap)
+        core_v1.create_namespaced_config_map(namespace=namespace, body=data_configmap)
     except ApiException as e:
         if e.status == 409:
             core_v1.replace_namespaced_config_map(
-                name=f"{deployment_name}-html",
+                name=f"{deployment_name}-data",
                 namespace=namespace,
-                body=configmap,
-            )
-        else:
-            raise
-
-    try:
-        core_v1.create_namespaced_config_map(namespace=namespace, body=nginx_configmap)
-    except ApiException as e:
-        if e.status == 409:
-            core_v1.replace_namespaced_config_map(
-                name=f"{deployment_name}-nginx",
-                namespace=namespace,
-                body=nginx_configmap,
+                body=data_configmap,
             )
         else:
             raise
@@ -305,32 +285,23 @@ server {
                 spec=client.V1PodSpec(
                     containers=[
                         client.V1Container(
-                            name="nginx",
-                            image="nginxinc/nginx-unprivileged:alpine",
+                            name="landing",
+                            image=LANDING_IMAGE,
+                            image_pull_policy="Always",
                             ports=[client.V1ContainerPort(container_port=8080)],
                             volume_mounts=[
                                 client.V1VolumeMount(
-                                    name="html",
-                                    mount_path="/usr/share/nginx/html",
-                                ),
-                                client.V1VolumeMount(
-                                    name="nginx-config",
-                                    mount_path="/etc/nginx/conf.d",
+                                    name="data",
+                                    mount_path="/data",
                                 ),
                             ],
                         )
                     ],
                     volumes=[
                         client.V1Volume(
-                            name="html",
+                            name="data",
                             config_map=client.V1ConfigMapVolumeSource(
-                                name=f"{deployment_name}-html"
-                            ),
-                        ),
-                        client.V1Volume(
-                            name="nginx-config",
-                            config_map=client.V1ConfigMapVolumeSource(
-                                name=f"{deployment_name}-nginx"
+                                name=f"{deployment_name}-data"
                             ),
                         ),
                     ],
@@ -472,10 +443,14 @@ class DeliveryManagerAgent:
         )
 
         try:
+            customers_json = params.get("customers_json", "[]")
+            campaign_json = params.get("campaign_json", "{}")
             preview_url = deploy_campaign_to_k8s(
                 campaign_id=validated.campaign_id,
                 html_content=validated.html_content,
                 namespace=validated.namespace or DEV_NAMESPACE,
+                customers_json=customers_json,
+                campaign_json=campaign_json,
             )
 
             result = DeployPreviewOutput(preview_url=preview_url, status="success")
@@ -516,10 +491,14 @@ class DeliveryManagerAgent:
         )
 
         try:
+            customers_json = params.get("customers_json", "[]")
+            campaign_json = params.get("campaign_json", "{}")
             production_url = deploy_campaign_to_k8s(
                 campaign_id=validated.campaign_id,
                 html_content=validated.html_content,
                 namespace=validated.namespace or PROD_NAMESPACE,
+                customers_json=customers_json,
+                campaign_json=campaign_json,
             )
 
             result = DeployProductionOutput(
