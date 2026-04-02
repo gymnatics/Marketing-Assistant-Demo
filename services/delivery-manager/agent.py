@@ -60,18 +60,16 @@ Generate email content in the following EXACT format:
 - Use ONLY inline HTML tags like <h1>, <h2>, <p>, <strong>, <em>, <a>, <br>
 - Do NOT include <!DOCTYPE>, <html>, <head>, <body>, or <style> tags
 - Do NOT wrap content in any document structure
-- For the CTA button, use: <a href="URL" style="background-color:#C41E3A;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Button Text</a>
+- For the CTA button, use: <a href="{{campaign_link}}" style="background-color:#C41E3A;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Button Text</a>
 
 ## Email Style Guidelines:
 - Keep subject lines under 60 characters
 - Use elegant, premium language
 - Use EXACTLY `{{customer_name}}` as the greeting placeholder (the system replaces it per recipient)
-- Use EXACTLY `{{campaign_link}}` as the CTA button href (personalized per recipient)
-- Add a prominent call-to-action button that links to the ACTUAL campaign URL provided (NOT a placeholder)
+- The CTA button href MUST be EXACTLY `{{campaign_link}}` — this placeholder is replaced per recipient with their personalized URL. Do NOT use any other URL for the button href.
 - Sign off with the hotel/casino name
 
 IMPORTANT: 
-- The call-to-action button href MUST use the exact campaign URL provided in the prompt. Do NOT use placeholder text like "{{campaign_url}}" - use the actual URL.
 - Mention that this is a personalized invitation — the landing page knows who they are.
 - Add a line like "Your personalized experience awaits" or "A page crafted exclusively for you"."""
 
@@ -166,17 +164,15 @@ async def generate_email_with_streaming(
 1. Create an enticing subject line that drives opens
 2. Write an elegant email body with:
    - Personalized greeting using {{{{customer_name}}}} placeholder
-   - CTA button href MUST be {{{{campaign_link}}}} (NOT the raw campaign URL)
+   - CTA button href MUST be EXACTLY {{{{campaign_link}}}} — do NOT use any actual URL, the system replaces this per recipient
    - Compelling description of the offer
    - Sense of exclusivity and urgency
    - Include the campaign dates ({start_date} to {end_date}) in the email body
-   - A styled call-to-action button with href="{campaign_url}" (use this EXACT URL)
    - Professional sign-off from {hotel_name}
 3. Use HTML formatting for the body (headers, paragraphs, button styling)
 4. Provide both English and Chinese versions
 
 CRITICAL: 
-- The CTA button MUST link to: {campaign_url}
 - Use the ACTUAL dates provided ({start_date} to {end_date}), NOT placeholders like [date]
 
 Generate the email content now:"""
@@ -290,7 +286,7 @@ def deploy_campaign_to_k8s(
                             image_pull_policy="Always",
                             ports=[client.V1ContainerPort(container_port=8080)],
                             env=[
-                                client.V1EnvVar(name="MONGODB_MCP_URL", value=os.environ.get("MONGODB_MCP_URL", "http://mongodb-mcp.marketing-assistant-v2.svc:8090")),
+                                client.V1EnvVar(name="MONGODB_MCP_URL", value="http://mongodb-mcp.marketing-assistant-v2.svc:8090"),
                             ],
                             volume_mounts=[
                                 client.V1VolumeMount(

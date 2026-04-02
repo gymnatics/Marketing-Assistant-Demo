@@ -22,31 +22,47 @@ function getCampaign() {
   try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
 }
 
+function parseSseJson(text) {
+  for (const line of text.split("\n")) {
+    if (line.startsWith("data: ")) {
+      try { return JSON.parse(line.slice(6)); } catch {}
+    }
+  }
+  return JSON.parse(text);
+}
+
 async function fetchCustomerFromMCP(customerId) {
   if (customerCache[customerId] && Date.now() - cacheTime < CACHE_TTL) {
     return customerCache[customerId];
   }
 
+  const mcpHeaders = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+  };
+
   try {
     const resp = await fetch(`${MONGODB_MCP_URL}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: mcpHeaders,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "initialize",
-        params: { capabilities: {} },
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "campaign-landing", version: "1.0.0" },
+        },
         id: 1,
       }),
     });
 
     if (!resp.ok) throw new Error(`MCP init failed: ${resp.status}`);
+    const sessionId = resp.headers.get("mcp-session-id") || "";
 
     const searchResp = await fetch(`${MONGODB_MCP_URL}/mcp`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "mcp-session-id": resp.headers.get("mcp-session-id") || "",
-      },
+      headers: { ...mcpHeaders, "mcp-session-id": sessionId },
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/call",
@@ -59,7 +75,8 @@ async function fetchCustomerFromMCP(customerId) {
     });
 
     if (searchResp.ok) {
-      const data = await searchResp.json();
+      const raw = await searchResp.text();
+      const data = parseSseJson(raw);
       if (data.result && data.result.content) {
         const customers = JSON.parse(data.result.content[0].text);
         customerCache = {};
@@ -120,6 +137,17 @@ function personalize(html, customer, campaign) {
   for (const [key, value] of Object.entries(replacements)) {
     result = result.split(key).join(value);
   }
+
+  // Catch LLM-hardcoded generic text that should have been placeholders
+  result = result
+    .replace(/Honored Guest/g, tierEn)
+    .replace(/Valued Guest/g, name)
+    .replace(/>Guest</g, `>${firstName}<`)
+    .replace(/Welcome,?\s*Guest/gi, `Welcome, ${firstName}`)
+    .replace(/欢迎[，,]\s*Guest/g, `欢迎，${firstName}`)
+    .replace(/>VIP Guest</g, `>${tierEn}<`)
+    .replace(/尊贵来宾/g, tierZh);
+
   return result;
 }
 

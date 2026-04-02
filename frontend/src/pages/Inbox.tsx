@@ -18,7 +18,7 @@ export default function Inbox() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [selected, setSelected] = useState<Email | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterEmail, setFilterEmail] = useState('');
+  const [filterEmail, setFilterEmail] = useState('wei.zhang@example.com');
 
   useEffect(() => {
     fetchInbox();
@@ -35,16 +35,6 @@ export default function Inbox() {
       if (resp.ok) {
         const data = await resp.json();
         setEmails(data);
-        // Auto-select first recipient on initial load
-        if (!filterEmail && data.length > 0) {
-          const firstEmail = data.find((e: Email) => e.to_email) || data[0];
-          if (firstEmail) {
-            setFilterEmail(firstEmail.to_email);
-            // Re-fetch filtered
-            const filtResp = await fetch(`/api/inbox?email=${encodeURIComponent(firstEmail.to_email)}`);
-            if (filtResp.ok) setEmails(await filtResp.json());
-          }
-        }
       }
     } catch {} finally { setLoading(false); }
   };

@@ -1,7 +1,7 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 4.0  
+**Version:** 4.1  
 **Last Updated:** April 2, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
@@ -688,22 +688,27 @@ app.kubernetes.io/name: <service-name>
 sequenceDiagram
     participant Browser
     participant ExpressJS as Campaign Landing (Express.js)
-    participant ConfigMap as K8s ConfigMap
+    participant MCP as MongoDB MCP<br/>(marketing-assistant-v2)
+    participant DB as MongoDB
 
     Browser->>ExpressJS: GET /?c=VIP-001
-    ExpressJS->>ConfigMap: Read /data/customers.json
-    ExpressJS->>ConfigMap: Read /data/template.html
+    ExpressJS->>ExpressJS: Read /data/template.html (ConfigMap)
+    ExpressJS->>MCP: POST /mcp (initialize + tools/call)
+    Note over ExpressJS,MCP: Cross-namespace: mongodb-mcp.marketing-assistant-v2.svc:8090
+    MCP->>DB: db.customers.find()
+    DB-->>MCP: customer documents
+    MCP-->>ExpressJS: customer list (SSE format)
     Note over ExpressJS: Replace {{GREETING}}, {{CUSTOMER_TIER_BADGE}}, etc.
-    Note over ExpressJS: Language based on preferred_language
+    Note over ExpressJS: Catch hardcoded "Guest" patterns (fallback)
     ExpressJS-->>Browser: Personalized HTML
 ```
 
 ### Data Flow
 
 1. **Step 1-2**: Creative Producer generates HTML with placeholders (`{{GREETING}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_FIRST_NAME}}`)
-2. **Step 1-2**: Delivery Manager deploys Express.js pod with `customers.json: []` (empty, customers not yet retrieved)
-3. **Step 3**: Customer Analyst retrieves customers → Campaign Director re-deploys with populated `customers.json`
-4. **Step 3+**: Frontend polls landing page until personalization is confirmed ready (no raw `{{GREETING}}` in response)
+2. **Step 1-2**: Delivery Manager deploys Express.js pod with hardcoded cross-namespace MCP URL
+3. **On page load**: Express.js fetches customer data from MongoDB MCP in real-time (no ConfigMap needed)
+4. **Step 3+**: Frontend enables VIP dropdown after email prep completes
 5. **VIP Dropdown**: User selects a customer from dropdown → opens `{url}?c=VIP-001` → sees personalized page
 
 ### Personalization Placeholders
@@ -720,14 +725,16 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 
 ### Campaign Landing Service
 
-- **Image**: `quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing-v2`
+- **Image**: `quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing`
 - **Base**: `registry.access.redhat.com/ubi9/nodejs-18`
 - **Port**: 8080
 - **Data mount**: `/data/` (ConfigMap with `template.html`, `campaign.json`)
 - **Customer data**: Fetched from MongoDB MCP at request time (NOT from ConfigMap)
-- **MCP call**: `POST http://mongodb-mcp:8090/mcp` → `tools/call` → `get_all_vip_customers`
-- **Cache**: 60-second TTL, falls back to ConfigMap if MCP unavailable
+- **MCP URL**: `http://mongodb-mcp.marketing-assistant-v2.svc:8090` (hardcoded cross-namespace, NOT from env var)
+- **MCP protocol**: Requires `Accept: application/json, text/event-stream` header, `protocolVersion: "2024-11-05"`, `clientInfo`. Responses are SSE format (parsed via `parseSseJson()`)
+- **Cache**: 60-second TTL, falls back to ConfigMap `customers.json` if MCP unavailable
 - **Routes**: `GET /` (personalized page), `GET /healthz`, `GET /readyz`
+- **Hardcoded text fallback**: `personalize()` catches LLM-hardcoded "Honored Guest" → tier name, "Guest" → first name, etc.
 - **Generic view** (no `?c=`): "Honored Guest" / "尊贵来宾"
 - **Prospect view** (`?c=PROSPECT-001`): "Exclusive Invitee" / "特邀嘉宾"
 - **Zero delay**: No pod restart needed for personalization — instant via MCP
@@ -735,10 +742,13 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 ### Fake Inbox
 
 - **Route**: `/inbox` (React page, link in top nav)
-- **Pre-populated**: 3 "read" emails (membership renewal, wine tasting, suite upgrade)
-- **Campaign email**: Delivery Manager POSTs one personalized email on Go Live (unread, bold)
-- **API**: `GET /api/inbox`, `POST /api/inbox`, `POST /api/inbox/{id}/read` (on campaign-api)
+- **Default recipient**: Wei Zhang (`wei.zhang@example.com`)
+- **Pre-populated**: 3 "read" emails per known customer (membership renewal, wine tasting, suite upgrade)
+- **Campaign email**: Delivery Manager POSTs personalized email per recipient on Go Live (unread, bold)
+- **Email links**: CTA button href uses `{{campaign_link}}` placeholder, replaced per recipient with `{production_url}?c={customer_id}`
+- **API**: `GET /api/inbox?email=...`, `POST /api/inbox`, `POST /api/inbox/{id}/read` (on campaign-api)
 - **Auto-refresh**: Every 10 seconds
+- **Per-VIP view**: Dropdown filter selects inbox per recipient
 
 ### Bilingual Strategy
 
@@ -751,8 +761,10 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 
 After HTML generation, the Creative Producer injects fixes before deployment:
 1. **Hero image**: `HERO_IMAGE_PLACEHOLDER` → actual public image URL
-2. **Nav button CSS**: Injects `!important` styles for `header button` to prevent white/unstyled buttons using theme CSS variables (`--button-color`, `--button-text-color`)
+2. **Overflow safety CSS**: Minimal `<style id="overflow-safety">` with `overflow-x: hidden` and `max-width: 100vw` — prevents horizontal scroll without breaking LLM layouts
 3. **Proofreading**: LLM prompt instructs fixing typos/capitalization in campaign names
+
+**Note:** Previous attempts at comprehensive CSS injection (wildcard selectors like `[class*="nav"]`, `[class*="grid"]`) caused severe layout conflicts. Keep post-processing minimal — all layout rules belong in the prompt.
 
 ### Frontend VIP Preview
 
