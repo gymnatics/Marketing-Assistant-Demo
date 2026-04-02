@@ -308,6 +308,68 @@ def delete_campaign(campaign_id: str):
     return jsonify({"message": "Campaign deleted", "campaign_id": campaign_id})
 
 
+
+# === Fake Inbox ===
+INBOX = [
+    {
+        "id": "inbox-001",
+        "from_name": "Simon Casino Resort",
+        "from_email": "vip@simoncasino.com",
+        "to_name": "Wei Zhang",
+        "to_email": "wei.zhang@example.com",
+        "subject": "Your Platinum Membership Has Been Renewed",
+        "body": "<p>Dear Wei Zhang,</p><p>We are pleased to confirm that your Platinum membership has been successfully renewed for another year.</p><p>As a valued member, you continue to enjoy exclusive benefits including priority reservations, complimentary spa access, and dedicated concierge service.</p><p>Best regards,<br>Simon Casino Resort VIP Services</p>",
+        "date": "2026-03-15T10:30:00",
+        "read": True
+    },
+    {
+        "id": "inbox-002",
+        "from_name": "Simon Casino Resort",
+        "from_email": "dining@simoncasino.com",
+        "to_name": "Wei Zhang",
+        "to_email": "wei.zhang@example.com",
+        "subject": "Exclusive Wine Tasting Event — March 28",
+        "body": "<p>Dear Wei Zhang,</p><p>You are cordially invited to an exclusive wine tasting event featuring rare vintages from our award-winning cellar.</p><p><strong>Date:</strong> March 28, 2026<br><strong>Time:</strong> 7:00 PM<br><strong>Venue:</strong> The Grand Cellar, Level B1</p><p>Limited to 20 guests. Please RSVP at your earliest convenience.</p><p>Warm regards,<br>The Dining Team</p>",
+        "date": "2026-03-20T14:15:00",
+        "read": True
+    },
+    {
+        "id": "inbox-003",
+        "from_name": "Simon Casino Resort",
+        "from_email": "concierge@simoncasino.com",
+        "to_name": "Wei Zhang",
+        "to_email": "wei.zhang@example.com",
+        "subject": "Your Suite Upgrade Confirmation",
+        "body": "<p>Dear Wei Zhang,</p><p>Great news! Your upcoming stay has been upgraded to the Presidential Suite as a token of our appreciation for your loyalty.</p><p><strong>Check-in:</strong> April 5, 2026<br><strong>Suite:</strong> Presidential Suite, Floor 38<br><strong>Amenities:</strong> Private butler, panoramic city view, complimentary minibar</p><p>We look forward to welcoming you.</p><p>Best regards,<br>Concierge Team</p>",
+        "date": "2026-03-25T09:00:00",
+        "read": True
+    },
+]
+
+
+@app.route("/api/inbox", methods=["GET"])
+def get_inbox():
+    return jsonify(INBOX)
+
+
+@app.route("/api/inbox", methods=["POST"])
+def add_to_inbox():
+    email = request.get_json()
+    email["id"] = f"inbox-{uuid.uuid4().hex[:6]}"
+    email["read"] = False
+    INBOX.insert(0, email)
+    return jsonify(email), 201
+
+
+@app.route("/api/inbox/<email_id>/read", methods=["POST"])
+def mark_read(email_id):
+    for email in INBOX:
+        if email["id"] == email_id:
+            email["read"] = True
+            return jsonify(email)
+    return jsonify({"error": "Not found"}), 404
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

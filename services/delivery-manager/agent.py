@@ -31,6 +31,7 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1",
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+CAMPAIGN_API_URL = os.environ.get("CAMPAIGN_API_URL", "http://campaign-api:5000")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 CLUSTER_DOMAIN = os.environ.get(
     "CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
@@ -541,6 +542,23 @@ class DeliveryManagerAgent:
 
         for customer in validated.customers:
             print(f"[Delivery Manager] SIMULATED: Sending email to {customer.email}")
+
+        # Send one sample email to the fake inbox (first customer)
+        if validated.customers:
+            first = validated.customers[0]
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.post(f"{CAMPAIGN_API_URL}/api/inbox", json={
+                        "from_name": "Simon Casino Resort",
+                        "from_email": "campaigns@simoncasino.com",
+                        "to_name": first.name_en or first.name,
+                        "to_email": first.email,
+                        "subject": validated.email_subject_en,
+                        "body": validated.email_body_en,
+                        "date": __import__("datetime").datetime.utcnow().isoformat(),
+                    })
+            except Exception as e:
+                print(f"[Delivery Manager] Inbox POST failed (non-critical): {e}")
 
         result = SendEmailsOutput(sent_count=sent_count, status="success")
 

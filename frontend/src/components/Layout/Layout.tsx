@@ -28,6 +28,12 @@ const TopNavBar: React.FC = () => {
           <span className="text-slate-500 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-50 transition-colors cursor-pointer">
             Settings
           </span>
+          <Link
+            to="/inbox"
+            className="text-slate-500 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-slate-50 transition-colors"
+          >
+            Inbox
+          </Link>
         </nav>
       </div>
       <div className="flex items-center gap-4">
