@@ -1,8 +1,8 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 3.1  
-**Last Updated:** April 1, 2026  
+**Version:** 4.0  
+**Last Updated:** April 2, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
 ---
@@ -48,9 +48,13 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | **Creative Producer** | 8081 | a2a-sdk, FastMCP Client | HTML/CSS landing page generation |
 | **Customer Analyst** | 8082 | a2a-sdk, FastMCP Client, Qwen3 | LLM-driven customer retrieval via MCP |
 | **Delivery Manager** | 8083 | a2a-sdk, Kubernetes client | Email generation + K8s deployment |
+| **Policy Guardian** | 8084 | a2a-sdk, Qwen3 | Business policy validation |
 | **MongoDB MCP** | 8090 | FastMCP streamable-http | Customer database tools |
 | **ImageGen MCP** | 8091 | FastMCP hybrid + Starlette | AI image generation + serving |
 | **Campaign Landing** | 8080 (per-campaign) | Express.js, UBI9 Node 18 | Personalized landing pages (?c=VIP-001) |
+| **TrustyAI HAP Detector** | 8000 | Granite Guardian 125M (CPU) | Hate/abuse/profanity detection |
+| **TrustyAI Prompt Injection** | 8000 | DeBERTa v3 (CPU) | Prompt injection detection |
+| **GuardrailsOrchestrator** | 8032 | fms-guardrails-orchestrator | Detector coordination |
 | **MongoDB** | 27017 | mongo:7 | Customer/prospect database |
 | **vLLM (Qwen Coder)** | KServe | vLLM, L40S #1 | HTML code generation |
 | **vLLM (Qwen3)** | KServe | vLLM, L40S #2 | Email gen + tool calling |
@@ -813,6 +817,84 @@ oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python
 All Python services: `registry.access.redhat.com/ubi9/python-311:latest`
 Campaign Landing: `registry.access.redhat.com/ubi9/nodejs-18:latest`
 Frontend: `nginxinc/nginx-unprivileged:alpine` (prebuilt React)
+
+---
+
+## 16. Guardrails Architecture
+
+### 4-Layer Validation
+
+All campaign content passes through 4 guardrail layers before creation:
+
+```mermaid
+flowchart TD
+    User["User clicks Next"] --> Regex["Layer 1: Regex\n(competitor names)"]
+    Regex -->|instant| HAP["Layer 2: TrustyAI HAP\n(Granite Guardian, CPU)"]
+    HAP -->|~100ms| PI["Layer 3: TrustyAI Prompt Injection\n(DeBERTa v3, CPU)"]
+    PI -->|~100ms| Policy["Layer 4: Policy Guardian\n(Qwen3 A2A Agent)"]
+    Policy -->|~5s| Decision{All pass?}
+    Decision -->|No| Reject["Error banner on Step 0\nUser edits and retries"]
+    Decision -->|Yes| Proceed["Proceed to Theme Selection"]
+```
+
+### Where Each Layer Runs
+
+| Layer | Detector | Location | Resources |
+|-------|----------|----------|-----------|
+| 1. Regex | Competitor names pattern | Campaign API (in-code) | None |
+| 2. HAP | Granite Guardian 125M | KServe InferenceService (CPU) | 4-8GB RAM |
+| 3. Prompt Injection | DeBERTa v3 | KServe InferenceService (CPU) | 16-24GB RAM |
+| 4. Policy Guardian | Qwen3-32B (A2A agent) | Reuses L40S #2 | No extra GPU |
+
+### TrustyAI Components
+
+Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guardrails/`:
+
+| Component | Purpose |
+|-----------|---------|
+| GuardrailsOrchestrator | Coordinates detectors (monitoring/dashboard) |
+| HAP Detector (Granite Guardian) | Hate, abuse, profanity detection |
+| Prompt Injection Detector (DeBERTa) | Jailbreak/manipulation detection |
+| Regex Detector (sidecar) | Pattern-based blocking |
+| MinIO | Downloads detector models from HuggingFace |
+| Chunker | Sentence-level text splitting |
+| Lingua | Language detection |
+
+### Policy Guardian Agent
+
+- **Service**: `services/policy-guardian/` (port 8084)
+- **Protocol**: A2A (3-layer pattern)
+- **Model**: Qwen3-32B (shared with Customer Analyst + Delivery Manager)
+- **Skill**: `validate_campaign`
+- **Rules**: No >50% discounts, professional tone, no misleading promises
+- **Called from**: Campaign API validate endpoint (pre-creation)
+
+### UX Flow on Rejection
+
+1. User fills in campaign brief on Step 0
+2. Clicks "Next: Select Theme"
+3. Loading spinner: "Validating campaign through safety checks..."
+4. If rejected: red error banner with reason, stays on Step 0
+5. User edits description, clicks Next again
+6. Error clears, re-validates
+7. No campaign created until all 4 layers pass
+
+---
+
+## 17. Agent Summary
+
+| # | Agent | Port | Model | Protocol | Purpose |
+|---|-------|------|-------|----------|---------|
+| 1 | Campaign Director | 8080 | — (orchestration) | A2A | LangGraph workflow coordination |
+| 2 | Creative Producer | 8081 | Qwen Coder (L40S #1) | A2A | AI image + HTML landing page |
+| 3 | Customer Analyst | 8082 | Qwen3 (L40S #2) | A2A + MCP | LLM tool calling for customer DB |
+| 4 | Delivery Manager | 8083 | Qwen3 (L40S #2) | A2A | Email gen + K8s deployment |
+| 5 | Policy Guardian | 8084 | Qwen3 (L40S #2) | A2A | Business policy validation |
+
+| # | MCP Server | Port | Transport | Purpose |
+|---|------------|------|-----------|---------|
+| 1 | MongoDB MCP | 8090 | streamable-http | Customer database tools |
+| 2 | ImageGen MCP | 8091 | streamable-http (hybrid) | AI image generation + serving |
 
 ---
 
