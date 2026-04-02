@@ -345,29 +345,7 @@ export default function CampaignCreate() {
       }));
       if (result.status === 'email_ready') {
         setCurrentStep(3);
-        // Poll the landing page until personalization data is ready
-        if (campaignState.preview_url && !campaignState.preview_url.startsWith('local')) {
-          setPersonalizationReady(false);
-          const checkPersonalization = async () => {
-            for (let i = 0; i < 20; i++) {
-              await new Promise(r => setTimeout(r, 5000));
-              try {
-                const resp = await fetch(`${campaignState.preview_url}?c=VIP-001`);
-                if (resp.ok) {
-                  const text = await resp.text();
-                  if (!text.includes('{{GREETING}}')) {
-                    setPersonalizationReady(true);
-                    return;
-                  }
-                }
-              } catch {}
-            }
-            setPersonalizationReady(true);
-          };
-          checkPersonalization();
-        } else {
-          setPersonalizationReady(true);
-        }
+        setPersonalizationReady(true);
       }
     } catch (err) {
       stopProgressSimulation(0);

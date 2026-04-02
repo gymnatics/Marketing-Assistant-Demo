@@ -287,6 +287,9 @@ def deploy_campaign_to_k8s(
                             image=LANDING_IMAGE,
                             image_pull_policy="Always",
                             ports=[client.V1ContainerPort(container_port=8080)],
+                            env=[
+                                client.V1EnvVar(name="MONGODB_MCP_URL", value=os.environ.get("MONGODB_MCP_URL", "http://mongodb-mcp.marketing-assistant-v2.svc:8090")),
+                            ],
                             volume_mounts=[
                                 client.V1VolumeMount(
                                     name="data",
