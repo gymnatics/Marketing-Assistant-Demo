@@ -1,0 +1,77 @@
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  annotations:
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+    openshift.io/display-name: Guardrails Detector ServingRuntime for KServe
+  name: guardrails-detector-runtime-prompt-injection
+  labels:
+    opendatahub.io/dashboard: 'true'
+spec:
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: '8080'
+  containers:
+    - args:
+        - '--workers'
+        - '4'
+        - '--host'
+        - 0.0.0.0
+        - '--port'
+        - '8000'
+        - '--log-config'
+        - /common/log_conf.yaml
+      command:
+        - uvicorn
+        - 'app:app'
+      env:
+        - name: MODEL_DIR
+          value: /mnt/models
+        - name: HF_HOME
+          value: /tmp/hf_home
+      image: quay.io/trustyai/guardrails-detector-huggingface-runtime:latest
+      name: kserve-container
+      ports:
+        - containerPort: 8000
+          protocol: TCP
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: guardrails-detector-huggingface
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    openshift.io/display-name: prompt-injection-detector
+    serving.kserve.io/deploymentMode: RawDeployment
+  name: prompt-injection-detector
+  labels:
+    opendatahub.io/dashboard: 'true'
+spec:
+  predictor:
+    automountServiceAccountToken: false
+    maxReplicas: 1
+    minReplicas: 1
+    model:
+      modelFormat:
+        name: guardrails-detector-huggingface
+      name: ''
+      resources:
+        limits:
+          cpu: '8'
+          memory: 24Gi
+          nvidia.com/gpu: '1'
+        requests:
+          cpu: '4'
+          memory: 16Gi
+          nvidia.com/gpu: '1'
+      runtime: guardrails-detector-runtime-prompt-injection
+      storage:
+        key: minio-data-connection-detector-models
+        path: deberta-v3-base-prompt-injection-v2
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
