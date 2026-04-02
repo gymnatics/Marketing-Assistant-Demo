@@ -906,6 +906,12 @@ export default function CampaignCreate() {
               <div className="flex justify-between"><span className="text-on-surface-variant">Audience</span><span className="font-medium">{campaignData.target_audience}</span></div>
               <div className="flex justify-between"><span className="text-on-surface-variant">Theme</span><span className="font-medium">{THEMES[campaignData.theme]?.name}</span></div>
               <div className="flex justify-between"><span className="text-on-surface-variant">Period</span><span className="font-medium text-right">{campaignData.start_date} — {campaignData.end_date}</span></div>
+              {campaignData.campaign_description && (
+                <div className="pt-2 border-t border-outline-variant/20 mt-2">
+                  <span className="text-on-surface-variant text-xs">Description</span>
+                  <p className="font-medium text-xs leading-relaxed mt-1 text-on-surface/80">{campaignData.campaign_description}</p>
+                </div>
+              )}
             </div>
           </div>
         </aside>
