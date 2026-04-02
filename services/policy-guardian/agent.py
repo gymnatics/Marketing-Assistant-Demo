@@ -44,6 +44,11 @@ EXAMPLES OF APPROVED CAMPAIGNS:
 - "Private dining experience for diamond tier guests" → APPROVED
 - "VIP gala evening with world-class entertainment" → APPROVED
 - "50% off luxury suite upgrade for loyalty members" → APPROVED
+- "Free 2 night stay with $1000 spent" → APPROVED (conditional offer, not unrealistic)
+- "Complimentary airport transfer for VIP members" → APPROVED
+- "Earn a free night for every 3 nights booked" → APPROVED (loyalty reward)
+
+NOTE: "Free" or "complimentary" offers that require a purchase, minimum spend, or membership tier are APPROVED — they are standard loyalty incentives, not unrealistic. Only reject truly absurd offers with no conditions.
 
 NOW EVALUATE:
 Campaign Name: {campaign_name}
