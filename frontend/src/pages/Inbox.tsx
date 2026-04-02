@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Layout from '../components/Layout/Layout';
+
 
 interface Email {
   id: string;
@@ -79,8 +79,18 @@ export default function Inbox() {
 
   if (selected) {
     return (
-      <Layout activeStep="overview">
-        <div className="max-w-4xl mx-auto">
+      <div className="min-h-screen bg-surface">
+        <header className="bg-surface-container-lowest border-b border-outline-variant/30 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-2xl text-red-500">mail</span>
+            <span className="text-lg font-bold text-on-surface font-headline">Mail</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-sm">account_circle</span>
+            <span>{selected.to_name}</span>
+          </div>
+        </header>
+        <div className="max-w-4xl mx-auto px-4 pt-6">
           <button
             onClick={() => setSelected(null)}
             className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface mb-6 font-medium"
@@ -131,20 +141,30 @@ export default function Inbox() {
             </div>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout activeStep="overview">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-surface">
+      <header className="bg-surface-container-lowest border-b border-outline-variant/30 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-2xl text-red-500">mail</span>
+          <span className="text-lg font-bold text-on-surface font-headline">Mail</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+          <span className="material-symbols-outlined text-sm">account_circle</span>
+          <span>{currentRecipient?.name || 'Inbox'}</span>
+        </div>
+      </header>
+      <div className="max-w-4xl mx-auto px-4 pt-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-3xl text-primary">inbox</span>
             <div>
               <h1 className="text-2xl font-headline font-bold text-on-surface">
-                {currentRecipient ? `${currentRecipient.name}'s Inbox` : 'Inbox'}
+                Inbox
               </h1>
               <p className="text-sm text-on-surface-variant">
                 {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
@@ -213,6 +233,6 @@ export default function Inbox() {
           </div>
         )}
       </div>
-    </Layout>
+    </div>
   );
 }
