@@ -68,6 +68,31 @@ flowchart TD
     Landing -->|"MCP (cross-ns)"| MongoMCP
 ```
 
+## How It Works
+
+When a user creates a campaign, here's what happens under the hood:
+
+**1. Landing Page Generation** — The Campaign Director (LangGraph) delegates to Creative Producer, which first calls ImageGen MCP to generate a hero banner via FLUX.2 on GPU #3, then streams HTML/CSS from Qwen Coder on GPU #1 with the image URL injected. The Delivery Manager deploys this as a live Express.js pod on OpenShift with a public URL.
+
+**2. Customer Retrieval** — The Customer Analyst sends the target audience (e.g., "Platinum members") to Qwen3 on GPU #2, which uses function calling to pick the right MongoDB MCP tool (`get_customers_by_tier`, `get_prospects`, etc.). The MCP server queries the real MongoDB database and returns customer profiles.
+
+**3. Email Generation** — The Delivery Manager calls Qwen3 to write bilingual email content with `{{campaign_link}}` placeholders. On Go Live, each recipient's link is replaced with their personalized URL (`?c=VIP-001`), and emails are posted to the fake inbox.
+
+**4. Personalization** — Each campaign landing page is an Express.js pod that, on every page load, calls MongoDB MCP in real-time (cross-namespace) to fetch the customer data for the `?c=` query parameter. Same page, different URL — completely different personalized experience.
+
+### Communication Protocols
+
+| From | To | Protocol | Purpose |
+|------|----|----------|---------|
+| Frontend | Campaign API | REST | Standard web API |
+| Campaign API | Agents | A2A (JSON-RPC) | Standardized agent communication |
+| Agents | MCP Servers | MCP (streamable-http) | Standardized tool access |
+| Agents | LLMs (Qwen, FLUX) | OpenAI API (streaming) | vLLM-compatible inference |
+| Agents | Event Hub | HTTP POST | Publish real-time status updates |
+| Event Hub | Frontend | SSE | Push agent activity to browser |
+| Delivery Manager | OpenShift | K8s API | Deploy campaign pods |
+| Campaign Landing | MongoDB MCP | MCP (cross-namespace) | Real-time personalization lookup |
+
 ## Components
 
 | Component | Port | Purpose |
