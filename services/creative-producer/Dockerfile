@@ -10,6 +10,7 @@ COPY shared/ /opt/app-root/src/shared/
 COPY services/creative-producer/agent.py .
 COPY services/creative-producer/agent_executor.py .
 COPY services/creative-producer/__main__.py .
+COPY services/creative-producer/base_template.html .
 
 EXPOSE 8081
 

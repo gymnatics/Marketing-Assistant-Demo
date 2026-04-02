@@ -83,10 +83,37 @@ async function fetchCustomerFromMCP(customerId) {
         for (const c of customers) {
           customerCache[c.customer_id] = c;
         }
-        cacheTime = Date.now();
-        return customerCache[customerId] || null;
       }
     }
+
+    // Also fetch prospects so PROSPECT-* IDs resolve
+    const prospectResp = await fetch(`${MONGODB_MCP_URL}/mcp`, {
+      method: "POST",
+      headers: { ...mcpHeaders, "mcp-session-id": sessionId },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          name: "get_prospects",
+          arguments: { limit: 100 },
+        },
+        id: 3,
+      }),
+    });
+
+    if (prospectResp.ok) {
+      const raw = await prospectResp.text();
+      const data = parseSseJson(raw);
+      if (data.result && data.result.content) {
+        const prospects = JSON.parse(data.result.content[0].text);
+        for (const p of prospects) {
+          customerCache[p.customer_id] = p;
+        }
+      }
+    }
+
+    cacheTime = Date.now();
+    return customerCache[customerId] || null;
   } catch (e) {
     console.log(`[Campaign Landing] MCP fetch failed, trying ConfigMap fallback: ${e.message}`);
   }
@@ -108,24 +135,26 @@ async function fetchCustomerFromMCP(customerId) {
 }
 
 function personalize(html, customer, campaign) {
-  const name = customer.name_en || customer.name || "Valued Guest";
-  const firstName = (customer.name_en || customer.name || "Guest").split(" ")[0];
+  const isProspect = customer.tier === "prospect";
+
+  // Prospects get anonymous treatment — no names, just inviting language
+  const name = isProspect ? "Distinguished Guest" : (customer.name_en || customer.name || "Valued Guest");
+  const firstName = isProspect ? "Distinguished Guest" : (customer.name_en || customer.name || "Guest").split(" ")[0];
   const tier = (customer.tier || "VIP").charAt(0).toUpperCase() + (customer.tier || "vip").slice(1);
   const interests = (customer.interests || []).join(", ");
 
-  const greetingEn = `Your Exclusive Experience Awaits, ${firstName}`;
-  const greetingZh = `${customer.name || firstName}，您的专属体验已就绪`;
-  const greeting = `${greetingEn}<br><span style="font-size:0.6em;opacity:0.7">${greetingZh}</span>`;
+  const greeting = isProspect
+    ? "An Exclusive Invitation Awaits You"
+    : `Your Exclusive Experience Awaits, ${firstName}`;
 
   const tierEn = { diamond: "Diamond Elite", platinum: "Platinum VIP", gold: "Gold Member", prospect: "Exclusive Invitee" }[customer.tier] || "VIP Guest";
-  const tierZh = { diamond: "钻石尊享会员", platinum: "铂金贵宾", gold: "金卡会员", prospect: "特邀嘉宾" }[customer.tier] || "贵宾";
 
   const replacements = {
     "{{CUSTOMER_NAME}}": name,
     "{{CUSTOMER_FIRST_NAME}}": firstName,
     "{{CUSTOMER_TIER}}": tier,
     "{{CUSTOMER_TIER_BADGE}}": tierEn,
-    "{{CUSTOMER_TIER_BADGE_ZH}}": tierZh,
+    "{{CUSTOMER_TIER_BADGE_ZH}}": tierEn,
     "{{GREETING}}": greeting,
     "{{CUSTOMER_INTERESTS}}": interests,
     "{{CUSTOMER_LANGUAGE}}": customer.preferred_language || "en",
@@ -144,9 +173,7 @@ function personalize(html, customer, campaign) {
     .replace(/Valued Guest/g, name)
     .replace(/>Guest</g, `>${firstName}<`)
     .replace(/Welcome,?\s*Guest/gi, `Welcome, ${firstName}`)
-    .replace(/欢迎[，,]\s*Guest/g, `欢迎，${firstName}`)
-    .replace(/>VIP Guest</g, `>${tierEn}<`)
-    .replace(/尊贵来宾/g, tierZh);
+    .replace(/>VIP Guest</g, `>${tierEn}<`);
 
   return result;
 }
@@ -157,7 +184,7 @@ function applyGenericDefaults(html, campaign) {
     .split("{{CUSTOMER_FIRST_NAME}}").join("Guest")
     .split("{{CUSTOMER_TIER}}").join("VIP")
     .split("{{CUSTOMER_TIER_BADGE}}").join("Honored Guest")
-    .split("{{CUSTOMER_TIER_BADGE_ZH}}").join("尊贵来宾")
+    .split("{{CUSTOMER_TIER_BADGE_ZH}}").join("Honored Guest")
     .split("{{GREETING}}").join("Your Exclusive Experience Awaits")
     .split("{{CUSTOMER_INTERESTS}}").join("")
     .split("{{CUSTOMER_LANGUAGE}}").join("en")

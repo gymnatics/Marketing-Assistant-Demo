@@ -1,7 +1,10 @@
 """
-Creative Producer Agent - Pure business logic for generating luxury marketing landing pages.
+Creative Producer Agent - Generates luxury marketing landing pages.
 
-Uses Qwen2.5-Coder-32B-FP8 model for HTML/CSS/JS generation.
+"Bones & Beauty" architecture:
+- Bones: Professional HTML skeleton (base_template.html) with fixed structural CSS
+- Beauty: LLM generates creative CSS + bilingual content
+- Result: Always polished, always different
 """
 import os
 import sys
@@ -20,93 +23,134 @@ CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
+BASE_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "base_template.html")
 
-CODER_SYSTEM_PROMPT = """You are a world-class Creative Director who builds luxury marketing landing pages. Your pages are visually stunning, with bold typography, smooth animations, and a premium feel.
+THEME_PRESET_NAMES = {
+    "luxury_gold": "The Heritage Collection",
+    "festive_red": "The Celebration Suite",
+    "modern_black": "The Urban Retreat",
+    "classic_casino": "The Grand Stakes",
+}
 
-## STRICT STRUCTURE (follow this exact section order):
+SYSTEM_PROMPT = """You are a premier Digital Brand Architect specializing in high-conversion marketing for luxury hotels and ultra-exclusive resorts. Your expertise is "Visual Hospitality" — translating a physical five-star experience into a digital interface that feels as refined and welcoming as a grand lobby.
 
-1. **Sticky Nav** — Translucent top bar with hotel name on the left + "Book Now 立即预订" CTA button on the right. Use `overflow: visible`, `padding: 0 2rem`, and ensure the button has `white-space: nowrap` so it is NEVER cut off.
-2. **Hero Section** (100vh) — Full-viewport with massive campaign headline + Chinese translation. Below the headline, show the placeholder `{{GREETING}}` exactly as written — do NOT put any example names like "John" in the HTML. The server replaces it at runtime. and a `{{CUSTOMER_TIER_BADGE}}` badge. The greeting should feel natural and warm — like the page was crafted just for them, NOT like a letter salutation. If a hero image URL is provided, use it as background-image with a dark overlay. Otherwise use an animated gradient.
-3. **Personalized Offer** — Use placeholders exactly: English line with `{{CUSTOMER_FIRST_NAME}}` and `{{CUSTOMER_TIER_BADGE}}`, Chinese subtitle with `{{CUSTOMER_TIER_BADGE_ZH}}`. Do NOT write example names — only use the curly-brace placeholders. This section introduces what benefits the customer gets and comes BEFORE the benefits grid.
-4. **Benefits Grid** — 3-4 cards in a responsive grid showing the specific benefits mentioned in the offer above. Use glassmorphism (backdrop-filter: blur, semi-transparent backgrounds, subtle borders)
-5. **Campaign Story** — Centered text block explaining the campaign/offer with generous padding
-6. **Campaign Dates** — Prominent date display as a styled banner or badge ("Limited Window" urgency)
-7. **CTA Section** — Large animated "Book Now 立即预订" button with glow/pulse effect. Make it look like a real booking button.
-8. **QR Code** — Centered: <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code" style="width:180px;height:180px;border-radius:12px;">
-9. **Footer** — Hotel branding, address, contact
-
-## DESIGN RULES:
-
-**Typography:**
-- Google Fonts: 'Manrope' for headlines, 'Inter' for body
-- Headlines: large (clamp(2.5rem, 6vw, 5rem)), bold, tight letter-spacing
-- Body: 1.1rem, relaxed line-height
-
-**Colors (use CSS variables):**
-- Apply the provided theme colors consistently throughout
-- Dark backgrounds, light text, accent colors for buttons and highlights
-- EVERY section must have a styled background — no white/unstyled sections
-
-**Animations:**
-- Hero: subtle gradient animation or parallax hint
-- Cards: hover scale + shadow transitions
-- CTA button: pulse or shimmer @keyframes animation
-- Sections: fadeInUp on scroll (use CSS animation-delay for stagger)
-
-**Layout:**
-- Use CSS flexbox and grid
-- Full-width sections with max-width inner containers (1200px)
-- Generous padding (80px-120px vertical) between sections
-- Diagonal section dividers using clip-path on 1-2 sections for visual interest
+## Core Design Principles:
+1. "The Check-In Impression": Your designs feel like a premium arrival experience. Expansive whitespace within sections, high-fidelity imagery, calm architectural order.
+2. "Hospitality Typography": 'Manrope' for headlines with tight tracking. Body text airy and elegant — like a personalized welcome letter.
+3. "Atmospheric Color Palettes": Use the provided CSS variables exclusively. Accents should feel metallic (gold/silver) or deep jewel (emerald/ruby).
+4. "Imagery as the Main Course": The hero image is the narrative centerpiece. Use overlays, blend modes, and gradients to frame it cinematically.
+5. "The Concierge CTA": Buttons are sharp-edged, high-contrast, premium language.
+6. "Visual Hierarchy & Flow": Guide the eye from hero to CTA using clear grouping (related elements close together, distinct sections with breathing room), consistent visual patterns (cards should feel like a cohesive set, not individual designs), and strong figure-ground contrast (text must always "lift" from its background through overlays, shadows, or contrast).
 
 ## Theme Presets:
-- **Luxury Gold**: Dark (#050510) base, Gold (#D4AF37) accents, warm amber glows. CTA button: gold background, dark text.
-- **Festive Red**: Deep maroon (#1a0008) base, Crimson (#C41E3A) primary, Rich Gold (#B8860B) accents (NOT bright yellow). CTA button: crimson background, white text. Elegant red and gold, NOT yellow.
-- **Modern Black**: Black (#000) base, white/silver accents, ultra-minimal. CTA button: white background, black text.
-- **Classic Casino**: Emerald (#001a0a) base, Gold (#D4AF37) + Green accents. CTA button: gold background, dark text.
+- "The Heritage Collection" (Luxury Gold): Deep midnight slate (#0F172A) backgrounds, classic gold (#D4AF37) accents, shimmer gold (#FDE047) hover states, warm and established.
+- "The Celebration Suite" (Festive Red): Deep maroon (#450A0A) base, rich crimson (#7F1D1D) sections, pure silver-white (#F8FAFC) accents, soft blush (#FEF2F2) card fills. Professional yet festive.
+- "The Urban Retreat" (Modern Minimal): Pure white (#FFFFFF) base, slate 50 (#F8FAFC) section separation, midnight black (#0F172A) buttons and branding. Maximum whitespace, architectural.
+- "The Grand Stakes" (Classic Casino): Deep emerald baize (#064E3B), forest green (#065F46) depth layers, amber gold (#F59E0B) to suggest winning, cool silver (#D1D5DB) for interactive elements. Mint white (#F0FDF4) text.
 
-## CTA BUTTON STYLING (MANDATORY):
-- CTA buttons must ALWAYS have a visible, theme-appropriate background color — NEVER white or light gray.
-- The button must contrast with the section background. Dark section = colored button, not white.
-- Use the theme accent color for button backgrounds (gold, crimson, white, or green depending on theme).
+## Technical Rules:
+- You receive a fixed semantic HTML skeleton. Do NOT output any HTML tags.
+- Output a <style> block to "paint" the brand onto the structure, PLUS a content block.
+- Use CSS variables: var(--primary), var(--secondary), var(--accent), var(--bg), var(--text), var(--button-color), var(--button-text)
+- Style these classes creatively: body, nav, .hero, .hero-overlay, .hero .badge, .offer, .benefits, .benefits-grid, .card, .story, .dates, .date-badge, .cta-section, .cta-btn, .qr-section, footer
+- Be creative with: backgrounds (gradients, radial, conic, mesh), card hover effects (scale, glow, border-shimmer), @keyframes animations (shimmer, float, pulse, glow, gradient-shift), hero overlay blend modes, section transitions
+- Every generation must look DIFFERENT — vary gradient directions, animation types, card treatments, section backgrounds
+- Use the CSS variables as your palette foundation. Ensure strong contrast between text and backgrounds. Sections should have varied but cohesive backgrounds — alternate between deeper and lighter tones to create visual rhythm. No section should ever look unstyled or default.
+- Every element must feel curated and intentional — no default-looking components.
 
-## PERSONALIZATION PLACEHOLDERS (use these EXACTLY as written):
-- `{{GREETING}}` — personalized welcome. Server replaces at runtime. Use the placeholder EXACTLY as `{{GREETING}}` in the HTML — do NOT write example names.
-- `{{CUSTOMER_NAME}}` — full name
-- `{{CUSTOMER_FIRST_NAME}}` — first name only
-- `{{CUSTOMER_TIER_BADGE}}` — English tier label (e.g., "Platinum VIP", "Diamond Elite")
-- `{{CUSTOMER_TIER_BADGE_ZH}}` — Chinese tier label (e.g., "铂金贵宾", "钻石尊享会员")
-- `{{CUSTOMER_TIER}}` — raw tier (e.g., "Platinum")
-- These will be replaced server-side with real customer data. Use them in the HTML exactly as shown with double curly braces.
+## Output Format:
+Return EXACTLY two sections separated by ---CONTENT---
 
-## CRITICAL TECHNICAL RULES:
-- Single self-contained HTML file. ALL CSS in one embedded <style> tag.
-- NO Tailwind, NO CSS frameworks. Write all CSS directly.
-- CSS variables for colors. Mobile-responsive with @media queries.
-- Semantic HTML5. Bilingual layout: English text FIRST, then Chinese on a SEPARATE LINE below (use `<br>` or a `<p>` tag). NEVER put English and Chinese on the same line. Chinese text should always be in a smaller font size (0.8em) or lighter opacity (0.7).
-- EVERY element must be fully styled. NO white gaps, NO unstyled sections, NO broken layouts.
-- The page must look complete and polished from top to bottom.
-- NAV BAR CSS (MANDATORY — include this EXACTLY):
-  ```css
-  nav, .nav, header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; overflow: visible !important; }
-  nav a, nav button, .nav a, .nav button, header a, header button { white-space: nowrap; flex-shrink: 0; }
-  ```
+First: a <style> block with your creative CSS (100-200 lines).
+Then: ---CONTENT--- followed by key-value content lines.
 
-## PLACEHOLDER RULES (CRITICAL):
-- Use placeholders EXACTLY as written: `{{GREETING}}`, `{{CUSTOMER_FIRST_NAME}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_TIER_BADGE_ZH}}`
-- Do NOT replace them with example text like "John", "Wei", "Platinum VIP" — the server does this at runtime
-- If you see `{{GREETING}}` in your output, that is CORRECT — do not expand it
+Do NOT output anything else — no explanations, no HTML, no markdown fences."""
 
-## PROOFREADING:
-- Fix any obvious typos or capitalization errors in the campaign name (e.g., "CNy" should be "CNY", "promo" should be "Promo")
-- Ensure proper title case for the campaign name in all headings
 
-## CREATIVITY:
-- Each generation should look DIFFERENT. Vary: section background styles, card designs, typography sizes, animation types, gradient directions, hero overlay opacity, section padding amounts.
-- Do NOT reuse the same design if regenerated — surprise the viewer with a fresh layout each time.
+def load_base_template() -> str:
+    with open(BASE_TEMPLATE_PATH, "r") as f:
+        return f.read()
 
-## Output:
-Return ONLY the complete HTML, starting with <!DOCTYPE html> and ending with </html>. No explanations, no markdown."""
+
+def parse_llm_output(raw: str) -> tuple[str, dict]:
+    """Parse LLM output into (css_style_block, content_dict).
+
+    Expected format:
+        <style>...</style>
+        ---CONTENT---
+        KEY: value
+        KEY: value
+    """
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+    if raw.endswith("```"):
+        raw = raw[:-3].strip()
+
+    separator = "---CONTENT---"
+    if separator not in raw:
+        return raw, {}
+
+    parts = raw.split(separator, 1)
+    style_block = parts[0].strip()
+    content_raw = parts[1].strip()
+
+    content = {}
+    for line in content_raw.split("\n"):
+        line = line.strip()
+        if ":" in line:
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip()
+            if not key or not value:
+                continue
+            content[key] = value
+
+    return style_block, content
+
+
+def merge_template(template: str, theme_config: dict, style_block: str, content: dict,
+                   hero_image_url: str | None, hotel_name: str, start_date: str, end_date: str) -> str:
+    """Merge the base template with theme vars, LLM style, and content."""
+    html = template
+
+    html = html.replace("THEME_PRIMARY", theme_config["primary_color"])
+    html = html.replace("THEME_SECONDARY", theme_config["secondary_color"])
+    html = html.replace("THEME_ACCENT", theme_config["accent_color"])
+    html = html.replace("THEME_BG", theme_config.get("secondary_color", "#0a0a0a"))
+    html = html.replace("THEME_TEXT", theme_config["text_color"])
+    html = html.replace("THEME_BUTTON_COLOR", theme_config["button_color"])
+    html = html.replace("THEME_BUTTON_TEXT", theme_config["button_text"])
+
+    html = html.replace("LLM_STYLE_PLACEHOLDER", style_block)
+
+    if hero_image_url:
+        html = html.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
+    else:
+        html = html.replace(
+            "style=\"background-image: url('HERO_IMAGE_PLACEHOLDER');\"",
+            "style=\"background: var(--bg);\""
+        )
+
+    html = html.replace("HOTEL_NAME", hotel_name)
+    html = html.replace("DATE_START", start_date or "TBD")
+    html = html.replace("DATE_END", end_date or "TBD")
+
+    content_keys = [
+        "HEADLINE", "SUBTITLE",
+        "OFFER_TEXT",
+        "BENEFIT_1_TITLE", "BENEFIT_1_DESC",
+        "BENEFIT_2_TITLE", "BENEFIT_2_DESC",
+        "BENEFIT_3_TITLE", "BENEFIT_3_DESC",
+        "BENEFIT_4_TITLE", "BENEFIT_4_DESC",
+        "STORY_TEXT",
+    ]
+    for key in content_keys:
+        value = content.get(key, "")
+        if value:
+            html = html.replace(key, value)
+
+    return html
 
 
 async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
@@ -154,92 +198,26 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
         print(f"[Creative Producer] Failed to publish event: {e}")
 
 
-async def generate_html_with_streaming(
-    campaign_name: str,
-    campaign_description: str,
-    hotel_name: str,
-    theme: str,
-    start_date: str,
-    end_date: str,
-    hero_image_url: str | None = None
-) -> str:
-    """Generate landing page HTML using streaming to avoid timeout."""
-
-    theme_config = CAMPAIGN_THEMES.get(theme, CAMPAIGN_THEMES["luxury_gold"])
-
-    date_info = ""
-    if start_date and end_date:
-        date_info = f"\n- Campaign Period: {start_date} to {end_date}"
-
-    hero_image_section = ""
-    if hero_image_url:
-        hero_image_section = """
-## AI-Generated Hero Image (MUST USE):
-- An AI-generated hero banner image has been created for this campaign.
-- You MUST use it as the hero section background: `background-image: url('HERO_IMAGE_PLACEHOLDER'); background-size: cover; background-position: center;`
-- Use EXACTLY the string `HERO_IMAGE_PLACEHOLDER` as the URL — it will be replaced with the actual image after generation.
-- Add a semi-transparent dark overlay (rgba(0,0,0,0.4)) on top for text readability
-- Make the hero section full-viewport height (100vh) to showcase the image prominently
-- The image is the visual centerpiece — design the page around it
-"""
-
-    user_prompt = f"""Create a STUNNING, one-of-a-kind luxury landing page for this campaign. Make it visually breathtaking — this is for a C-suite demo showcasing AI creativity.
-
-## Campaign Brief:
-- **Campaign:** {campaign_name}
-- **Story:** {campaign_description}
-- **Venue:** {hotel_name}
-- **Theme:** {theme_config['name']}{date_info}
-{hero_image_section}
-## Color Palette:
-- Primary: {theme_config['primary_color']}
-- Secondary: {theme_config['secondary_color']}
-- Accent: {theme_config['accent_color']}
-- Background: {theme_config['background']}
-- Text: {theme_config['text_color']}
-- Button: {theme_config['button_color']}
-- Button Text: {theme_config['button_text']}
-
-## Creative Direction:
-Create something UNIQUE and IMPRESSIVE. Choose a bold layout approach — asymmetric grids, overlapping sections, cinematic hero, diagonal dividers, floating cards, anything that says "an AI designed this and it's amazing."
-
-Include these elements (in any creative order — surprise me with the arrangement):
-- **Epic Hero** — Full-viewport (100vh), {campaign_name} as a massive headline with Chinese translation, compelling value prop
-- **Campaign Story** — {campaign_description} — present it as an immersive narrative, not a boring text block
-- **Date Showcase** — {start_date} to {end_date} — make the dates feel exclusive (countdown style, "Limited Window", or elegant badge)
-- **Benefits/Features** — 3-4 cards with creative designs (glassmorphism, gradient borders, 3D tilt, neon glow — pick one style)
-- **Exclusivity** — urgency element ("By Invitation Only", "Limited to Select Members", tier badges)
-- **CTA** — animated button with glow/shimmer/pulse effect
-- **QR Code** — <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com" alt="QR Code">
-- **Footer** — {hotel_name} branding
-
-## Language:
-- Primary: English with luxury editorial copywriting (think Ritz-Carlton meets Apple)
-- Hero headline + CTA: include Chinese (中文) translations
-- Use actual dates ({start_date} to {end_date}), never placeholders
-
-## IMPORTANT: Make this page dramatically different from a standard corporate template. Use creative CSS animations, bold typography, and a layout that showcases AI creativity.
-
-Generate the complete HTML file now:"""
-
+async def stream_llm(system_prompt: str, user_prompt: str) -> str:
+    """Stream a completion from Qwen Coder and return the full response text."""
     url = f"{CODE_MODEL_ENDPOINT}/chat/completions"
-    headers = {
-        "Content-Type": "application/json"
-    }
+    headers = {"Content-Type": "application/json"}
+    auth_token = os.environ.get("CODE_MODEL_TOKEN", "")
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
 
     payload = {
         "model": CODE_MODEL_NAME,
         "messages": [
-            {"role": "system", "content": CODER_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.9,
-        "max_tokens": 12000,
+        "max_tokens": 8000,
         "stream": True
     }
 
-    html_content = ""
-
+    result = ""
     async with httpx.AsyncClient(timeout=300.0) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             if response.status_code != 200:
@@ -257,46 +235,105 @@ Generate the complete HTML file now:"""
                             delta = chunk["choices"][0].get("delta", {})
                             content = delta.get("content", "")
                             if content:
-                                html_content += content
+                                result += content
                     except json.JSONDecodeError:
                         continue
+    return result
 
-    if html_content.startswith("```html"):
-        html_content = html_content[7:]
-    if html_content.startswith("```"):
-        html_content = html_content[3:]
-    if html_content.endswith("```"):
-        html_content = html_content[:-3]
 
-    html_content = html_content.strip()
+async def generate_html_with_streaming(
+    campaign_name: str,
+    campaign_description: str,
+    hotel_name: str,
+    theme: str,
+    start_date: str,
+    end_date: str,
+    hero_image_url: str | None = None
+) -> str:
+    """Generate landing page by merging skeleton template with LLM-generated CSS + content."""
 
-    if hero_image_url and "HERO_IMAGE_PLACEHOLDER" in html_content:
-        html_content = html_content.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
-        print(f"[Creative Producer] Injected hero image URL into HTML: {hero_image_url[:80]}")
+    theme_config = CAMPAIGN_THEMES.get(theme, CAMPAIGN_THEMES["luxury_gold"])
+    preset_name = THEME_PRESET_NAMES.get(theme, "The Heritage Collection")
 
-    base_css_fix = """<style id="overflow-safety">
-/* Minimal safety net: prevent horizontal overflow only */
-html, body { overflow-x: hidden !important; }
-section, div { max-width: 100vw; box-sizing: border-box; }
-</style>"""
-    html_content = html_content.replace("</head>", f"{base_css_fix}\n</head>")
+    hero_note = ""
+    if hero_image_url:
+        hero_note = "\nThe hero section has an AI-generated background image — make it feel cinematic with overlays (rgba or gradient) and blend modes."
 
-    return html_content
+    user_prompt = f"""Design a "{preset_name}" visual experience for "{campaign_name}" at {hotel_name}.
+
+Color palette:
+- Primary: {theme_config['primary_color']}
+- Secondary: {theme_config['secondary_color']}
+- Accent: {theme_config['accent_color']}
+- Background: {theme_config.get('secondary_color', '#0a0a0a')}
+- Text: {theme_config['text_color']}
+- Button: {theme_config['button_color']} on {theme_config['button_text']}
+
+Campaign story: {campaign_description}
+Period: {start_date} to {end_date}
+{hero_note}
+Make the benefit cards feel luxurious (glassmorphism, gradient borders, frosted glass, or subtle depth).
+Add at least 2 @keyframes animations (e.g., shimmer on CTA, float on cards, gradient shift on hero, pulse on badge).
+
+Output format — provide BOTH sections:
+
+<style>
+... your creative CSS here ...
+</style>
+---CONTENT---
+HEADLINE: (proofread/polished campaign name — fix typos, proper capitalization)
+SUBTITLE: (short tagline, e.g., "An Invitation to Indulgence")
+OFFER_TEXT: (1-2 sentence exclusive offer description, luxury editorial tone)
+BENEFIT_1_TITLE: (short benefit name, e.g., "Luxury Suite Upgrade")
+BENEFIT_1_DESC: (1 sentence benefit description)
+BENEFIT_2_TITLE: (different benefit)
+BENEFIT_2_DESC: (1 sentence)
+BENEFIT_3_TITLE: (different benefit)
+BENEFIT_3_DESC: (1 sentence)
+BENEFIT_4_TITLE: (different benefit)
+BENEFIT_4_DESC: (1 sentence)
+STORY_TEXT: (2-3 sentences about the campaign experience, luxury editorial tone)
+
+ALL content must be in English only. Do NOT include any Chinese text."""
+
+    raw_response = await stream_llm(SYSTEM_PROMPT, user_prompt)
+
+    # Fallback: if LLM returned full HTML instead of style+content, use it directly
+    if "<!DOCTYPE" in raw_response or "<html" in raw_response:
+        print("[Creative Producer] Fallback: LLM returned full HTML, using directly")
+        html = raw_response.strip()
+        if html.startswith("```html"):
+            html = html[7:]
+        if html.startswith("```"):
+            html = html[3:]
+        if html.endswith("```"):
+            html = html[:-3]
+        if hero_image_url and "HERO_IMAGE_PLACEHOLDER" in html:
+            html = html.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
+        return html
+
+    style_block, content = parse_llm_output(raw_response)
+    print(f"[Creative Producer] Parsed LLM output: {len(style_block)} chars CSS, {len(content)} content keys")
+
+    template = load_base_template()
+    html = merge_template(
+        template=template,
+        theme_config=theme_config,
+        style_block=style_block,
+        content=content,
+        hero_image_url=hero_image_url,
+        hotel_name=hotel_name,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    return html
 
 
 class CreativeProducerAgent:
     """Pure business logic for the Creative Producer agent."""
 
     async def generate(self, params: dict) -> dict:
-        """Generate a landing page from campaign parameters.
-
-        Args:
-            params: dict with keys campaign_id, campaign_name, campaign_description,
-                    hotel_name, theme, start_date, end_date
-
-        Returns:
-            dict with keys html, status, and optionally error
-        """
         campaign_id = params.get("campaign_id", "unknown")
 
         await publish_event(

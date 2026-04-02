@@ -20,47 +20,47 @@ class CampaignTheme(str, Enum):
 CAMPAIGN_THEMES = {
     "luxury_gold": {
         "name": "Luxury Gold",
-        "description": "Elegant gold and champagne tones for premium experiences",
+        "description": "Timeless warmth, deep midnight slate with classic gold accents",
         "primary_color": "#D4AF37",
-        "secondary_color": "#1a1a2e",
-        "accent_color": "#FFD700",
-        "background": "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-        "text_color": "#ffffff",
+        "secondary_color": "#0F172A",
+        "accent_color": "#FDE047",
+        "background": "#0F172A",
+        "text_color": "#F8FAFC",
         "button_color": "#D4AF37",
-        "button_text": "#1a1a2e"
+        "button_text": "#0F172A"
     },
     "festive_red": {
         "name": "Festive Red",
-        "description": "Elegant red and gold for celebrations and Chinese holidays",
-        "primary_color": "#C41E3A",
-        "secondary_color": "#8B0000",
-        "accent_color": "#B8860B",
-        "background": "linear-gradient(135deg, #8B0000 0%, #C41E3A 50%, #DC143C 100%)",
-        "text_color": "#ffffff",
-        "button_color": "#C41E3A",
-        "button_text": "#ffffff"
+        "description": "Professional yet celebratory, deep maroon with silver-white accents",
+        "primary_color": "#7F1D1D",
+        "secondary_color": "#450A0A",
+        "accent_color": "#FEF2F2",
+        "background": "#450A0A",
+        "text_color": "#FFFFFF",
+        "button_color": "#F8FAFC",
+        "button_text": "#450A0A"
     },
     "modern_black": {
-        "name": "Modern Black",
-        "description": "Sleek black and silver for sophisticated appeal",
-        "primary_color": "#C0C0C0",
-        "secondary_color": "#1a1a1a",
-        "accent_color": "#E5E5E5",
-        "background": "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #2d2d2d 100%)",
-        "text_color": "#ffffff",
-        "button_color": "#C0C0C0",
-        "button_text": "#1a1a1a"
+        "name": "Modern Minimal",
+        "description": "Architectural, crisp, ultra-clean with maximum whitespace",
+        "primary_color": "#0F172A",
+        "secondary_color": "#F8FAFC",
+        "accent_color": "#334155",
+        "background": "#FFFFFF",
+        "text_color": "#0F172A",
+        "button_color": "#0F172A",
+        "button_text": "#FFFFFF"
     },
     "classic_casino": {
         "name": "Classic Casino",
-        "description": "Traditional green felt with gold accents",
-        "primary_color": "#228B22",
-        "secondary_color": "#006400",
-        "accent_color": "#FFD700",
-        "background": "linear-gradient(135deg, #004d00 0%, #006400 50%, #228B22 100%)",
-        "text_color": "#ffffff",
-        "button_color": "#FFD700",
-        "button_text": "#004d00"
+        "description": "Deep emerald felt with amber gold, old-money high-stakes elegance",
+        "primary_color": "#F59E0B",
+        "secondary_color": "#064E3B",
+        "accent_color": "#D1D5DB",
+        "background": "#064E3B",
+        "text_color": "#F0FDF4",
+        "button_color": "#F59E0B",
+        "button_text": "#064E3B"
     }
 }
 

@@ -38,8 +38,8 @@ const THEMES: Record<string, { name: string; tag: string; color: string; desc: s
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAFj3s1Lg-nB_uRfAPZ6uLDRTgkoSnw0_japaDC68mxVPALBv-ANKzjFZLoDEnsudst6sdKJJpn2G0EsbfStbWo8EIgz_GVh1wdIxCYIxQQ1bJJ_OKEnpkULU7PFeGvuI-k-f281uMxrgUmZMOwaA0Rj9U49w5Pzx3wkU5hV5QACeox5ZX-li71xYZOT06g2KLaHMuxyl0T0nydxtqSnPaOT54N-h9fcrXR3g1nfime1jI9gkQO6S-2TBD5pdpql7HFAr9jip1Bh08'
   },
   modern_black: {
-    name: 'Modern Black', tag: 'Minimalist', color: 'bg-slate-400',
-    desc: 'Ultra-minimalist and tech-forward. High contrast typography on dark surfaces.',
+    name: 'Modern Minimal', tag: 'Minimalist', color: 'bg-slate-400',
+    desc: 'Architectural and crisp. Sharp midnight typography on pure white surfaces.',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBDBP4BrTyi2GcMPBop8amdkt4v-nIeZrjS6-XLaEAF-UfcGSr-QzBO4OJHx4CvAOTNYY3JrM9cA_FILjRpTxRmxpGzk0N0SVZrVQEVUlQdqrzRT_xZsUMJ92pOCle6OFvWVGVHEiG47llaaujFUvkuBDOcUAqbSYi1hHFKQEpMVL83ofmlspEPk8sUM-Of37AxWYBC6atL35ESMaaNbHoZf0WgpgZjg-L2yKE21l2ApPZsRKcyrozZpbzwKlsp8S0bbXeFtCDo80Y'
   },
   classic_casino: {
@@ -497,14 +497,18 @@ export default function CampaignCreate() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <div className="md:col-span-2">
-                <label className="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Hotel Name</label>
-                <input
-                  className="w-full bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary py-3 px-4 font-medium transition-all placeholder:text-slate-400"
-                  placeholder="e.g., The Golden Sands Resort"
-                  type="text"
+                <label className="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Venue</label>
+                <select
+                  className="w-full bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary py-3 px-4 font-medium transition-all"
                   value={campaignData.hotel_name}
                   onChange={(e) => handleDataChange({ hotel_name: e.target.value })}
-                />
+                >
+                  <option value="Simon Casino Resort">Simon Casino Resort</option>
+                  <option value="Simon Imperial Palace">Simon Imperial Palace</option>
+                  <option value="Simon Oceanview Resort">Simon Oceanview Resort</option>
+                  <option value="Simon Golden Bay Hotel">Simon Golden Bay Hotel</option>
+                  <option value="Simon Jade Garden Spa & Resort">Simon Jade Garden Spa & Resort</option>
+                </select>
               </div>
               <div>
                 <label className="block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Start Date</label>
@@ -1006,14 +1010,8 @@ export default function CampaignCreate() {
                 <span className="material-symbols-outlined">open_in_new</span>View Live Page
               </a>
             )}
-            <button
-              onClick={() => navigate('/')}
-              className="px-8 py-4 bg-secondary-container text-on-secondary-container rounded-xl font-headline font-bold text-sm flex items-center gap-3 hover:bg-secondary-container/80 transition-colors"
-            >
-              <span className="material-symbols-outlined">monitoring</span>Go to Performance
-            </button>
-            <button onClick={() => navigate('/')} className="px-8 py-4 text-on-surface-variant font-bold text-sm hover:text-primary transition-colors">
-              Return to Dashboard
+            <button onClick={() => navigate('/')} className="px-8 py-4 bg-secondary-container text-on-secondary-container rounded-xl font-headline font-bold text-sm flex items-center gap-3 hover:bg-secondary-container/80 transition-colors">
+              <span className="material-symbols-outlined">arrow_back</span>Return to Dashboard
             </button>
           </div>
         </div>
