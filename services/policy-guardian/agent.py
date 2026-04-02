@@ -21,20 +21,36 @@ LANG_MODEL_ENDPOINT = os.environ.get(
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 
-POLICY_PROMPT = """You are a luxury casino resort marketing policy validator. Evaluate the campaign below against these rules:
+POLICY_PROMPT = """You are a luxury casino resort marketing policy validator.
 
 RULES:
-1. No discounts greater than 50% — luxury brands never offer extreme discounts
-2. Must be professional and appropriate for a premium hospitality brand
-3. No unrealistic or misleading promises (e.g., "guaranteed winnings", "free everything")
+1. No discounts greater than 50%
+2. Must be professional and appropriate for a premium brand
+3. No unrealistic or misleading promises
 4. No references to gambling addiction or irresponsible behavior
-5. Must maintain exclusivity — avoid language that sounds cheap or mass-market
+5. Must maintain exclusivity — no cheap or mass-market language
 
+EXAMPLES OF REJECTED CAMPAIGNS:
+- "99% Off All Hotel Rooms" → REJECTED: Discount exceeds 50% maximum
+- "Free Everything For Everyone" → REJECTED: Unrealistic promise, no exclusivity
+- "Buy 2 Nights Get 80% Off" → REJECTED: Discount exceeds 50% maximum
+- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading gambling promise
+- "Cheapest Rooms in Macau" → REJECTED: Language not appropriate for luxury brand
+- "Unlimited Free Drinks and Casino Credits" → REJECTED: Unrealistic promise
+
+EXAMPLES OF APPROVED CAMPAIGNS:
+- "Exclusive 30% off suites for platinum members" → APPROVED
+- "Complimentary spa treatment with 2-night stay" → APPROVED
+- "Private dining experience for diamond tier guests" → APPROVED
+- "VIP gala evening with world-class entertainment" → APPROVED
+- "50% off luxury suite upgrade for loyalty members" → APPROVED
+
+NOW EVALUATE:
 Campaign Name: {campaign_name}
 Campaign Description: {description}
 
 Respond with ONLY: APPROVED or REJECTED: <brief reason>
-Do not use thinking tags, XML, or explanations. One line only."""
+No thinking, no XML tags, one line only."""
 
 
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):

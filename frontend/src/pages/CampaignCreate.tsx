@@ -407,7 +407,7 @@ export default function CampaignCreate() {
         });
         const validateResult = await validateResp.json();
         if (validateResult.valid === false) {
-          setCampaignState(prev => ({ ...prev, error: `Guardrail: ${validateResult.reason}` }));
+          setCampaignState(prev => ({ ...prev, error: validateResult.reason }));
           setLoading(false);
           setAgentStatus('');
           return;
