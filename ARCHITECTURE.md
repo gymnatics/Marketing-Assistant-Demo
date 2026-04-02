@@ -723,10 +723,22 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 - **Image**: `quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing-v2`
 - **Base**: `registry.access.redhat.com/ubi9/nodejs-18`
 - **Port**: 8080
-- **Data mount**: `/data/` (ConfigMap with `template.html`, `customers.json`, `campaign.json`)
+- **Data mount**: `/data/` (ConfigMap with `template.html`, `campaign.json`)
+- **Customer data**: Fetched from MongoDB MCP at request time (NOT from ConfigMap)
+- **MCP call**: `POST http://mongodb-mcp:8090/mcp` → `tools/call` → `get_all_vip_customers`
+- **Cache**: 60-second TTL, falls back to ConfigMap if MCP unavailable
 - **Routes**: `GET /` (personalized page), `GET /healthz`, `GET /readyz`
 - **Generic view** (no `?c=`): "Honored Guest" / "尊贵来宾"
 - **Prospect view** (`?c=PROSPECT-001`): "Exclusive Invitee" / "特邀嘉宾"
+- **Zero delay**: No pod restart needed for personalization — instant via MCP
+
+### Fake Inbox
+
+- **Route**: `/inbox` (React page, link in top nav)
+- **Pre-populated**: 3 "read" emails (membership renewal, wine tasting, suite upgrade)
+- **Campaign email**: Delivery Manager POSTs one personalized email on Go Live (unread, bold)
+- **API**: `GET /api/inbox`, `POST /api/inbox`, `POST /api/inbox/{id}/read` (on campaign-api)
+- **Auto-refresh**: Every 10 seconds
 
 ### Bilingual Strategy
 
