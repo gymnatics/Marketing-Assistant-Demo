@@ -346,6 +346,10 @@ export default function CampaignCreate() {
       if (result.status === 'email_ready') {
         setCurrentStep(3);
         setPersonalizationReady(true);
+        // Auto-select first customer for consistent personalization
+        if (result.customer_list && result.customer_list.length > 0 && result.customer_list[0].customer_id) {
+          setSelectedVip(result.customer_list[0].customer_id);
+        }
       }
     } catch (err) {
       stopProgressSimulation(0);

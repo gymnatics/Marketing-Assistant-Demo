@@ -24,12 +24,20 @@ export default function Inbox() {
     fetchInbox();
     const interval = setInterval(fetchInbox, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchInbox = async () => {
     try {
       const resp = await fetch('/api/inbox');
-      if (resp.ok) setEmails(await resp.json());
+      if (resp.ok) {
+        const data = await resp.json();
+        setEmails(data);
+        // Auto-select first recipient on initial load
+        if (!filterEmail && data.length > 0) {
+          const firstEmail = data.find((e: Email) => e.to_email) || data[0];
+          if (firstEmail) setFilterEmail(firstEmail.to_email);
+        }
+      }
     } catch {} finally { setLoading(false); }
   };
 
