@@ -274,25 +274,85 @@ Generate the complete HTML file now:"""
         html_content = html_content.replace("HERO_IMAGE_PLACEHOLDER", hero_image_url)
         print(f"[Creative Producer] Injected hero image URL into HTML: {hero_image_url[:80]}")
 
-    nav_button_fix = """<style>
-header, nav, .nav {
-  overflow: visible !important;
-  padding-right: 2rem !important;
+    base_css_fix = """<style id="base-layout-fix">
+/* === Base layout guarantees (injected post-generation) === */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: var(--secondary-color, #0a0a0a) !important;
+  overflow-x: hidden !important;
 }
-header button, header .cta-button, nav button, nav .cta-button {
+
+/* Nav bar */
+header, nav, .nav, .navbar, .navigation {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.8rem 2rem !important;
+  overflow: visible !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Nav button — always on the right, never clipped */
+header button, header .cta-button, header a.cta-button,
+nav button, nav .cta-button, nav a.cta-button {
   background: var(--button-color, var(--primary-color, #C41E3A)) !important;
   color: var(--button-text-color, #fff) !important;
   border: none !important;
   padding: 0.6rem 1.5rem !important;
   border-radius: 8px !important;
   font-weight: 600 !important;
-  cursor: pointer;
+  cursor: pointer !important;
   white-space: nowrap !important;
   flex-shrink: 0 !important;
-  margin-right: 0.5rem !important;
+  margin-left: auto !important;
+  text-decoration: none !important;
+}
+
+/* Sections — no white gaps */
+section, .section, [class*="section"] {
+  background-color: var(--secondary-color, #0a0a0a) !important;
+}
+
+/* Cards grid — proper spacing */
+.benefits, .cards, .grid, [class*="benefit"], [class*="card-grid"], [class*="cards-grid"] {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  gap: 1.5rem !important;
+  padding: 0 2rem !important;
+}
+
+/* Individual cards */
+.card, [class*="card"]:not([class*="grid"]):not(section) {
+  border-radius: 12px !important;
+  padding: 2rem !important;
+  overflow: hidden !important;
+}
+
+/* CTA buttons */
+.cta-button, .cta button, [class*="cta"] button, [class*="cta"] a {
+  background: var(--button-color, var(--primary-color, #C41E3A)) !important;
+  color: var(--button-text-color, #fff) !important;
+  border: none !important;
+  padding: 1rem 2.5rem !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 1.1rem !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  display: inline-block !important;
+}
+
+/* Prevent white background bleed */
+footer, .footer {
+  background-color: var(--secondary-color, #0a0a0a) !important;
 }
 </style>"""
-    html_content = html_content.replace("</head>", f"{nav_button_fix}\n</head>")
+    html_content = html_content.replace("</head>", f"{base_css_fix}\n</head>")
 
     return html_content
 
