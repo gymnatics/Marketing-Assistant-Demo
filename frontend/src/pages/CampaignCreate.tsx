@@ -416,6 +416,7 @@ export default function CampaignCreate() {
       // Validate through guardrails before proceeding
       setLoading(true);
       setAgentStatus('Validating campaign through safety checks...');
+      setCampaignState(prev => ({ ...prev, error: undefined }));
       try {
         const validateResp = await fetch('/api/campaigns/validate', {
           method: 'POST',
