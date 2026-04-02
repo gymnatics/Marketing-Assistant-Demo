@@ -241,4 +241,6 @@ flowchart TD
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed architecture, data flows, Mermaid sequence diagrams
+For deeper technical details — sequence diagrams, A2A/MCP protocol flows, LangGraph workflows, K8s deployment internals, personalization architecture, and observability — see:
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow
