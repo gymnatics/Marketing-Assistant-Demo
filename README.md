@@ -1,6 +1,6 @@
 # Simon Casino Resort — AI Campaign Manager
 
-A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI.
+A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI. Generates personalized luxury landing pages, bilingual email campaigns, and AI hero images — all orchestrated by autonomous agents.
 
 ## Architecture
 
@@ -8,11 +8,19 @@ A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and
 flowchart TD
     subgraph ui [User Interface]
         Frontend["React Dashboard\n(nginx :8080)"]
+        Inbox["Fake Inbox\n(/inbox)"]
     end
 
     subgraph api [API Layer]
         CampaignAPI["Campaign API\n(Flask :5000)"]
         EventHub["Event Hub\n(SSE :5001)"]
+    end
+
+    subgraph guardrails [Guardrails]
+        Regex["Regex Filter"]
+        HAP["TrustyAI HAP\n(Granite Guardian)"]
+        PI["TrustyAI Prompt Injection\n(DeBERTa v3)"]
+        PG["Policy Guardian\n(Qwen3 A2A :8084)"]
     end
 
     subgraph agents [A2A Agents]
@@ -27,6 +35,10 @@ flowchart TD
         ImageMCP["ImageGen MCP\n(:8091 /mcp)"]
     end
 
+    subgraph landing [Per-Campaign Pods]
+        Landing["Campaign Landing\n(Express.js, personalized)"]
+    end
+
     subgraph models [GPU Models]
         Coder["Qwen2.5-Coder-32B\n(L40S #1)"]
         Lang["Qwen3-32B\n(L40S #2)"]
@@ -35,7 +47,12 @@ flowchart TD
 
     Frontend -->|"/api"| CampaignAPI
     Frontend -->|"/events"| EventHub
-    CampaignAPI -->|A2A| Director
+    CampaignAPI -->|validate| Regex
+    CampaignAPI -->|validate| HAP
+    CampaignAPI -->|validate| PI
+    CampaignAPI -->|"A2A validate"| PG
+    CampaignAPI -->|"A2A"| Director
+    PG -->|LLM| Lang
     Director -->|A2A| CP
     Director -->|A2A| CA
     Director -->|A2A| DM
@@ -44,8 +61,11 @@ flowchart TD
     CA -->|"LLM tool calling"| Lang
     CA -->|MCP| MongoMCP
     DM -->|LLM| Lang
+    DM -->|"K8s deploy"| Landing
+    DM -->|"POST /api/inbox"| CampaignAPI
     ImageMCP --> Flux
     MongoMCP --> DB[(MongoDB)]
+    Landing -->|"MCP (cross-ns)"| MongoMCP
 ```
 
 ## Components
@@ -53,15 +73,28 @@ flowchart TD
 | Component | Port | Purpose |
 |-----------|------|---------|
 | React Dashboard | 8080 | Campaign portal UI (nginx) |
-| Campaign API | 5000 | REST gateway + A2A client |
+| Campaign API | 5000 | REST gateway, guardrails validation, fake inbox API |
 | Event Hub | 5001 | Real-time SSE agent status |
 | Campaign Director | 8080 | LangGraph workflow orchestrator |
 | Creative Producer | 8081 | AI image + HTML landing page generation |
 | Customer Analyst | 8082 | LLM-driven customer retrieval via MCP |
 | Delivery Manager | 8083 | Email generation + K8s deployment |
-| MongoDB MCP | 8090 | Customer database tools (streamable-http) |
-| ImageGen MCP | 8091 | AI image generation + serving (hybrid MCP) |
+| Policy Guardian | 8084 | Business policy validation (Qwen3 A2A agent) |
+| MongoDB MCP | 8090 | Customer database tools (FastMCP streamable-http) |
+| ImageGen MCP | 8091 | AI image generation + serving (FastMCP hybrid) |
+| Campaign Landing | 8080/pod | Per-campaign Express.js personalized landing pages |
 | MongoDB | 27017 | Customer/prospect database |
+
+## Key Features
+
+- **AI-Generated Landing Pages** — Qwen Coder creates unique HTML/CSS with every generation
+- **AI Hero Images** — FLUX.2 generates atmospheric campaign banners via MCP
+- **Hyper-Personalization** — Landing pages personalize per VIP customer (`?c=VIP-001`) via real-time MCP lookup
+- **Bilingual** — All content in English (primary) + Chinese (subtitle)
+- **4-Layer Guardrails** — Regex → TrustyAI HAP → TrustyAI Prompt Injection → Policy Guardian (Qwen3)
+- **Gmail-Style Inbox** — Fake inbox shows personalized emails per recipient with campaign QR codes
+- **Real-Time Agent Status** — SSE streaming shows agent activity during generation
+- **Preview Before Commit** — Review landing page, emails, and recipients before going live
 
 ## Quick Start
 
@@ -76,33 +109,44 @@ docker-compose up
 
 Access: http://localhost:3000
 
-### OpenShift Deployment (Kustomize)
+### OpenShift Deployment
 
 ```bash
-# 1. Copy and edit the overlay secret with your model tokens
-cp k8s/overlays/dev/secret.yaml k8s/overlays/dev/secret-local.yaml
-# Edit secret-local.yaml with your actual endpoints and tokens
+# Option A: Interactive deployment (recommended)
+./deploy.sh
 
-# 2. Deploy everything in one command
+# Option B: Manual Kustomize
 oc apply -k k8s/overlays/dev
-
-# 3. Seed MongoDB with customer data
 oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
-
-# 4. Import vLLM-Omni ServingRuntime (for image generation)
 oc apply -f k8s/imagegen/serving-runtime.yaml
+```
+
+### Build & Push Images
+
+```bash
+./build-and-push.sh
+```
+
+### RBAC (Required for New Clusters)
+
+The Delivery Manager deploys campaign landing pages to dev/prod namespaces. Grant permissions:
+
+```bash
+oc apply -f k8s/rbac.yaml
 ```
 
 **For a different cluster:** Copy `k8s/overlays/dev/` to `k8s/overlays/<your-name>/`, edit `configmap-patch.yaml` (cluster domain, namespaces) and `secret.yaml` (model endpoints, tokens).
 
 ## Workflow
 
-1. **Create Campaign** — Define name, description, hotel, audience, dates
-2. **Select Theme** — Choose visual style (Luxury Gold, Festive Red, Modern Black, Classic Casino)
-3. **Generate Landing Page** — AI generates hero image (FLUX.2) + HTML/CSS (Qwen Coder)
-4. **Preview** — Review landing page, regenerate for different layouts
-5. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (EN + ZH)
-6. **Go Live** — Deploy to production + send emails
+1. **Define Campaign** — Name, description, hotel, audience, dates
+2. **Guardrails Validation** — 4-layer check (regex, HAP, prompt injection, policy) before proceeding
+3. **Select Theme** — Visual style picker (Luxury Gold, Festive Red, Modern Black, Classic Casino)
+4. **Generate Landing Page** — AI generates hero image (FLUX.2) + HTML/CSS (Qwen Coder), deploys preview pod
+5. **Preview + Personalize** — Review landing page, select VIP from dropdown for personalized preview
+6. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (EN + ZH)
+7. **Review** — Email preview, recipient list, campaign summary
+8. **Go Live** — Deploy to production, send personalized emails to fake inbox
 
 ## Technology Stack
 
@@ -113,7 +157,9 @@ oc apply -f k8s/imagegen/serving-runtime.yaml
 - **Orchestration**: LangGraph 0.2+, LangChain 0.2+
 - **LLM Inference**: vLLM on RHOAI (Qwen2.5-Coder-32B, Qwen3-32B)
 - **Image Generation**: vLLM-Omni 0.18.0 (FLUX.2-klein-4B)
+- **Guardrails**: TrustyAI (Granite Guardian, DeBERTa v3) + Policy Guardian (Qwen3)
 - **Database**: MongoDB 7
+- **Landing Pages**: Express.js on UBI9 Node 18 (personalized via MCP)
 - **Platform**: Red Hat OpenShift AI 3.3, 3x NVIDIA L40S GPUs
 
 ## Models
@@ -126,6 +172,33 @@ oc apply -f k8s/imagegen/serving-runtime.yaml
 | Granite Guardian HAP 125M | CPU | Hate/abuse/profanity detection (TrustyAI) | [ibm-granite/granite-guardian-hap-125m](https://huggingface.co/ibm-granite/granite-guardian-hap-125m) |
 | DeBERTa v3 Prompt Injection v2 | CPU | Prompt injection detection (TrustyAI) | [protectai/deberta-v3-base-prompt-injection-v2](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) |
 
+## Project Structure
+
+```
+├── frontend/                    # React Dashboard (nginx)
+├── services/
+│   ├── campaign-api/            # Flask API Gateway + guardrails + inbox
+│   ├── event-hub/               # SSE Broadcasting
+│   ├── campaign-director/       # LangGraph Orchestrator (A2A)
+│   ├── creative-producer/       # HTML Generation (A2A)
+│   ├── customer-analyst/        # Customer Profiles (A2A + MCP)
+│   ├── delivery-manager/        # Email + K8s Deploy (A2A)
+│   ├── policy-guardian/         # Business Policy Validation (A2A)
+│   ├── mongodb-mcp/             # Customer DB MCP Server
+│   ├── imagegen-mcp/            # AI Image Gen MCP Server
+│   └── campaign-landing/        # Personalized Landing Pages (Express.js)
+├── shared/models.py             # Shared Pydantic models + themes
+├── k8s/                         # Kubernetes manifests (Kustomize)
+│   ├── base/                    # Namespace-agnostic manifests
+│   ├── overlays/dev/            # Cluster-specific config
+│   ├── guardrails/              # TrustyAI detector deployment
+│   ├── imagegen/                # vLLM-Omni ServingRuntime
+│   └── rbac.yaml                # Cross-namespace permissions
+├── build-and-push.sh            # Build & push all container images
+├── deploy.sh                    # Interactive OpenShift deployment
+└── docker-compose.yaml          # Local development (all services)
+```
+
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed architecture, data flows, sequence diagrams
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed architecture, data flows, Mermaid sequence diagrams
