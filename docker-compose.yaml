@@ -42,7 +42,6 @@ services:
     environment:
       IMAGEGEN_MODEL_ENDPOINT: ${IMAGEGEN_MODEL_ENDPOINT}
       IMAGEGEN_MODEL_NAME: ${IMAGEGEN_MODEL_NAME:-flux2-klein-4b}
-      IMAGEGEN_MODEL_TOKEN: ${IMAGEGEN_MODEL_TOKEN:-}
       IMAGEGEN_MCP_SELF_URL: http://imagegen-mcp:8091
 
   # Creative Producer Agent
@@ -55,7 +54,6 @@ services:
     environment:
       CODE_MODEL_ENDPOINT: ${CODE_MODEL_ENDPOINT}
       CODE_MODEL_NAME: ${CODE_MODEL_NAME:-qwen25-coder-32b-fp8}
-      CODE_MODEL_TOKEN: ${CODE_MODEL_TOKEN}
       EVENT_HUB_URL: http://event-hub:5001
       IMAGEGEN_MCP_URL: http://imagegen-mcp:8091
     depends_on:
@@ -73,7 +71,6 @@ services:
       MONGODB_MCP_URL: http://mongodb-mcp:8090
       LANG_MODEL_ENDPOINT: ${LANG_MODEL_ENDPOINT}
       LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
-      LANG_MODEL_TOKEN: ${LANG_MODEL_TOKEN}
       EVENT_HUB_URL: http://event-hub:5001
     depends_on:
       - mongodb-mcp
@@ -89,7 +86,6 @@ services:
     environment:
       LANG_MODEL_ENDPOINT: ${LANG_MODEL_ENDPOINT}
       LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
-      LANG_MODEL_TOKEN: ${LANG_MODEL_TOKEN}
       EVENT_HUB_URL: http://event-hub:5001
       CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}

@@ -17,7 +17,6 @@ CODE_MODEL_ENDPOINT = os.environ.get(
     "https://qwen25-coder-32b-fp8-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
 CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
-CODE_MODEL_TOKEN = os.environ.get("CODE_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
@@ -227,8 +226,6 @@ Generate the complete HTML file now:"""
     headers = {
         "Content-Type": "application/json"
     }
-    if CODE_MODEL_TOKEN:
-        headers["Authorization"] = f"Bearer {CODE_MODEL_TOKEN}"
 
     payload = {
         "model": CODE_MODEL_NAME,

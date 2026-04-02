@@ -31,7 +31,6 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1",
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
-LANG_MODEL_TOKEN = os.environ.get("LANG_MODEL_TOKEN", "")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 CLUSTER_DOMAIN = os.environ.get(
     "CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
@@ -181,8 +180,6 @@ Generate the email content now:"""
 
     url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
     headers = {"Content-Type": "application/json"}
-    if LANG_MODEL_TOKEN:
-        headers["Authorization"] = f"Bearer {LANG_MODEL_TOKEN}"
 
     payload = {
         "model": LANG_MODEL_NAME,

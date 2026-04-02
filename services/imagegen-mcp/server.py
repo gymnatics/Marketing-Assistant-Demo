@@ -20,7 +20,6 @@ IMAGEGEN_MODEL_ENDPOINT = os.environ.get(
     "https://flux2-klein-4b-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
 IMAGEGEN_MODEL_NAME = os.environ.get("IMAGEGEN_MODEL_NAME", "flux2-klein-4b")
-IMAGEGEN_MODEL_TOKEN = os.environ.get("IMAGEGEN_MODEL_TOKEN", "")
 SELF_URL = os.environ.get("IMAGEGEN_MCP_SELF_URL", "http://imagegen-mcp:8091")
 
 image_store: dict[str, bytes] = {}
@@ -57,8 +56,6 @@ async def _call_imagegen_api(prompt: str, width: int = 1024, height: int = 576) 
     """Call vLLM-Omni image generation API and return raw PNG bytes."""
     url = f"{IMAGEGEN_MODEL_ENDPOINT}/images/generations"
     headers = {"Content-Type": "application/json"}
-    if IMAGEGEN_MODEL_TOKEN:
-        headers["Authorization"] = f"Bearer {IMAGEGEN_MODEL_TOKEN}"
 
     payload = {
         "model": IMAGEGEN_MODEL_NAME,

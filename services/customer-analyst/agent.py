@@ -25,7 +25,6 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
-LANG_MODEL_TOKEN = os.environ.get("LANG_MODEL_TOKEN", "")
 
 TOOLS = [
     {
@@ -121,8 +120,6 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tup
     """Use Qwen3 LLM to decide which MCP tool to call, then execute it."""
     url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
     headers = {"Content-Type": "application/json"}
-    if LANG_MODEL_TOKEN:
-        headers["Authorization"] = f"Bearer {LANG_MODEL_TOKEN}"
 
     payload = {
         "model": LANG_MODEL_NAME,
