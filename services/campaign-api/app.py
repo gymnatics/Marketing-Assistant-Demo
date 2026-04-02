@@ -99,7 +99,7 @@ Rules:
 Campaign Name: {campaign_name}
 Campaign Description: {description}
 
-Respond with ONLY one word: APPROVED or REJECTED followed by a brief reason.
+Respond with ONLY one word: APPROVED or REJECTED followed by a brief reason. No explanations, no thinking, no XML tags.
 Example: REJECTED: Discount of 99% exceeds the maximum allowed 50%
 Example: APPROVED"""
 
@@ -110,12 +110,15 @@ Example: APPROVED"""
                     "model": LANG_MODEL_NAME,
                     "messages": [{"role": "user", "content": policy_prompt}],
                     "temperature": 0.1,
-                    "max_tokens": 100,
+                    "max_tokens": 300,
                 },
             )
             if resp.status_code == 200:
                 result = resp.json()
                 answer = result["choices"][0]["message"]["content"].strip()
+                # Strip Qwen3 thinking tags if present
+                if "</think>" in answer:
+                    answer = answer.split("</think>")[-1].strip()
                 if answer.upper().startswith("REJECTED"):
                     reason = answer.split(":", 1)[1].strip() if ":" in answer else "Campaign policy violation"
                     GUARDRAILS_BLOCKED.labels(detector="policy_agent").inc()
