@@ -30,6 +30,7 @@ STEP_DURATION = Histogram("campaign_step_duration_seconds", "Duration of campaig
 ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 # Guardrails configuration
 HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor:8000")
+POLICY_GUARDIAN_URL = os.environ.get("POLICY_GUARDIAN_URL", "http://policy-guardian:8084")
 PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor:8000")
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
@@ -83,6 +84,47 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                             return {"passed": False, "reason": "Potential prompt injection detected. Please revise your campaign description."}
     except Exception as e:
         print(f"[Guardrails] Prompt injection check failed (non-blocking): {e}")
+
+    # Layer 4: Policy Guardian Agent (A2A) — business logic
+    try:
+        import asyncio
+        from a2a.client import A2AClient
+        from a2a.types import MessageSendParams, SendMessageRequest
+
+        async def _call_policy():
+            message_params = MessageSendParams(
+                message={
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": json.dumps({
+                        "skill": "validate_campaign",
+                        "campaign_name": campaign_name,
+                        "campaign_description": description,
+                    })}],
+                    "messageId": uuid.uuid4().hex,
+                }
+            )
+            request_obj = SendMessageRequest(id=str(uuid.uuid4()), params=message_params)
+            timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+            async with httpx.AsyncClient(timeout=timeout) as hc:
+                client = A2AClient(httpx_client=hc, url=POLICY_GUARDIAN_URL)
+                response = await client.send_message(request_obj)
+            resp = response.root
+            if hasattr(resp, 'result') and resp.result and hasattr(resp.result, 'artifacts') and resp.result.artifacts:
+                text = resp.result.artifacts[0].parts[0].root.text
+                return json.loads(text)
+            return {"approved": True}
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(_call_policy())
+        finally:
+            loop.close()
+
+        if result.get("approved") is False:
+            GUARDRAILS_BLOCKED.labels(detector="policy_guardian").inc()
+            return {"passed": False, "reason": f"Policy check: {result.get('reason', 'Campaign policy violation')}"}
+    except Exception as e:
+        print(f"[Guardrails] Policy Guardian check failed (non-blocking): {e}")
 
     return {"passed": True, "reason": ""}
 
