@@ -823,14 +823,14 @@ export default function CampaignCreate() {
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/10">
                   <p className="text-[10px] font-label text-on-surface-variant uppercase mb-1 tracking-wider">Subject Line</p>
                   <p className="text-base font-semibold leading-relaxed">
-                    {emailLang === 'en' ? (campaignState.email_subject_en || 'Loading...') : (campaignState.email_subject_zh || 'Loading...')}
+                    {personalizeEmail(emailLang === 'en' ? (campaignState.email_subject_en || 'Loading...') : (campaignState.email_subject_zh || 'Loading...'))}
                   </p>
                 </div>
                 <div className="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10">
                   <p className="text-[10px] font-label text-on-surface-variant uppercase mb-3 tracking-wider">Email Body</p>
                   <div
                     className="text-sm text-on-surface leading-relaxed prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: emailLang === 'en' ? (campaignState.email_body_en || 'Loading...') : (campaignState.email_body_zh || 'Loading...') }}
+                    dangerouslySetInnerHTML={{ __html: personalizeEmail(emailLang === 'en' ? (campaignState.email_body_en || 'Loading...') : (campaignState.email_body_zh || 'Loading...')) }}
                   />
                 </div>
               </div>
@@ -1082,6 +1082,18 @@ export default function CampaignCreate() {
 
   const state = campaignState;
   const state_has_emails = !!(state.email_subject_en || state.email_subject_zh);
+  const personalizeEmail = (text: string) => {
+    if (!text || !selectedVip) return text;
+    const customer = (campaignState.customer_list || []).find(c => c.customer_id === selectedVip);
+    if (!customer) return text;
+    const name = customer.name_en || customer.name || 'Valued Guest';
+    const link = (campaignState.preview_url || campaignState.production_url || '') + '?c=' + selectedVip;
+    return text
+      .replace(/\{\{customer_name\}\}/gi, name)
+      .replace(/\{\{campaign_link\}\}/gi, link);
+  };
+
+
 
   const activeNav = SIDE_NAV_MAP[currentStep] || 'strategy';
 

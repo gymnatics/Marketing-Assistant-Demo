@@ -65,7 +65,8 @@ Generate email content in the following EXACT format:
 ## Email Style Guidelines:
 - Keep subject lines under 60 characters
 - Use elegant, premium language
-- Include personalization placeholder {{customer_name}} for the greeting
+- Use EXACTLY `{{customer_name}}` as the greeting placeholder (the system replaces it per recipient)
+- Use EXACTLY `{{campaign_link}}` as the CTA button href (personalized per recipient)
 - Add a prominent call-to-action button that links to the ACTUAL campaign URL provided (NOT a placeholder)
 - Sign off with the hotel/casino name
 
@@ -165,6 +166,7 @@ async def generate_email_with_streaming(
 1. Create an enticing subject line that drives opens
 2. Write an elegant email body with:
    - Personalized greeting using {{{{customer_name}}}} placeholder
+   - CTA button href MUST be {{{{campaign_link}}}} (NOT the raw campaign URL)
    - Compelling description of the offer
    - Sense of exclusivity and urgency
    - Include the campaign dates ({start_date} to {end_date}) in the email body
@@ -546,22 +548,26 @@ class DeliveryManagerAgent:
         for customer in validated.customers:
             print(f"[Delivery Manager] SIMULATED: Sending email to {customer.email}")
 
-        # Send one sample email to the fake inbox (first customer)
-        if validated.customers:
-            first = validated.customers[0]
+        # Send personalized emails to fake inbox for each customer
+        import datetime as _dt
+        for customer in validated.customers[:5]:
             try:
+                name = customer.name_en or customer.name
+                body = validated.email_body_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name)
+                subject = validated.email_subject_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name)
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.post(f"{CAMPAIGN_API_URL}/api/inbox", json={
                         "from_name": "Simon Casino Resort",
                         "from_email": "campaigns@simoncasino.com",
-                        "to_name": first.name_en or first.name,
-                        "to_email": first.email,
-                        "subject": validated.email_subject_en,
-                        "body": validated.email_body_en,
-                        "date": __import__("datetime").datetime.utcnow().isoformat(),
+                        "to_name": name,
+                        "to_email": customer.email,
+                        "subject": subject,
+                        "body": body,
+                        "date": _dt.datetime.utcnow().isoformat(),
+                        "customer_id": customer.customer_id,
                     })
             except Exception as e:
-                print(f"[Delivery Manager] Inbox POST failed (non-critical): {e}")
+                print(f"[Delivery Manager] Inbox POST failed for {customer.email}: {e}")
 
         result = SendEmailsOutput(sent_count=sent_count, status="success")
 
