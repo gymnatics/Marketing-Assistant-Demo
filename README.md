@@ -139,6 +139,18 @@ oc apply -f k8s/rbac.yaml
 
 ## Workflow
 
+```mermaid
+flowchart LR
+    A["Define\nCampaign"] --> B["Guardrails\nValidation"]
+    B --> C["Select\nTheme"]
+    C --> D["Generate\nLanding Page"]
+    D --> E["Preview +\nPersonalize"]
+    E -->|"Regenerate"| D
+    E --> F["Prepare\nEmails"]
+    F --> G["Review\nAssets"]
+    G --> H["Go Live"]
+```
+
 1. **Define Campaign** — Name, description, hotel, audience, dates
 2. **Guardrails Validation** — 4-layer check (regex, HAP, prompt injection, policy) before proceeding
 3. **Select Theme** — Visual style picker (Luxury Gold, Festive Red, Modern Black, Classic Casino)
@@ -147,6 +159,34 @@ oc apply -f k8s/rbac.yaml
 6. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (EN + ZH)
 7. **Review** — Email preview, recipient list, campaign summary
 8. **Go Live** — Deploy to production, send personalized emails to fake inbox
+
+## Guardrails
+
+All user input is validated through 4 layers before campaign creation proceeds:
+
+```mermaid
+flowchart TD
+    Input["User Input\n(campaign name + description)"] --> L1
+    
+    L1["Layer 1: Regex Filter\n(competitor names, instant)"]
+    L1 -->|pass| L2
+    L1 -->|"fail"| Reject
+
+    L2["Layer 2: TrustyAI HAP\n(Granite Guardian 125M, ~100ms)"]
+    L2 -->|pass| L3
+    L2 -->|"fail"| Reject
+
+    L3["Layer 3: TrustyAI Prompt Injection\n(DeBERTa v3, ~100ms)"]
+    L3 -->|pass| L4
+    L3 -->|"fail"| Reject
+
+    L4["Layer 4: Policy Guardian\n(Qwen3 A2A agent, ~5s)"]
+    L4 -->|pass| Accept["✓ Proceed to\nTheme Selection"]
+    L4 -->|"fail"| Reject["✗ Error banner\n(user edits & retries)"]
+```
+
+- **No restart needed** — user edits the input and retries on the same screen
+- **Policy Guardian** validates business rules: no unrealistic discounts (>50%), professional tone, no misleading promises
 
 ## Technology Stack
 
