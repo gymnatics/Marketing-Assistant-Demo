@@ -416,11 +416,7 @@ footer, .footer, [class*="footer"] {
   padding: 3rem var(--container-padding) !important;
 }
 
-/* === No white gaps anywhere === */
-section, footer, [class*="section"], [class*="offer"], [class*="exclu"],
-[class*="story"], [class*="campaign"], [class*="date"], [class*="limit"] {
-  background-color: inherit;
-}
+/* No white gaps — body handles the base color, sections inherit */
 
 /* === Responsive === */
 @media (max-width: 1024px) {
