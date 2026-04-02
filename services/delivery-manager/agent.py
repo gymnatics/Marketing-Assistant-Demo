@@ -567,6 +567,7 @@ class DeliveryManagerAgent:
                         "body": body,
                         "date": _dt.datetime.utcnow().isoformat(),
                         "customer_id": customer.customer_id,
+                        "campaign_url": personalized_link,
                     })
             except Exception as e:
                 print(f"[Delivery Manager] Inbox POST failed for {customer.email}: {e}")

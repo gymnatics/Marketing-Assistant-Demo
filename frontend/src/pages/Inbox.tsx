@@ -115,6 +115,19 @@ export default function Inbox() {
                 className="prose prose-sm max-w-none text-on-surface leading-relaxed"
                 dangerouslySetInnerHTML={{ __html: selected.body }}
               />
+              {selected.customer_id && (
+                <div className="mt-8 pt-6 border-t border-outline-variant/20 flex flex-col items-center gap-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Your Personalized Experience</p>
+                  <div className="bg-white p-3 rounded-xl shadow-sm">
+                    <img
+                      alt="Personalized QR Code"
+                      className="w-32 h-32"
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent((selected as any).campaign_url || '')}`}
+                    />
+                  </div>
+                  <p className="text-xs text-on-surface-variant">Scan to view your exclusive campaign page</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
