@@ -16,5 +16,6 @@ data:
   DELIVERY_MANAGER_URL: "http://delivery-manager:8083"
   MONGODB_MCP_URL: "http://mongodb-mcp:8090"
   IMAGEGEN_MCP_URL: "http://imagegen-mcp:8091"
+  CAMPAIGN_API_URL: "http://campaign-api:5000"
   POLICY_GUARDIAN_URL: "http://policy-guardian:8084"
   EVENT_HUB_URL: "http://event-hub:5001"

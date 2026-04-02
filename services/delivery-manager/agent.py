@@ -237,7 +237,7 @@ def init_k8s_client():
 
 
 LANDING_IMAGE = os.environ.get(
-    "LANDING_IMAGE", "quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing-v2"
+    "LANDING_IMAGE", "quay.io/rh-ee-dayeo/marketing-assistant:campaign-landing"
 )
 
 
