@@ -28,6 +28,104 @@ CAMPAIGNS_LIVE = Counter("campaigns_live_total", "Total campaigns that went live
 AGENT_CALLS = Counter("agent_calls_total", "A2A calls to Campaign Director", ["skill"])
 STEP_DURATION = Histogram("campaign_step_duration_seconds", "Duration of campaign workflow steps", ["step"])
 ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
+# Guardrails configuration
+HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor:8000")
+PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor:8000")
+LANG_MODEL_ENDPOINT = os.environ.get("LANG_MODEL_ENDPOINT", "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1")
+LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+
+GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
+
+COMPETITOR_PATTERN = r"(?i)(grand lisboa|wynn|venetian|mgm|galaxy|sands|melco|studio city|city of dreams|parisian|londoner)"
+
+
+def check_guardrails(campaign_name: str, description: str) -> dict:
+    """Run campaign through TrustyAI detectors + policy agent. Returns {passed: bool, reason: str}."""
+    import re
+    text = f"{campaign_name} {description}"
+
+    # Layer 1: Regex — competitor names
+    match = re.search(COMPETITOR_PATTERN, text)
+    if match:
+        GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
+        return {"passed": False, "reason": f"Campaign references a competitor: '{match.group()}'. Please remove competitor mentions."}
+
+    # Layer 2: TrustyAI HAP detector — hate/abuse/profanity
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{HAP_DETECTOR_URL}/api/v1/text/contents",
+                json={"contents": [text], "detector_params": {}},
+                headers={"Content-Type": "application/json", "detector-id": "hap"}
+            )
+            if resp.status_code == 200:
+                results = resp.json()
+                if results and results[0]:
+                    for det in results[0]:
+                        if det.get("score", 0) > 0.5:
+                            GUARDRAILS_BLOCKED.labels(detector="hap").inc()
+                            return {"passed": False, "reason": "Campaign content flagged for inappropriate language. Please revise."}
+    except Exception as e:
+        print(f"[Guardrails] HAP check failed (non-blocking): {e}")
+
+    # Layer 3: TrustyAI Prompt Injection detector
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{PROMPT_INJECTION_URL}/api/v1/text/contents",
+                json={"contents": [text], "detector_params": {}},
+                headers={"Content-Type": "application/json", "detector-id": "prompt_injection"}
+            )
+            if resp.status_code == 200:
+                results = resp.json()
+                if results and results[0]:
+                    for det in results[0]:
+                        if det.get("score", 0) > 0.5:
+                            GUARDRAILS_BLOCKED.labels(detector="prompt_injection").inc()
+                            return {"passed": False, "reason": "Potential prompt injection detected. Please revise your campaign description."}
+    except Exception as e:
+        print(f"[Guardrails] Prompt injection check failed (non-blocking): {e}")
+
+    # Layer 4: Policy Agent (Qwen3) — business logic validation
+    try:
+        policy_prompt = f"""You are a casino marketing campaign policy validator. Check if this campaign violates any rules.
+
+Rules:
+1. No discounts greater than 50%
+2. Must be professional and appropriate for a luxury brand
+3. No unrealistic or misleading promises
+4. No references to gambling addiction or irresponsible behavior
+
+Campaign Name: {campaign_name}
+Campaign Description: {description}
+
+Respond with ONLY one word: APPROVED or REJECTED followed by a brief reason.
+Example: REJECTED: Discount of 99% exceeds the maximum allowed 50%
+Example: APPROVED"""
+
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                f"{LANG_MODEL_ENDPOINT}/chat/completions",
+                json={
+                    "model": LANG_MODEL_NAME,
+                    "messages": [{"role": "user", "content": policy_prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 100,
+                },
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                answer = result["choices"][0]["message"]["content"].strip()
+                if answer.upper().startswith("REJECTED"):
+                    reason = answer.split(":", 1)[1].strip() if ":" in answer else "Campaign policy violation"
+                    GUARDRAILS_BLOCKED.labels(detector="policy_agent").inc()
+                    return {"passed": False, "reason": f"Policy check: {reason}"}
+    except Exception as e:
+        print(f"[Guardrails] Policy agent check failed (non-blocking): {e}")
+
+    return {"passed": True, "reason": ""}
+
+
 
 
 def call_director_a2a_sync(skill: str, params: dict) -> dict:
@@ -125,10 +223,34 @@ def get_campaign(campaign_id: str):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/campaigns/validate", methods=["POST"])
+def validate_campaign():
+    """Validate campaign through guardrails without creating it."""
+    try:
+        data = request.get_json()
+        name = data.get("campaign_name", "")
+        desc = data.get("campaign_description", "")
+        result = check_guardrails(name, desc)
+        if not result["passed"]:
+            return jsonify({"valid": False, "reason": result["reason"]}), 200
+        return jsonify({"valid": True, "reason": ""}), 200
+    except Exception as e:
+        return jsonify({"valid": True, "reason": ""}), 200
+
+
 @app.route("/api/campaigns", methods=["POST"])
 def create_campaign():
     try:
         data = request.get_json()
+
+        # Run guardrails check before creating
+        guardrails = check_guardrails(
+            data.get("campaign_name", ""),
+            data.get("campaign_description", "")
+        )
+        if not guardrails["passed"]:
+            return jsonify({"error": guardrails["reason"], "guardrail_blocked": True}), 400
+
         AGENT_CALLS.labels(skill="create_campaign").inc()
         result = call_director_a2a_sync("create_campaign", data)
         if "error" in result and result["error"]:

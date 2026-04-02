@@ -413,6 +413,27 @@ export default function CampaignCreate() {
   const handleNext = async () => {
     if (busyRef.current) return;
     if (currentStep === 0) {
+      // Validate through guardrails before proceeding
+      setLoading(true);
+      setAgentStatus('Validating campaign through safety checks...');
+      try {
+        const validateResp = await fetch('/api/campaigns/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(campaignData)
+        });
+        const validateResult = await validateResp.json();
+        if (validateResult.valid === false) {
+          setCampaignState(prev => ({ ...prev, error: `Guardrail: ${validateResult.reason}` }));
+          setLoading(false);
+          setAgentStatus('');
+          return;
+        }
+      } catch {
+        // Validation service unavailable — proceed anyway
+      }
+      setLoading(false);
+      setAgentStatus('');
       setCurrentStep(1);
     } else if (currentStep === 1) {
       busyRef.current = true;
