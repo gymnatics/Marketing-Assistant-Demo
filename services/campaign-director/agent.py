@@ -29,6 +29,7 @@ from shared.models import (
 CREATIVE_PRODUCER_URL = os.environ.get("CREATIVE_PRODUCER_URL", "http://creative-producer:8081")
 CUSTOMER_ANALYST_URL = os.environ.get("CUSTOMER_ANALYST_URL", "http://customer-analyst:8082")
 DELIVERY_MANAGER_URL = os.environ.get("DELIVERY_MANAGER_URL", "http://delivery-manager:8083")
+POLICY_GUARDIAN_URL = os.environ.get("POLICY_GUARDIAN_URL", "http://policy-guardian:8084")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 CLUSTER_DOMAIN = os.environ.get("CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com")
 DEV_NAMESPACE = os.environ.get("DEV_NAMESPACE", "0-marketing-assistant-demo-dev")
@@ -120,6 +121,30 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
 
 
 # ── LangGraph Workflow Nodes ──
+
+
+async def validate_policy_node(state: CampaignState) -> CampaignState:
+    await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
+                        "Checking campaign policies...")
+    try:
+        result = await call_a2a_agent(POLICY_GUARDIAN_URL, "validate_campaign", {
+            "campaign_id": state["campaign_id"],
+            "campaign_name": state["campaign_name"],
+            "campaign_description": state["campaign_description"],
+        })
+        if result.get("approved") is False:
+            state["error_message"] = f"Policy violation: {result.get('reason', 'Unknown')}"
+            state["status"] = "failed"
+            state["messages"] = [{"role": "assistant", "agent": "Policy Guardian",
+                                  "content": f"Rejected: {result.get('reason', '')}"}]
+        else:
+            state["messages"] = [{"role": "assistant", "agent": "Policy Guardian",
+                                  "content": "Campaign policies approved"}]
+    except Exception as e:
+        state["messages"] = [{"role": "assistant", "agent": "Policy Guardian",
+                              "content": "Policy check skipped (service unavailable)"}]
+    return state
+
 
 async def generate_landing_page_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
@@ -321,9 +346,11 @@ def _check_failed(state: CampaignState) -> str:
 
 def build_landing_page_workflow():
     workflow = StateGraph(CampaignState)
+    workflow.add_node("validate_policy", validate_policy_node)
     workflow.add_node("generate_landing_page", generate_landing_page_node)
     workflow.add_node("deploy_preview", deploy_preview_node)
-    workflow.add_edge(START, "generate_landing_page")
+    workflow.add_edge(START, "validate_policy")
+    workflow.add_conditional_edges("validate_policy", _check_failed, {"continue": "generate_landing_page", "end": END})
     workflow.add_conditional_edges("generate_landing_page", _check_failed, {"continue": "deploy_preview", "end": END})
     workflow.add_edge("deploy_preview", END)
     return workflow.compile()

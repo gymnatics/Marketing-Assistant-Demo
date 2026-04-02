@@ -93,6 +93,21 @@ services:
     depends_on:
       - event-hub
 
+
+  # Policy Guardian Agent
+  policy-guardian:
+    build:
+      context: .
+      dockerfile: ./services/policy-guardian/Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      LANG_MODEL_ENDPOINT: ${LANG_MODEL_ENDPOINT}
+      LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
+      EVENT_HUB_URL: http://event-hub:5001
+    depends_on:
+      - event-hub
+
   # Campaign Director (Orchestrator)
   campaign-director:
     build:
@@ -104,6 +119,7 @@ services:
       CREATIVE_PRODUCER_URL: http://creative-producer:8081
       CUSTOMER_ANALYST_URL: http://customer-analyst:8082
       DELIVERY_MANAGER_URL: http://delivery-manager:8083
+      POLICY_GUARDIAN_URL: http://policy-guardian:8084
       EVENT_HUB_URL: http://event-hub:5001
       CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}
@@ -112,6 +128,7 @@ services:
       - creative-producer
       - customer-analyst
       - delivery-manager
+      - policy-guardian
       - event-hub
 
   # Campaign API Gateway

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-guardian
+  labels:
+    app: policy-guardian
+    component: agent
+    kagenti.io/type: agent
+    protocol.kagenti.io/a2a: ""
+    kagenti.io/framework: custom
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: policy-guardian
+  template:
+    metadata:
+      labels:
+        app: policy-guardian
+        component: agent
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: "true"
+        sidecar.opentelemetry.io/inject: app-sidecar
+    spec:
+      containers:
+        - name: agent
+          image: quay.io/rh-ee-dayeo/marketing-assistant:policy-guardian
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: marketing-assistant-config
+            - secretRef:
+                name: marketing-assistant-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-guardian
+spec:
+  selector:
+    app: policy-guardian
+  ports:
+    - port: 8084
+      targetPort: 8084

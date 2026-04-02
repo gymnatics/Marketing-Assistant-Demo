@@ -17,6 +17,7 @@ resources:
   - agents/creative-producer.yaml
   - agents/customer-analyst.yaml
   - agents/delivery-manager.yaml
+  - agents/policy-guardian.yaml
   # API layer
   - api/campaign-api.yaml
   - api/event-hub.yaml

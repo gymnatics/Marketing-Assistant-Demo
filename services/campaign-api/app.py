@@ -31,8 +31,6 @@ ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 # Guardrails configuration
 HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor:8000")
 PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor:8000")
-LANG_MODEL_ENDPOINT = os.environ.get("LANG_MODEL_ENDPOINT", "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1")
-LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
 
@@ -85,46 +83,6 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                             return {"passed": False, "reason": "Potential prompt injection detected. Please revise your campaign description."}
     except Exception as e:
         print(f"[Guardrails] Prompt injection check failed (non-blocking): {e}")
-
-    # Layer 4: Policy Agent (Qwen3) — business logic validation
-    try:
-        policy_prompt = f"""You are a casino marketing campaign policy validator. Check if this campaign violates any rules.
-
-Rules:
-1. No discounts greater than 50%
-2. Must be professional and appropriate for a luxury brand
-3. No unrealistic or misleading promises
-4. No references to gambling addiction or irresponsible behavior
-
-Campaign Name: {campaign_name}
-Campaign Description: {description}
-
-Respond with ONLY one word: APPROVED or REJECTED followed by a brief reason. No explanations, no thinking, no XML tags.
-Example: REJECTED: Discount of 99% exceeds the maximum allowed 50%
-Example: APPROVED"""
-
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.post(
-                f"{LANG_MODEL_ENDPOINT}/chat/completions",
-                json={
-                    "model": LANG_MODEL_NAME,
-                    "messages": [{"role": "user", "content": policy_prompt}],
-                    "temperature": 0.1,
-                    "max_tokens": 300,
-                },
-            )
-            if resp.status_code == 200:
-                result = resp.json()
-                answer = result["choices"][0]["message"]["content"].strip()
-                # Strip Qwen3 thinking tags if present
-                if "</think>" in answer:
-                    answer = answer.split("</think>")[-1].strip()
-                if answer.upper().startswith("REJECTED"):
-                    reason = answer.split(":", 1)[1].strip() if ":" in answer else "Campaign policy violation"
-                    GUARDRAILS_BLOCKED.labels(detector="policy_agent").inc()
-                    return {"passed": False, "reason": f"Policy check: {reason}"}
-    except Exception as e:
-        print(f"[Guardrails] Policy agent check failed (non-blocking): {e}")
 
     return {"passed": True, "reason": ""}
 
