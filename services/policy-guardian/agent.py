@@ -48,7 +48,11 @@ EXAMPLES OF APPROVED CAMPAIGNS:
 - "Complimentary airport transfer for VIP members" → APPROVED
 - "Earn a free night for every 3 nights booked" → APPROVED (loyalty reward)
 
-NOTE: "Free" or "complimentary" offers that require a purchase, minimum spend, or membership tier are APPROVED — they are standard loyalty incentives, not unrealistic. Only reject truly absurd offers with no conditions.
+NOTE: "Free" or "complimentary" offers are only APPROVED if the condition is proportional to the reward. Examples:
+- "Free 2 nights with $1000 spent" → APPROVED (proportional)
+- "Free 2 nights with $50 spent" → REJECTED (spend too low for the reward)
+- "Free spa with 2-night booking" → APPROVED (proportional)
+Use common sense: a luxury hotel night costs $300+. The spend must be reasonable relative to what is offered for free.
 
 NOW EVALUATE:
 Campaign Name: {campaign_name}
