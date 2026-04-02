@@ -383,7 +383,7 @@ class DeliveryManagerAgent:
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Generating marketing email",
+            task="Writing personalized emails...",
         )
 
         try:
@@ -409,7 +409,7 @@ class DeliveryManagerAgent:
                 campaign_id=campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
-                task="Email content generated",
+                task="Email content ready",
             )
 
             return result.model_dump()
@@ -419,7 +419,7 @@ class DeliveryManagerAgent:
                 campaign_id=campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
-                task="Email generation failed",
+                task="Email writing failed",
                 data={"error": str(e)},
             )
             return GenerateEmailOutput(
@@ -439,7 +439,7 @@ class DeliveryManagerAgent:
             campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Deploying to preview environment",
+            task="Publishing preview...",
         )
 
         try:
@@ -459,7 +459,7 @@ class DeliveryManagerAgent:
                 campaign_id=validated.campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
-                task="Preview deployment complete",
+                task="Preview published",
                 data={"preview_url": preview_url},
             )
 
@@ -470,7 +470,7 @@ class DeliveryManagerAgent:
                 campaign_id=validated.campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
-                task="Preview deployment failed",
+                task="Preview publishing failed",
                 data={"error": str(e)},
             )
             return DeployPreviewOutput(
@@ -487,7 +487,7 @@ class DeliveryManagerAgent:
             campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task="Deploying to production environment",
+            task="Going live...",
         )
 
         try:
@@ -509,7 +509,7 @@ class DeliveryManagerAgent:
                 campaign_id=validated.campaign_id,
                 event_type="agent_completed",
                 agent="Delivery Manager",
-                task="Production deployment complete",
+                task="Campaign is live!",
                 data={"production_url": production_url},
             )
 
@@ -520,7 +520,7 @@ class DeliveryManagerAgent:
                 campaign_id=validated.campaign_id,
                 event_type="agent_error",
                 agent="Delivery Manager",
-                task="Production deployment failed",
+                task="Live deployment failed",
                 data={"error": str(e)},
             )
             return DeployProductionOutput(
@@ -537,7 +537,7 @@ class DeliveryManagerAgent:
             campaign_id=validated.campaign_id,
             event_type="agent_started",
             agent="Delivery Manager",
-            task=f"Sending emails to {len(validated.customers)} recipients",
+            task=f"Delivering to {len(validated.customers)} recipients...",
         )
 
         sent_count = len(validated.customers)
@@ -551,7 +551,7 @@ class DeliveryManagerAgent:
             campaign_id=validated.campaign_id,
             event_type="agent_completed",
             agent="Delivery Manager",
-            task=f"Sent {sent_count} emails (simulated)",
+            task=f"Successfully sent to {sent_count} recipients",
             data={"sent_count": sent_count},
         )
 

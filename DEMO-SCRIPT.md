@@ -131,3 +131,33 @@
 ## Architecture One-Liner
 
 > "4 AI agents communicating via A2A protocol, accessing tools via MCP, orchestrated by LangGraph, running 3 open-source GPU models on Red Hat OpenShift AI — generating a complete marketing campaign in under 3 minutes."
+
+---
+
+## Sample Campaign Descriptions (for demo variety)
+
+Use these when creating campaigns during the demo. Each pairs well with a different theme and audience.
+
+### 1. Chinese New Year VIP Gala (Theme: Festive Red, Audience: Platinum members)
+**Name:** `CNY VIP Gala`
+**Description:** `Ring in the Year of the Snake with an exclusive celebration for our most distinguished guests. Five-star dining, private gaming salons, and world-class entertainment await. Limited to 100 invitations.`
+
+### 2. Summer Luxury Escape (Theme: Luxury Gold, Audience: All VIP customers)
+**Name:** `Summer Luxury Escape`
+**Description:** `Escape to paradise with our premium summer package. Oceanview suites, infinity pool access, and complimentary spa treatments for an unforgettable retreat. Available June through August.`
+
+### 3. Mid-Autumn Festival (Theme: Festive Red, Audience: Gold members)
+**Name:** `Mid-Autumn Festival`
+**Description:** `Celebrate the Mid-Autumn Festival under the Macau skyline. Exclusive mooncake tasting, lantern garden experience, and a VIP entertainment showcase. A night of tradition and elegance.`
+
+### 4. New Member Welcome (Theme: Modern Black, Audience: New members)
+**Name:** `Welcome Experience`
+**Description:** `Your journey begins here. As a new member, enjoy a complimentary welcome package including dining credits, spa vouchers, and a private casino orientation with a personal host.`
+
+### 5. High Roller Weekend (Theme: Classic Casino, Audience: Diamond members)
+**Name:** `Diamond Weekend`
+**Description:** `An invitation-only weekend for our most valued patrons. Private jet transfers, presidential suite, unlimited table access, and a dedicated concierge team. By invitation only.`
+
+### 6. Wellness Retreat (Theme: Luxury Gold, Audience: High-spend customers)
+**Name:** `Wellness Retreat`
+**Description:** `Recharge with our curated wellness experience. Two nights in a luxury suite, daily spa treatments, private yoga sessions, and a Michelin-starred dining experience. Limited availability.`

@@ -66,7 +66,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <Layout activeStep="performance">
+      <Layout activeStep="overview">
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -78,7 +78,7 @@ export default function Dashboard() {
   }
 
   return (
-    <Layout activeStep="performance">
+    <Layout activeStep="overview">
       {/* Hero Section */}
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
         <div className="max-w-2xl">

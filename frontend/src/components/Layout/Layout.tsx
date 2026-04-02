@@ -50,11 +50,11 @@ interface SideNavBarProps {
 
 const SideNavBar: React.FC<SideNavBarProps> = ({ activeStep = '', campaignName }) => {
   const navItems = [
-    { id: 'strategy', label: 'Strategy', icon: 'tactic', path: '/campaign/create', step: 0 },
-    { id: 'assets', label: 'Assets', icon: 'auto_awesome', path: '/campaign/create', step: 1 },
-    { id: 'preview', label: 'Preview', icon: 'visibility', path: '/campaign/create', step: 2 },
-    { id: 'launch', label: 'Launch', icon: 'rocket_launch', path: '/campaign/create', step: 3 },
-    { id: 'performance', label: 'Performance', icon: 'monitoring', path: '/' },
+    { id: 'overview', label: 'Overview', icon: 'dashboard', path: '/' },
+    { id: 'strategy', label: 'Campaign Brief', icon: 'edit_note', path: '/campaign/create', step: 0 },
+    { id: 'assets', label: 'Theme & Design', icon: 'auto_awesome', path: '/campaign/create', step: 1 },
+    { id: 'preview', label: 'Review', icon: 'visibility', path: '/campaign/create', step: 2 },
+    { id: 'launch', label: 'Go Live', icon: 'rocket_launch', path: '/campaign/create', step: 3 },
   ];
 
   return (

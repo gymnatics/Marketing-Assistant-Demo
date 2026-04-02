@@ -123,7 +123,7 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
 
 async def generate_landing_page_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Delegating to Creative Producer", {"step": "generating_landing_page"})
+                        "Starting creative design...", {"step": "generating_landing_page"})
 
     result = await call_a2a_agent(CREATIVE_PRODUCER_URL, "generate_landing_page", {
         "campaign_id": state["campaign_id"],
@@ -147,7 +147,7 @@ async def generate_landing_page_node(state: CampaignState) -> CampaignState:
 
 async def deploy_preview_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Deploying preview", {"step": "deploying_preview"})
+                        "Publishing preview...", {"step": "deploying_preview"})
     try:
         campaign_info = json.dumps({
             "campaign_name": state["campaign_name"],
@@ -186,7 +186,7 @@ async def deploy_preview_node(state: CampaignState) -> CampaignState:
 
 async def retrieve_customers_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Retrieving customers", {"step": "retrieving_customers"})
+                        "Finding your target audience...", {"step": "retrieving_customers"})
 
     result = await call_a2a_agent(CUSTOMER_ANALYST_URL, "get_target_customers", {
         "campaign_id": state["campaign_id"],
@@ -207,7 +207,7 @@ async def retrieve_customers_node(state: CampaignState) -> CampaignState:
 
 async def generate_email_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Generating email content", {"step": "generating_email"})
+                        "Crafting personalized emails...", {"step": "generating_email"})
 
     result = await call_a2a_agent(DELIVERY_MANAGER_URL, "generate_email", {
         "campaign_id": state["campaign_id"],
@@ -247,7 +247,7 @@ async def generate_email_node(state: CampaignState) -> CampaignState:
                     }),
                 })
                 await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                                    "Updated landing page with personalization data")
+                                    "Personalization data synced")
             except Exception as e:
                 print(f"[Campaign Director] Failed to update personalization data: {e}")
 
@@ -256,7 +256,7 @@ async def generate_email_node(state: CampaignState) -> CampaignState:
 
 async def deploy_production_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Deploying to production", {"step": "deploying_production"})
+                        "Deploying campaign...", {"step": "deploying_production"})
     try:
         campaign_info = json.dumps({
             "campaign_name": state["campaign_name"],
@@ -292,7 +292,7 @@ async def deploy_production_node(state: CampaignState) -> CampaignState:
 
 async def send_emails_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
-                        "Sending emails", {"step": "sending_emails"})
+                        "Sending to recipients...", {"step": "sending_emails"})
 
     customers = [CustomerProfile(**c) for c in state["customer_list"]]
     result = await call_a2a_agent(DELIVERY_MANAGER_URL, "send_emails", {

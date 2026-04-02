@@ -954,21 +954,11 @@ export default function CampaignCreate() {
           <div className="bg-surface-container-lowest p-8 rounded-xl ring-1 ring-black/[0.03]">
             <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-6 font-headline">Production Environments</h3>
             <div className="space-y-6">
-              {campaignState.preview_url && (
-                <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-on-surface-variant/60 mb-1">Preview</span>
-                    <span className="font-mono text-sm text-primary">{campaignState.preview_url}</span>
-                  </div>
-                  <a href={campaignState.preview_url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-surface-container-high rounded transition-colors">
-                    <span className="material-symbols-outlined text-on-surface-variant">open_in_new</span>
-                  </a>
-                </div>
-              )}
+
               {campaignState.production_url && (
                 <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-on-surface-variant/60 mb-1">Production</span>
+                    <span className="text-[10px] uppercase font-bold text-on-surface-variant/60 mb-1">Live Campaign</span>
                     <span className="font-mono text-sm text-primary">{campaignState.production_url}</span>
                   </div>
                   <a href={campaignState.production_url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-surface-container-high rounded transition-colors">
@@ -986,18 +976,10 @@ export default function CampaignCreate() {
                 <span className="material-symbols-outlined text-3xl">forward_to_inbox</span>
               </div>
               <div>
-                <h4 className="text-lg font-headline font-bold mb-1">Broadcast Sequence Complete</h4>
-                <p className="text-on-surface-variant text-sm mb-4">Priority delivery confirmed for targeted segments.</p>
-                <div className="flex items-center gap-8">
-                  <div>
-                    <span className="block text-2xl font-headline font-extrabold text-primary">{campaignState.customer_count || 0}</span>
-                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Recipients</span>
-                  </div>
-                  <div className="h-8 w-px bg-outline-variant/30"></div>
-                  <div>
-                    <span className="block text-2xl font-headline font-extrabold text-primary">99.9%</span>
-                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Deliverability</span>
-                  </div>
+                <h4 className="text-lg font-headline font-bold mb-1">Emails Successfully Sent</h4>
+                <p className="text-on-surface-variant text-sm mb-4">All campaign emails have been delivered to your target audience.</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-headline font-bold text-primary">Sent to {campaignState.customer_count || 0} customers</span>
                 </div>
               </div>
             </div>

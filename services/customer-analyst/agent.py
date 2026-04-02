@@ -215,7 +215,7 @@ class CustomerAnalystAgent:
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Customer Analyst",
-            task=f"Analyzing audience: {target_audience}"
+            task=f"Identifying {target_audience}..."
         )
 
         try:
@@ -223,7 +223,7 @@ class CustomerAnalystAgent:
                 campaign_id=campaign_id,
                 event_type="workflow_status",
                 agent="Customer Analyst",
-                task="Consulting LLM for tool selection"
+                task="Analyzing target audience..."
             )
 
             customers_data, recipient_type = await llm_select_and_call_tool(
@@ -251,7 +251,7 @@ class CustomerAnalystAgent:
                 campaign_id=campaign_id,
                 event_type="agent_completed",
                 agent="Customer Analyst",
-                task=f"Retrieved {len(customers)} {recipient_type} via MCP",
+                task=f"Found {len(customers)} {recipient_type}",
                 data={"count": len(customers), "recipient_type": recipient_type}
             )
 
@@ -267,7 +267,7 @@ class CustomerAnalystAgent:
                 campaign_id=campaign_id,
                 event_type="agent_error",
                 agent="Customer Analyst",
-                task="Customer retrieval failed",
+                task="Could not retrieve customers",
                 data={"error": str(e)}
             )
 

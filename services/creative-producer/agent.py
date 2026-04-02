@@ -319,7 +319,7 @@ class CreativeProducerAgent:
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Creative Producer",
-            task="Generating hero image with AI"
+            task="Creating campaign visuals..."
         )
 
         try:
@@ -335,7 +335,7 @@ class CreativeProducerAgent:
                     campaign_id=campaign_id,
                     event_type="agent_completed",
                     agent="Creative Producer",
-                    task="Hero image generated",
+                    task="Campaign visuals ready",
                     data={"image_url": hero_image_url}
                 )
             else:
@@ -343,14 +343,14 @@ class CreativeProducerAgent:
                     campaign_id=campaign_id,
                     event_type="workflow_status",
                     agent="Creative Producer",
-                    task="Image gen unavailable, using CSS gradients"
+                    task="Applying theme design..."
                 )
 
             await publish_event(
                 campaign_id=campaign_id,
                 event_type="agent_started",
                 agent="Creative Producer",
-                task="Generating landing page HTML"
+                task="Designing your landing page..."
             )
 
             html = await generate_html_with_streaming(
@@ -367,7 +367,7 @@ class CreativeProducerAgent:
                 campaign_id=campaign_id,
                 event_type="agent_completed",
                 agent="Creative Producer",
-                task="Landing page generated",
+                task="Landing page ready",
                 data={"html_length": len(html)}
             )
 
@@ -378,7 +378,7 @@ class CreativeProducerAgent:
                 campaign_id=campaign_id,
                 event_type="agent_error",
                 agent="Creative Producer",
-                task="Generation failed",
+                task="Design generation failed",
                 data={"error": str(e)}
             )
 
