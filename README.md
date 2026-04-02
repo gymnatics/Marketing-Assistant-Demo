@@ -1,4 +1,4 @@
-# Grand Lisboa Palace — AI Campaign Manager
+# Simon Casino Resort — AI Campaign Manager
 
 A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI.
 
@@ -115,6 +115,16 @@ oc apply -f k8s/imagegen/serving-runtime.yaml
 - **Image Generation**: vLLM-Omni 0.18.0 (FLUX.2-klein-4B)
 - **Database**: MongoDB 7
 - **Platform**: Red Hat OpenShift AI 3.3, 3x NVIDIA L40S GPUs
+
+## Models
+
+| Model | GPU | Purpose | HuggingFace |
+|-------|-----|---------|-------------|
+| Qwen2.5-Coder-32B-Instruct-FP8 | L40S #1 | HTML/CSS/JS generation | [neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8](https://huggingface.co/neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8) |
+| Qwen3-32B-FP8-Dynamic | L40S #2 | Email gen, tool calling, policy validation | [RedHatAI/Qwen3-32B-FP8-dynamic](https://huggingface.co/RedHatAI/Qwen3-32B-FP8-dynamic) |
+| FLUX.2-klein-4B | L40S #3 | AI hero image generation (vLLM-Omni) | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
+| Granite Guardian HAP 125M | CPU | Hate/abuse/profanity detection (TrustyAI) | [ibm-granite/granite-guardian-hap-125m](https://huggingface.co/ibm-granite/granite-guardian-hap-125m) |
+| DeBERTa v3 Prompt Injection v2 | CPU | Prompt injection detection (TrustyAI) | [protectai/deberta-v3-base-prompt-injection-v2](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) |
 
 ## Documentation
 
