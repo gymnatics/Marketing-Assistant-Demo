@@ -24,18 +24,26 @@ export default function Inbox() {
     fetchInbox();
     const interval = setInterval(fetchInbox, 10000);
     return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchInbox = async () => {
     try {
-      const resp = await fetch('/api/inbox');
+      const url = filterEmail
+        ? `/api/inbox?email=${encodeURIComponent(filterEmail)}`
+        : '/api/inbox';
+      const resp = await fetch(url);
       if (resp.ok) {
         const data = await resp.json();
         setEmails(data);
         // Auto-select first recipient on initial load
         if (!filterEmail && data.length > 0) {
           const firstEmail = data.find((e: Email) => e.to_email) || data[0];
-          if (firstEmail) setFilterEmail(firstEmail.to_email);
+          if (firstEmail) {
+            setFilterEmail(firstEmail.to_email);
+            // Re-fetch filtered
+            const filtResp = await fetch(`/api/inbox?email=${encodeURIComponent(firstEmail.to_email)}`);
+            if (filtResp.ok) setEmails(await filtResp.json());
+          }
         }
       }
     } catch {} finally { setLoading(false); }
@@ -64,9 +72,7 @@ export default function Inbox() {
     return { email, name: match?.to_name || email };
   });
 
-  const filteredEmails = filterEmail
-    ? emails.filter(e => e.to_email === filterEmail)
-    : emails;
+  const filteredEmails = emails;
 
   const unreadCount = filteredEmails.filter(e => !e.read).length;
   const currentRecipient = recipients.find(r => r.email === filterEmail);

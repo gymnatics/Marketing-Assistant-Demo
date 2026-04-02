@@ -310,46 +310,80 @@ def delete_campaign(campaign_id: str):
 
 
 # === Fake Inbox ===
-INBOX = [
+INBOX_TEMPLATES = [
     {
-        "id": "inbox-001",
         "from_name": "Simon Casino Resort",
         "from_email": "vip@simoncasino.com",
-        "to_name": "Wei Zhang",
-        "to_email": "wei.zhang@example.com",
-        "subject": "Your Platinum Membership Has Been Renewed",
-        "body": "<p>Dear Wei Zhang,</p><p>We are pleased to confirm that your Platinum membership has been successfully renewed for another year.</p><p>As a valued member, you continue to enjoy exclusive benefits including priority reservations, complimentary spa access, and dedicated concierge service.</p><p>Best regards,<br>Simon Casino Resort VIP Services</p>",
+        "subject": "Your {tier} Membership Has Been Renewed",
+        "body": "<p>Dear {name},</p><p>We are pleased to confirm that your {tier} membership has been successfully renewed for another year.</p><p>As a valued member, you continue to enjoy exclusive benefits including priority reservations, complimentary spa access, and dedicated concierge service.</p><p>Best regards,<br>Simon Casino Resort VIP Services</p>",
         "date": "2026-03-15T10:30:00",
-        "read": True
     },
     {
-        "id": "inbox-002",
         "from_name": "Simon Casino Resort",
         "from_email": "dining@simoncasino.com",
-        "to_name": "Wei Zhang",
-        "to_email": "wei.zhang@example.com",
         "subject": "Exclusive Wine Tasting Event — March 28",
-        "body": "<p>Dear Wei Zhang,</p><p>You are cordially invited to an exclusive wine tasting event featuring rare vintages from our award-winning cellar.</p><p><strong>Date:</strong> March 28, 2026<br><strong>Time:</strong> 7:00 PM<br><strong>Venue:</strong> The Grand Cellar, Level B1</p><p>Limited to 20 guests. Please RSVP at your earliest convenience.</p><p>Warm regards,<br>The Dining Team</p>",
+        "body": "<p>Dear {name},</p><p>You are cordially invited to an exclusive wine tasting event featuring rare vintages from our award-winning cellar.</p><p><strong>Date:</strong> March 28, 2026<br><strong>Time:</strong> 7:00 PM<br><strong>Venue:</strong> The Grand Cellar, Level B1</p><p>Limited to 20 guests. Please RSVP at your earliest convenience.</p><p>Warm regards,<br>The Dining Team</p>",
         "date": "2026-03-20T14:15:00",
-        "read": True
     },
     {
-        "id": "inbox-003",
         "from_name": "Simon Casino Resort",
         "from_email": "concierge@simoncasino.com",
-        "to_name": "Wei Zhang",
-        "to_email": "wei.zhang@example.com",
         "subject": "Your Suite Upgrade Confirmation",
-        "body": "<p>Dear Wei Zhang,</p><p>Great news! Your upcoming stay has been upgraded to the Presidential Suite as a token of our appreciation for your loyalty.</p><p><strong>Check-in:</strong> April 5, 2026<br><strong>Suite:</strong> Presidential Suite, Floor 38<br><strong>Amenities:</strong> Private butler, panoramic city view, complimentary minibar</p><p>We look forward to welcoming you.</p><p>Best regards,<br>Concierge Team</p>",
+        "body": "<p>Dear {name},</p><p>Great news! Your upcoming stay has been upgraded to the Presidential Suite as a token of our appreciation for your loyalty.</p><p><strong>Check-in:</strong> April 5, 2026<br><strong>Suite:</strong> Presidential Suite, Floor 38<br><strong>Amenities:</strong> Private butler, panoramic city view, complimentary minibar</p><p>We look forward to welcoming you.</p><p>Best regards,<br>Concierge Team</p>",
         "date": "2026-03-25T09:00:00",
-        "read": True
     },
 ]
+
+CAMPAIGN_EMAILS = []  # Campaign emails added by Delivery Manager
+
+
+def get_inbox_for(email_filter=None):
+    """Get inbox emails, personalizing templates for the requested recipient."""
+    all_emails = []
+
+    # Add pre-populated template emails for each known customer
+    known_customers = [
+        {"name": "Wei Zhang", "email": "wei.zhang@example.com", "tier": "Platinum"},
+        {"name": "Ming Li", "email": "ming.li@example.com", "tier": "Platinum"},
+        {"name": "John Smith", "email": "john.smith@example.com", "tier": "Platinum"},
+        {"name": "Yang Liu", "email": "yang.liu@example.com", "tier": "Diamond"},
+        {"name": "Fang Wang", "email": "fang.wang@example.com", "tier": "Gold"},
+    ]
+
+    for cust in known_customers:
+        if email_filter and cust["email"] != email_filter:
+            continue
+        for i, tmpl in enumerate(INBOX_TEMPLATES):
+            all_emails.append({
+                "id": f"inbox-{cust['email']}-{i}",
+                "from_name": tmpl["from_name"],
+                "from_email": tmpl["from_email"],
+                "to_name": cust["name"],
+                "to_email": cust["email"],
+                "subject": tmpl["subject"].format(name=cust["name"], tier=cust["tier"]),
+                "body": tmpl["body"].format(name=cust["name"], tier=cust["tier"]),
+                "date": tmpl["date"],
+                "read": True,
+            })
+
+    # Add campaign emails
+    for ce in CAMPAIGN_EMAILS:
+        if email_filter and ce.get("to_email") != email_filter:
+            continue
+        all_emails.append(ce)
+
+    # Sort: unread first, then by date descending
+    all_emails.sort(key=lambda e: (e.get("read", True), e.get("date", "")), reverse=False)
+    unread = [e for e in all_emails if not e.get("read")]
+    read = [e for e in all_emails if e.get("read")]
+    read.sort(key=lambda e: e.get("date", ""), reverse=True)
+    return unread + read
 
 
 @app.route("/api/inbox", methods=["GET"])
 def get_inbox():
-    return jsonify(INBOX)
+    email_filter = request.args.get("email")
+    return jsonify(get_inbox_for(email_filter))
 
 
 @app.route("/api/inbox", methods=["POST"])
@@ -357,17 +391,17 @@ def add_to_inbox():
     email = request.get_json()
     email["id"] = f"inbox-{uuid.uuid4().hex[:6]}"
     email["read"] = False
-    INBOX.insert(0, email)
+    CAMPAIGN_EMAILS.append(email)
     return jsonify(email), 201
 
 
 @app.route("/api/inbox/<email_id>/read", methods=["POST"])
 def mark_read(email_id):
-    for email in INBOX:
+    for email in CAMPAIGN_EMAILS:
         if email["id"] == email_id:
             email["read"] = True
             return jsonify(email)
-    return jsonify({"error": "Not found"}), 404
+    return jsonify({"read": True}), 200
 
 
 if __name__ == "__main__":
