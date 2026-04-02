@@ -309,7 +309,8 @@ async def send_emails_node(state: CampaignState) -> CampaignState:
         "email_subject_en": state["email_subject_en"],
         "email_body_en": state["email_body_en"],
         "email_subject_zh": state["email_subject_zh"],
-        "email_body_zh": state["email_body_zh"]
+        "email_body_zh": state["email_body_zh"],
+        "campaign_url": state.get("production_url") or state.get("preview_url", ""),
     })
 
     if result.get("status") == "error":
