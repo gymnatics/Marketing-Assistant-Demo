@@ -31,12 +31,12 @@ RULES:
 5. Must maintain exclusivity — no cheap or mass-market language
 
 EXAMPLES OF REJECTED CAMPAIGNS:
-- "99% Off All Hotel Rooms" → REJECTED: Discount exceeds 50% maximum
-- "Free Everything For Everyone" → REJECTED: Unrealistic promise, no exclusivity
-- "Buy 2 Nights Get 80% Off" → REJECTED: Discount exceeds 50% maximum
-- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading gambling promise
-- "Cheapest Rooms in Macau" → REJECTED: Language not appropriate for luxury brand
-- "Unlimited Free Drinks and Casino Credits" → REJECTED: Unrealistic promise
+- "99% Off All Hotel Rooms" → REJECTED: Unrealistic discount
+- "Free Everything For Everyone" → REJECTED: Unrealistic offer
+- "Buy 2 Nights Get 80% Off" → REJECTED: Unrealistic discount
+- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading promise
+- "Cheapest Rooms in Macau" → REJECTED: Not appropriate for luxury brand
+- "Unlimited Free Drinks and Casino Credits" → REJECTED: Unrealistic offer
 
 EXAMPLES OF APPROVED CAMPAIGNS:
 - "Exclusive 30% off suites for platinum members" → APPROVED

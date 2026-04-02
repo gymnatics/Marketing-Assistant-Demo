@@ -47,7 +47,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
     match = re.search(COMPETITOR_PATTERN, text)
     if match:
         GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
-        return {"passed": False, "reason": f"Campaign references a competitor: '{match.group()}'. Please remove competitor mentions."}
+        return {"passed": False, "reason": "Campaign references a competitor brand. Please revise."}
 
     # Layer 2: TrustyAI HAP detector — hate/abuse/profanity
     try:
@@ -63,7 +63,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                     for det in results[0]:
                         if det.get("score", 0) > 0.5:
                             GUARDRAILS_BLOCKED.labels(detector="hap").inc()
-                            return {"passed": False, "reason": "Campaign content flagged for inappropriate language. Please revise."}
+                            return {"passed": False, "reason": "Content flagged as inappropriate. Please revise."}
     except Exception as e:
         print(f"[Guardrails] HAP check failed (non-blocking): {e}")
 
@@ -81,7 +81,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                     for det in results[0]:
                         if det.get("score", 0) > 0.5:
                             GUARDRAILS_BLOCKED.labels(detector="prompt_injection").inc()
-                            return {"passed": False, "reason": "Potential prompt injection detected. Please revise your campaign description."}
+                            return {"passed": False, "reason": "Invalid input detected. Please revise."}
     except Exception as e:
         print(f"[Guardrails] Prompt injection check failed (non-blocking): {e}")
 
@@ -122,7 +122,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
 
         if result.get("approved") is False:
             GUARDRAILS_BLOCKED.labels(detector="policy_guardian").inc()
-            return {"passed": False, "reason": f"Policy check: {result.get('reason', 'Campaign policy violation')}"}
+            return {"passed": False, "reason": result.get("reason", "Campaign does not meet policy requirements. Please revise.")}
     except Exception as e:
         print(f"[Guardrails] Policy Guardian check failed (non-blocking): {e}")
 
