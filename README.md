@@ -259,7 +259,7 @@ flowchart TD
 
 | Model | GPU | Purpose | HuggingFace |
 |-------|-----|---------|-------------|
-| Qwen2.5-Coder-32B-Instruct-FP8 | L40S #1 | HTML/CSS/JS generation | [neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8](https://huggingface.co/neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8) |
+| Qwen2.5-Coder-32B-Instruct-FP8-dynamic | L40S #1 | HTML/CSS/JS generation | [RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic](https://huggingface.co/RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic) |
 | Qwen3-32B-FP8-Dynamic | L40S #2 | Email gen, tool calling, policy validation | [RedHatAI/Qwen3-32B-FP8-dynamic](https://huggingface.co/RedHatAI/Qwen3-32B-FP8-dynamic) |
 | FLUX.2-klein-4B | L40S #3 | AI hero image generation (vLLM-Omni) | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
 | Granite Guardian HAP 125M | CPU | Hate/abuse/profanity detection (TrustyAI) | [ibm-granite/granite-guardian-hap-125m](https://huggingface.co/ibm-granite/granite-guardian-hap-125m) |

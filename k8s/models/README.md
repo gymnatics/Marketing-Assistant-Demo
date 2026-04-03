@@ -6,7 +6,7 @@ These are the ServingRuntime and InferenceService manifests for the 3 GPU models
 
 | Model | GPU | HuggingFace | vLLM Args |
 |-------|-----|-------------|-----------|
-| Qwen2.5-Coder-32B-FP8 | L40S #1 | [neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8](https://huggingface.co/neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8) | `--max-model-len=16384 --gpu-memory-utilization=0.95 --enable-auto-tool-choice --tool-call-parser=hermes` |
+| Qwen2.5-Coder-32B-FP8 | L40S #1 | [RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic](https://huggingface.co/RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic) | `--max-model-len=16384 --gpu-memory-utilization=0.95 --enable-auto-tool-choice --tool-call-parser=hermes` |
 | Qwen3-32B-FP8-Dynamic | L40S #2 | [RedHatAI/Qwen3-32B-FP8-dynamic](https://huggingface.co/RedHatAI/Qwen3-32B-FP8-dynamic) | `--dtype=auto --max-model-len=16000 --gpu-memory-utilization=0.90 --enable-auto-tool-choice --tool-call-parser=hermes --tensor-parallel-size=1` |
 | FLUX.2-klein-4B | L40S #3 | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) | `--omni --gpu-memory-utilization=0.90 --trust-remote-code` (vLLM-Omni runtime) |
 
@@ -70,12 +70,12 @@ export NAMESPACE=0-marketing-assistant-demo
 ./scripts/setup-model-storage.sh -n $NAMESPACE
 
 # 2. Download all 3 models from HuggingFace to MinIO (~30 min each)
-./scripts/download-model.sh s3 neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8
+./scripts/download-model.sh s3 RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
 ./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic
 ./scripts/download-model.sh s3 black-forest-labs/FLUX.2-klein-4B
 
 # 3. Serve all 3 models
-./scripts/serve-model.sh s3 qwen25-coder neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8 "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
+./scripts/serve-model.sh s3 qwen25-coder RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
 ./scripts/serve-model.sh s3 qwen3 RedHatAI/Qwen3-32B-FP8-dynamic "--dtype auto --max-model-len 16000 --gpu-memory-utilization 0.90 --enable-auto-tool-choice --tool-call-parser hermes"
 RUNTIME=omni ./scripts/serve-model.sh s3 flux2-klein black-forest-labs/FLUX.2-klein-4B "--gpu-memory-utilization 0.90"
 ```
