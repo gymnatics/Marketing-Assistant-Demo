@@ -210,8 +210,8 @@ echo "  ConfigMap patch generated"
 # Update Kustomize namespace to match
 sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/base/kustomization.yaml k8s/overlays/dev/kustomization.yaml 2>/dev/null
 rm -f k8s/base/kustomization.yaml.bak k8s/overlays/dev/kustomization.yaml.bak 2>/dev/null
-# Update namespace.yaml
-sed -i.bak "s/name: .*/name: ${NAMESPACE}/" k8s/base/namespace.yaml 2>/dev/null
+# Update namespace.yaml (only the metadata.name, not labels)
+sed -i.bak "4s/name: .*/name: ${NAMESPACE}/" k8s/base/namespace.yaml 2>/dev/null
 rm -f k8s/base/namespace.yaml.bak 2>/dev/null
 echo "  Kustomize namespace set to ${NAMESPACE}"
 
