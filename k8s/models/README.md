@@ -57,30 +57,30 @@ If you prefer PVC-based model storage (e.g., downloading models to a PVC):
 
 ## Full Setup From Scratch (MinIO + Model Download + Serve)
 
-For a complete automated setup, use the helper scripts from the [Openshift-installation](https://github.com/gymnatics/Openshift-installation) repo:
+For a complete automated setup, use the helper scripts from the [RHOAI-Toolkit](https://github.com/gymnatics/RHOAI-Toolkit) repo:
 
 ```bash
-git clone https://github.com/gymnatics/Openshift-installation.git
-cd Openshift-installation
+git clone https://github.com/gymnatics/RHOAI-Toolkit.git
+cd RHOAI-Toolkit
+
+# Set the model namespace
+export NAMESPACE=0-marketing-assistant-demo
 
 # 1. Deploy MinIO S3 storage + create RHOAI data connection
-./scripts/setup-model-storage.sh -n 0-marketing-assistant-demo
+./scripts/setup-model-storage.sh -n $NAMESPACE
 
-# 2. Download all 3 models from HuggingFace to MinIO
+# 2. Download all 3 models from HuggingFace to MinIO (~30 min each)
 ./scripts/download-model.sh s3 neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8
 ./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic
 ./scripts/download-model.sh s3 black-forest-labs/FLUX.2-klein-4B
 
-# 3. Serve each model (applies ServingRuntime + InferenceService)
-./scripts/serve-model.sh s3 qwen25-coder-32b-fp8 neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8 "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
-./scripts/serve-model.sh s3 qwen3-32b-fp8-dynamic RedHatAI/Qwen3-32B-FP8-dynamic "--dtype auto --max-model-len 16000 --gpu-memory-utilization 0.90 --enable-auto-tool-choice --tool-call-parser hermes"
+# 3. Serve all 3 models
+./scripts/serve-model.sh s3 qwen25-coder neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8 "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
+./scripts/serve-model.sh s3 qwen3 RedHatAI/Qwen3-32B-FP8-dynamic "--dtype auto --max-model-len 16000 --gpu-memory-utilization 0.90 --enable-auto-tool-choice --tool-call-parser hermes"
+RUNTIME=omni ./scripts/serve-model.sh s3 flux2-klein black-forest-labs/FLUX.2-klein-4B "--gpu-memory-utilization 0.90"
 ```
 
-For FLUX.2, apply the vLLM-Omni runtime manually (it uses a custom runtime, not the default vLLM):
-```bash
-oc apply -f flux2-serving-runtime.yaml -n 0-marketing-assistant-demo
-oc apply -f flux2-isvc.yaml -n 0-marketing-assistant-demo
-```
+All 3 models served with one set of commands. The `RUNTIME=omni` flag tells the script to use vLLM-Omni for FLUX.2 image generation.
 
 ## Notes
 
