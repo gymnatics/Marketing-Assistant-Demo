@@ -237,7 +237,38 @@ oc apply -f /tmp/marketing-assistant-secret.yaml
 rm /tmp/marketing-assistant-secret.yaml
 
 echo "Applying RBAC (cross-namespace permissions)..."
-oc apply -f k8s/rbac.yaml 2>&1 | grep -E "created|configured|unchanged" || true
+oc create namespace "$DEV_NS" --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+oc create namespace "$PROD_NS" --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+cat <<EOF | oc apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: marketing-assistant-deploy-dev
+  namespace: ${DEV_NS}
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: ${NAMESPACE}
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: marketing-assistant-deploy-prod
+  namespace: ${PROD_NS}
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: ${NAMESPACE}
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+EOF
+echo "  RBAC applied for ${NAMESPACE} → ${DEV_NS}, ${PROD_NS}"
 
 echo ""
 echo "Waiting for deployments..."
