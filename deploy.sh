@@ -139,7 +139,7 @@ else
         for i in "${!ISVC_NAMES[@]}"; do
             if echo "${ISVC_NAMES[$i]}" | grep -qi "$pattern"; then
                 found="${ISVC_ROUTES[$i]}"
-                echo "  Auto-detected $label: ${ISVC_NAMES[$i]} → $found"
+                echo "  Auto-detected $label: ${ISVC_NAMES[$i]} → $found" >&2
                 echo "$found"
                 return
             fi
