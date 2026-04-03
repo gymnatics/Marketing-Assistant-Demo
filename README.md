@@ -115,52 +115,80 @@ When a user creates a campaign, here's what happens under the hood:
 - **AI-Generated Landing Pages** — Qwen Coder creates unique HTML/CSS with every generation
 - **AI Hero Images** — FLUX.2 generates atmospheric campaign banners via MCP
 - **Hyper-Personalization** — Landing pages personalize per VIP customer (`?c=VIP-001`) via real-time MCP lookup
-- **Bilingual** — All content in English (primary) + Chinese (subtitle)
+- **Professional Templates** — Skeleton-based "Bones & Beauty" architecture ensures polished layouts every time
 - **4-Layer Guardrails** — Regex → TrustyAI HAP → TrustyAI Prompt Injection → Policy Guardian (Qwen3)
 - **Gmail-Style Inbox** — Fake inbox shows personalized emails per recipient with campaign QR codes
 - **Real-Time Agent Status** — SSE streaming shows agent activity during generation
 - **Preview Before Commit** — Review landing page, emails, and recipients before going live
 
-## Quick Start
+## Getting Started
 
-### Local Development
+### Prerequisites
+
+- OpenShift 4.19+ cluster with RHOAI 3.3 installed
+- 3x NVIDIA L40S GPUs (or equivalent, 48GB VRAM each)
+- `oc` CLI logged in to the cluster
+- Container images pushed to a registry (see "Build Images" below)
+
+### Step 1: Deploy Models
+
+Download and serve the 3 GPU models. You can use the provided manifests or deploy via the RHOAI dashboard.
 
 ```bash
-cp .env.example .env
-# Edit .env with your model endpoints and tokens
+# Option A: Apply model manifests via Kustomize (requires S3 data connections set up in RHOAI)
+oc apply -k k8s/models/ -n <model-namespace>
 
-docker-compose up
+# Option B: Deploy via RHOAI dashboard UI
+# See k8s/models/README.md for model names, vLLM args, and storage options (S3 vs PVC)
 ```
 
-Access: http://localhost:3000
+Wait for all 3 models to show `READY: True` in `oc get inferenceservice -n <model-namespace>`.
 
-### OpenShift Deployment
+### Step 2: Deploy the App
 
 ```bash
-# Option A: Interactive deployment (recommended)
 ./deploy.sh
-
-# Option B: Manual Kustomize
-oc apply -k k8s/overlays/dev
-oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
-oc apply -f k8s/imagegen/serving-runtime.yaml
 ```
 
-### Build & Push Images
+The script will:
+1. Auto-detect your cluster domain
+2. Find running models and auto-assign them (code / language / image)
+3. Let you override model assignments if needed
+4. Generate config (ConfigMap + Secret) with the correct endpoints
+5. Deploy all 11 services via Kustomize
+6. Apply RBAC for cross-namespace landing page deployments
+7. Seed MongoDB with sample customer data
+
+### Step 3: Use the App
+
+1. Open the **Frontend URL** printed at the end of `deploy.sh`
+2. Click **Create New Campaign**
+3. Use the **Quick Start** dropdown to auto-fill a sample campaign, or type your own
+4. Pick a **theme** and click **Next** — watch the AI agents generate a landing page in real-time
+5. **Preview** the landing page, select VIPs from the dropdown to see personalization
+6. Click **Prepare Emails** — AI retrieves customers and generates email content
+7. **Review** everything, then click **Go Live** — deploys to production and sends emails
+8. Check the **Inbox** page to see personalized emails per recipient
+
+### Build Images (if modifying code)
 
 ```bash
 ./build-and-push.sh
 ```
 
-### RBAC (Required for New Clusters)
-
-The Delivery Manager deploys campaign landing pages to dev/prod namespaces. Grant permissions:
+### Reset Demo (clean slate)
 
 ```bash
-oc apply -f k8s/rbac.yaml
+./reset-demo.sh
 ```
 
-**For a different cluster:** Copy `k8s/overlays/dev/` to `k8s/overlays/<your-name>/`, edit `configmap-patch.yaml` (cluster domain, namespaces) and `secret.yaml` (model endpoints, tokens).
+Removes all generated campaign pods (keeps the pre-generated nginx one), restarts services to clear in-memory state and inbox.
+
+### Deploy to a Different Cluster
+
+1. Copy `k8s/overlays/dev/` to `k8s/overlays/<your-name>/`
+2. Run `./deploy.sh` — it auto-detects your cluster and models
+3. See `k8s/models/README.md` for model storage options (S3 vs PVC)
 
 ## Workflow
 
