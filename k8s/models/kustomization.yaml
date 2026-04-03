@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Qwen2.5-Coder-32B — HTML/CSS generation (L40S #1)
+  - qwen-coder-serving-runtime.yaml
+  - qwen-coder-isvc.yaml
+
+  # Qwen3-32B — Email gen, tool calling, policy validation (L40S #2)
+  - qwen3-serving-runtime.yaml
+  - qwen3-isvc.yaml
+
+  # FLUX.2-klein-4B — AI image generation via vLLM-Omni (L40S #3)
+  - flux2-serving-runtime.yaml
+  - flux2-isvc.yaml
