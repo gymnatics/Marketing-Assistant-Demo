@@ -125,24 +125,37 @@ When a user creates a campaign, here's what happens under the hood:
 
 ### Prerequisites
 
-- OpenShift 4.19+ cluster with RHOAI 3.3 installed
+- OpenShift 4.19+ cluster with **RHOAI 3.3 installed and configured**
 - 3x NVIDIA L40S GPUs (or equivalent, 48GB VRAM each)
+- **3 models deployed and serving** (see below)
 - `oc` CLI logged in to the cluster
 - Container images pushed to a registry (see "Build Images" below)
 
 ### Step 1: Deploy Models
 
-Download and serve the 3 GPU models. You can use the provided manifests or deploy via the RHOAI dashboard.
+This demo assumes RHOAI is set up and the 3 GPU models are already deployed and serving. If not, you can set them up using any of these methods:
 
+**Option A: RHOAI Dashboard UI** — Deploy models through the web console using the model names and vLLM args from `k8s/models/README.md`
+
+**Option B: [RHOAI-Toolkit](https://github.com/gymnatics/RHOAI-Toolkit)** (recommended for automation) — Handles MinIO storage, model download from HuggingFace, and serving in one flow:
 ```bash
-# Option A: Apply model manifests via Kustomize (requires S3 data connections set up in RHOAI)
-oc apply -k k8s/models/ -n <model-namespace>
-
-# Option B: Deploy via RHOAI dashboard UI
-# See k8s/models/README.md for model names, vLLM args, and storage options (S3 vs PVC)
+git clone https://github.com/gymnatics/RHOAI-Toolkit.git && cd RHOAI-Toolkit
+export NAMESPACE=<model-namespace>
+./scripts/setup-model-storage.sh -n $NAMESPACE
+./scripts/download-model.sh s3 RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
+./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic
+./scripts/download-model.sh s3 black-forest-labs/FLUX.2-klein-4B
+./scripts/serve-model.sh s3 qwen25-coder RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
+./scripts/serve-model.sh s3 qwen3 RedHatAI/Qwen3-32B-FP8-dynamic "--dtype auto --max-model-len 16000 --gpu-memory-utilization 0.90 --enable-auto-tool-choice --tool-call-parser hermes"
+RUNTIME=omni ./scripts/serve-model.sh s3 flux2-klein black-forest-labs/FLUX.2-klein-4B "--gpu-memory-utilization 0.90"
 ```
 
-Wait for all 3 models to show `READY: True` in `oc get inferenceservice -n <model-namespace>`.
+**Option C: Kustomize manifests** — Reference YAMLs in `k8s/models/` (requires S3 data connections pre-configured):
+```bash
+oc apply -k k8s/models/ -n <model-namespace>
+```
+
+Verify all 3 models are ready: `oc get inferenceservice -n <model-namespace>` (all should show `READY: True`).
 
 ### Step 2: Deploy the App
 
