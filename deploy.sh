@@ -53,7 +53,8 @@ echo "--- Step 1: Model Setup ---"
 echo ""
 
 # Check if models are already served
-ISVC_COUNT=$(oc get inferenceservice -n "$MODEL_NS" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+ISVC_COUNT=$(oc get inferenceservice -n "$MODEL_NS" --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
+ISVC_COUNT=${ISVC_COUNT:-0}
 
 if [ "$ISVC_COUNT" -ge 3 ]; then
     echo "Found $ISVC_COUNT InferenceServices in $MODEL_NS — skipping model deploy."
@@ -77,7 +78,10 @@ fi
 echo "--- Step 1b: Guardrails ---"
 echo ""
 
-GUARDRAILS_COUNT=$(oc get deployment -n "$NAMESPACE" --no-headers 2>/dev/null | grep -cE "guardrails|hap|prompt-injection|chunker|lingua" || echo "0")
+GUARDRAILS_COUNT=$(oc get deployment -n "$NAMESPACE" --no-headers 2>/dev/null | grep -cE "guardrails|hap|prompt-injection|chunker|lingua" 2>/dev/null || true)
+GUARDRAILS_COUNT=${GUARDRAILS_COUNT:-0}
+GUARDRAILS_COUNT=$(echo "$GUARDRAILS_COUNT" | tr -dc '0-9')
+GUARDRAILS_COUNT=${GUARDRAILS_COUNT:-0}
 
 if [ "$GUARDRAILS_COUNT" -ge 3 ]; then
     echo "Found $GUARDRAILS_COUNT guardrails components — skipping."
