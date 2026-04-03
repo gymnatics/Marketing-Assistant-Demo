@@ -3,8 +3,8 @@ kind: ConfigMap
 metadata:
   name: marketing-assistant-config
 data:
-  # Cluster-specific values — change these for your cluster
   CLUSTER_DOMAIN: "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
   DEV_NAMESPACE: "0-marketing-assistant-demo-dev"
   PROD_NAMESPACE: "0-marketing-assistant-demo-prod"
-  IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-marketing-assistant-v2.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
+  APP_NAMESPACE: "0-marketing-assistant-demo"
+  IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"

@@ -5,7 +5,7 @@ resources:
   - ../../base
   # secret.yaml is applied separately (contains real tokens, not included in oc apply -k)
 
-namespace: marketing-assistant-v2
+namespace: 0-marketing-assistant-demo
 
 patches:
   - path: configmap-patch.yaml

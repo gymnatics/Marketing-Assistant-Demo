@@ -49,7 +49,7 @@ kind: Route
 metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 300s
-  name: marketing-assistant-v2
+  name: marketing-assistant
 spec:
   port:
     targetPort: 8080

@@ -6,7 +6,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: default
-    namespace: marketing-assistant-v2
+    namespace: 0-marketing-assistant-demo
 roleRef:
   kind: ClusterRole
   name: edit
@@ -20,7 +20,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: default
-    namespace: marketing-assistant-v2
+    namespace: 0-marketing-assistant-demo
 roleRef:
   kind: ClusterRole
   name: edit
