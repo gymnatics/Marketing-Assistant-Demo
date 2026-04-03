@@ -55,6 +55,33 @@ If you prefer PVC-based model storage (e.g., downloading models to a PVC):
 | `--omni` | vLLM-Omni multimodal mode (required for FLUX image generation) |
 | `--trust-remote-code` | Required for FLUX.2 model loading |
 
+## Full Setup From Scratch (MinIO + Model Download + Serve)
+
+For a complete automated setup, use the helper scripts from the [Openshift-installation](https://github.com/gymnatics/Openshift-installation) repo:
+
+```bash
+git clone https://github.com/gymnatics/Openshift-installation.git
+cd Openshift-installation
+
+# 1. Deploy MinIO S3 storage + create RHOAI data connection
+./scripts/setup-model-storage.sh -n 0-marketing-assistant-demo
+
+# 2. Download all 3 models from HuggingFace to MinIO
+./scripts/download-model.sh s3 neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8
+./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic
+./scripts/download-model.sh s3 black-forest-labs/FLUX.2-klein-4B
+
+# 3. Serve each model (applies ServingRuntime + InferenceService)
+./scripts/serve-model.sh s3 qwen25-coder-32b-fp8 neuralmagic/Qwen2.5-Coder-32B-Instruct-FP8 "--max-model-len 16384 --gpu-memory-utilization 0.95 --enable-auto-tool-choice --tool-call-parser hermes"
+./scripts/serve-model.sh s3 qwen3-32b-fp8-dynamic RedHatAI/Qwen3-32B-FP8-dynamic "--dtype auto --max-model-len 16000 --gpu-memory-utilization 0.90 --enable-auto-tool-choice --tool-call-parser hermes"
+```
+
+For FLUX.2, apply the vLLM-Omni runtime manually (it uses a custom runtime, not the default vLLM):
+```bash
+oc apply -f flux2-serving-runtime.yaml -n 0-marketing-assistant-demo
+oc apply -f flux2-isvc.yaml -n 0-marketing-assistant-demo
+```
+
 ## Notes
 
 - The Qwen models use the standard RHOAI vLLM runtime (`registry.redhat.io/rhaiis/vllm-cuda-rhel9`)
