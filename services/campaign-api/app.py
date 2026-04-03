@@ -35,7 +35,7 @@ PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-inj
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
 
-COMPETITOR_PATTERN = r"(?i)(grand lisboa|wynn|venetian|mgm|galaxy|sands|melco|studio city|city of dreams|parisian|londoner)"
+COMPETITOR_PATTERN = r"(?i)(jennifer casino|jennifer resort|lucky star casino|jade emperor palace|phoenix bay resort|emerald fortune club|royal lotus gaming)"
 
 
 def check_guardrails(campaign_name: str, description: str) -> dict:
