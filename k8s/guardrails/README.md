@@ -2,10 +2,15 @@
 
 ## Prerequisites
 
-- Red Hat OpenShift AI with TrustyAI enabled
-- KServe Raw Deployment mode (`serviceMesh.managementState: Removed`)
-- Helm CLI installed
-- Cluster admin privileges
+1. **Red Hat OpenShift AI 3.3+** installed on the cluster
+2. **TrustyAI enabled** in RHOAI — this is a one-time cluster admin step:
+   - Go to RHOAI Dashboard → Settings → Cluster settings
+   - Enable "TrustyAI" under the AI Safety section
+   - Or enable via DataScienceCluster CR: set `trustyai.managementState: Managed`
+3. **KServe Raw Deployment mode** (`serviceMesh.managementState: Removed`)
+4. Cluster admin privileges (needed for GuardrailsOrchestrator CR)
+
+> **Note:** The Kustomize/Helm below deploys the guardrails *components* (detectors, orchestrator, model storage). It does NOT install the TrustyAI operator itself — that must be enabled in RHOAI first.
 
 ## Quick Deploy (Kustomize)
 
