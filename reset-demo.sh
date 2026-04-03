@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="${NAMESPACE:-marketing-assistant-v2}"
+NAMESPACE="${NAMESPACE:-0-marketing-assistant-demo}"
 DEV_NS="${DEV_NS:-0-marketing-assistant-demo-dev}"
 PROD_NS="${PROD_NS:-0-marketing-assistant-demo-prod}"
 KEEP="${KEEP:-campaign-basic-preview}"

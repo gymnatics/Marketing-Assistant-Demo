@@ -38,6 +38,7 @@ CLUSTER_DOMAIN = os.environ.get(
 )
 DEV_NAMESPACE = os.environ.get("DEV_NAMESPACE", "0-marketing-assistant-demo-dev")
 PROD_NAMESPACE = os.environ.get("PROD_NAMESPACE", "0-marketing-assistant-demo-prod")
+APP_NAMESPACE = os.environ.get("APP_NAMESPACE", "0-marketing-assistant-demo")
 
 
 MARKETING_SYSTEM_PROMPT = """You are a luxury casino marketing expert creating personalized email campaigns.
@@ -286,7 +287,7 @@ def deploy_campaign_to_k8s(
                             image_pull_policy="Always",
                             ports=[client.V1ContainerPort(container_port=8080)],
                             env=[
-                                client.V1EnvVar(name="MONGODB_MCP_URL", value="http://mongodb-mcp.marketing-assistant-v2.svc:8090"),
+                                client.V1EnvVar(name="MONGODB_MCP_URL", value=f"http://mongodb-mcp.{APP_NAMESPACE}.svc:8090"),
                             ],
                             volume_mounts=[
                                 client.V1VolumeMount(

@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="${NAMESPACE:-marketing-assistant-v2}"
+NAMESPACE="${NAMESPACE:-0-marketing-assistant-demo}"
 MODEL_NS="${MODEL_NS:-0-marketing-assistant-demo}"
+DEV_NS="${DEV_NS:-}"
+PROD_NS="${PROD_NS:-}"
 OVERLAY="${OVERLAY:-k8s/overlays/dev}"
 
 echo "=========================================="
@@ -19,6 +21,21 @@ fi
 echo "Logged in as: $(oc whoami)"
 echo "App namespace: $NAMESPACE"
 echo "Model namespace: $MODEL_NS"
+
+# Determine dev/prod namespaces
+if [ -z "$DEV_NS" ]; then
+    DEFAULT_DEV="${NAMESPACE}-dev"
+    read -p "Dev namespace for campaign previews [$DEFAULT_DEV]: " DEV_NS_INPUT
+    DEV_NS="${DEV_NS_INPUT:-$DEFAULT_DEV}"
+fi
+if [ -z "$PROD_NS" ]; then
+    DEFAULT_PROD="${NAMESPACE}-prod"
+    read -p "Prod namespace for live campaigns [$DEFAULT_PROD]: " PROD_NS_INPUT
+    PROD_NS="${PROD_NS_INPUT:-$DEFAULT_PROD}"
+fi
+
+echo "Dev namespace: $DEV_NS"
+echo "Prod namespace: $PROD_NS"
 echo ""
 
 # --- Cluster domain ---
@@ -179,8 +196,9 @@ metadata:
   name: marketing-assistant-config
 data:
   CLUSTER_DOMAIN: "${CLUSTER_DOMAIN}"
-  DEV_NAMESPACE: "${NAMESPACE/v2/dev}"
-  PROD_NAMESPACE: "${NAMESPACE/v2/prod}"
+  DEV_NAMESPACE: "${DEV_NS}"
+  PROD_NAMESPACE: "${PROD_NS}"
+  APP_NAMESPACE: "${NAMESPACE}"
   IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-${NAMESPACE}.${CLUSTER_DOMAIN}"
 EOF
 echo "  ConfigMap patch generated"
