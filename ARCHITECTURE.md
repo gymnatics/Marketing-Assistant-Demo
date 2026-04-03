@@ -1,8 +1,8 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 4.1  
-**Last Updated:** April 2, 2026  
+**Version:** 5.0  
+**Last Updated:** April 3, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
 ---
@@ -28,6 +28,8 @@
 
 The Marketing Campaign Assistant is a multi-agent AI system that generates luxury marketing campaigns for Macau casinos. It uses four protocols:
 
+**Product conventions (v5):** All customer-facing copy is **English-only** (no bilingual UI or email variants). The **hotel / casino** field is a **dropdown of five fictional Simon-branded venues** (not free text). **Competitor guardrails** match **fictional** competitor names only (for example **Jennifer Casino Resort** and similar demo patterns—not real licensed properties).
+
 | Protocol | Purpose | Implementation |
 |----------|---------|----------------|
 | **A2A** (Agent-to-Agent) | Inter-agent communication | `a2a-sdk` JSON-RPC 2.0 over HTTP |
@@ -45,7 +47,7 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | **Campaign API** | 5000 | Flask, Flask-CORS | REST gateway, A2A client to Director |
 | **Event Hub** | 5001 | Flask | SSE pub/sub for real-time agent status |
 | **Campaign Director** | 8080 | a2a-sdk, LangGraph, Starlette | Orchestrator, workflow coordination |
-| **Creative Producer** | 8081 | a2a-sdk, FastMCP Client | HTML/CSS landing page generation |
+| **Creative Producer** | 8081 | a2a-sdk, FastMCP Client | “Bones & Beauty” skeleton template merge (theme CSS + LLM content) |
 | **Customer Analyst** | 8082 | a2a-sdk, FastMCP Client, Qwen3 | LLM-driven customer retrieval via MCP |
 | **Delivery Manager** | 8083 | a2a-sdk, Kubernetes client | Email generation + K8s deployment |
 | **Policy Guardian** | 8084 | a2a-sdk, Qwen3 | Business policy validation |
@@ -56,7 +58,7 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | **TrustyAI Prompt Injection** | 8000 | DeBERTa v3 (CPU) | Prompt injection detection |
 | **GuardrailsOrchestrator** | 8032 | fms-guardrails-orchestrator | Detector coordination |
 | **MongoDB** | 27017 | mongo:7 | Customer/prospect database |
-| **vLLM (Qwen Coder)** | KServe | vLLM, L40S #1 | HTML code generation |
+| **vLLM (Qwen Coder)** | KServe | vLLM, L40S #1 | Style block + content key-values (skeleton merge) |
 | **vLLM (Qwen3)** | KServe | vLLM, L40S #2 | Email gen + tool calling |
 | **vLLM-Omni (FLUX.2)** | KServe | vLLM-Omni 0.18.0, L40S #3 | Image generation |
 
@@ -91,7 +93,7 @@ flowchart TD
     end
 
     subgraph models [GPU Models]
-        QwenCoder["Qwen2.5-Coder-32B\n(L40S #1)"]
+        QwenCoder["RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic\n(L40S #1)"]
         Qwen3["Qwen3-32B\n(L40S #2)"]
         FLUX2["FLUX.2-klein-4B\n(L40S #3)"]
     end
@@ -178,8 +180,8 @@ sequenceDiagram
     FLUX-->>IMG: base64 PNG
     IMG-->>CP: {image_url: public URL}
     CP->>Coder: POST /v1/chat/completions (streaming)
-    Coder-->>CP: HTML with HERO_IMAGE_PLACEHOLDER
-    Note over CP: Replace placeholder with image URL
+    Coder-->>CP: CSS style block + content key-values (structured output)
+    Note over CP: Merge base_template.html — theme vars, LLM CSS, placeholders, hero image URL
     CP-->>Dir: {html, status: success}
 
     Dir->>DM: A2A: deploy_preview
@@ -219,7 +221,7 @@ sequenceDiagram
 
     Dir->>DM: A2A: generate_email
     DM->>LLM: Email prompt (streaming)
-    LLM-->>DM: Email content EN + ZH
+    LLM-->>DM: Email subject + body (English only)
     DM-->>Dir: {email_subject_en, email_body_en, ...}
 
     Dir-->>API: {status: email_ready}
