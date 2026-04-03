@@ -7,20 +7,29 @@
 - Helm CLI installed
 - Cluster admin privileges
 
-## Quick Deploy (Helm)
+## Quick Deploy (Kustomize)
 
 ```bash
-# Clone the lemonade-stand-assistant chart
+# 1. Apply the MinIO secret (edit with your credentials first if needed)
+cp minio-secret-example.yaml minio-secret.yaml
+oc apply -f minio-secret.yaml -n marketing-assistant-v2
+
+# 2. Deploy everything via Kustomize
+oc apply -k k8s/guardrails/ -n marketing-assistant-v2
+
+# 3. Wait for all pods to be ready (~5 minutes for model downloads)
+oc get pods -n marketing-assistant-v2 | grep -E "guardrails|detector|minio|lingua|chunker"
+```
+
+## Alternative: Deploy via Helm
+
+```bash
 git clone https://github.com/rh-ai-quickstart/lemonade-stand-assistant.git /tmp/lemonade-stand-assistant
 
-# Deploy guardrails in your namespace (no LLM — we use our own models)
 helm install guardrails /tmp/lemonade-stand-assistant/chart \
   --namespace marketing-assistant-v2 \
   --set model.endpoint=qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.<YOUR_CLUSTER_DOMAIN> \
   --set model.port=443
-
-# Wait for all pods to be ready (~5 minutes for model downloads)
-oc get pods -n marketing-assistant-v2 | grep -E "guardrails|detector|minio|lingua|chunker"
 ```
 
 ## What Gets Deployed

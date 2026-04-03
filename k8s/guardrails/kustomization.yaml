@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # 1. Model storage (MinIO downloads detector models from HuggingFace)
+  - minio-storage.yaml
+
+  # 2. Detectors (CPU-only, no GPU needed)
+  - hap-detector.yaml
+  - prompt-injection-detector.yaml
+
+  # 3. Supporting services
+  - chunker.yaml
+  - lingua.yaml
+
+  # 4. Orchestrator
+  - orchestrator-config.yaml
+  - orchestrator-cr.yaml
+
+  # NOTE: minio-secret-example.yaml is NOT included — copy and edit it manually:
+  #   cp minio-secret-example.yaml minio-secret.yaml
+  #   # Edit with your actual credentials
+  #   oc apply -f minio-secret.yaml
