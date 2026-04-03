@@ -31,14 +31,14 @@ CAMPAIGN_THEMES = {
     },
     "festive_red": {
         "name": "Festive Red",
-        "description": "Professional yet celebratory, deep maroon with silver-white accents",
-        "primary_color": "#7F1D1D",
+        "description": "Professional yet celebratory, deep maroon with crimson and gold",
+        "primary_color": "#C41E3A",
         "secondary_color": "#450A0A",
-        "accent_color": "#FEF2F2",
+        "accent_color": "#B8860B",
         "background": "#450A0A",
         "text_color": "#FFFFFF",
-        "button_color": "#F8FAFC",
-        "button_text": "#450A0A"
+        "button_color": "#C41E3A",
+        "button_text": "#FFFFFF"
     },
     "modern_black": {
         "name": "Modern Minimal",

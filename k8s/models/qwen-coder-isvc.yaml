@@ -1,0 +1,43 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: qwen25-coder-32b-fp8
+  annotations:
+    openshift.io/display-name: Qwen2.5-Coder-32B-FP8
+    serving.kserve.io/deploymentMode: RawDeployment
+    serving.kserve.io/route-timeout: "300"
+    security.opendatahub.io/enable-auth: "false"
+  labels:
+    opendatahub.io/dashboard: "true"
+    networking.kserve.io/visibility: exposed
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: qwen25-coder-32b-fp8
+      # Storage: S3 connection named "qwen25-coder-32b-fp8"
+      # If using PVC, change to: storageUri: pvc://your-pvc-name/path/to/model
+      storage:
+        key: qwen25-coder-32b-fp8
+        path: RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic
+      args:
+      - --max-model-len=16384
+      - --gpu-memory-utilization=0.95
+      - --enable-auto-tool-choice
+      - --tool-call-parser=hermes
+      resources:
+        requests:
+          cpu: "1"
+          memory: 12Gi
+          nvidia.com/gpu: "1"
+        limits:
+          cpu: "2"
+          memory: 24Gi
+          nvidia.com/gpu: "1"
+    tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule

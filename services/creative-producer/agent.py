@@ -44,7 +44,7 @@ SYSTEM_PROMPT = """You are a premier Digital Brand Architect specializing in hig
 
 ## Theme Presets:
 - "The Heritage Collection" (Luxury Gold): Deep midnight slate (#0F172A) backgrounds, classic gold (#D4AF37) accents, shimmer gold (#FDE047) hover states, warm and established.
-- "The Celebration Suite" (Festive Red): Deep maroon (#450A0A) base, rich crimson (#7F1D1D) sections, pure silver-white (#F8FAFC) accents, soft blush (#FEF2F2) card fills. Professional yet festive.
+- "The Celebration Suite" (Festive Red): Deep maroon (#450A0A) base, crimson (#C41E3A) primary, rich gold (#B8860B) accents. Sections alternate between maroon and darker crimson tones. Professional yet festive — elegant red and gold, NOT pink or blush.
 - "The Urban Retreat" (Modern Minimal): Pure white (#FFFFFF) base, slate 50 (#F8FAFC) section separation, midnight black (#0F172A) buttons and branding. Maximum whitespace, architectural.
 - "The Grand Stakes" (Classic Casino): Deep emerald baize (#064E3B), forest green (#065F46) depth layers, amber gold (#F59E0B) to suggest winning, cool silver (#D1D5DB) for interactive elements. Mint white (#F0FDF4) text.
 

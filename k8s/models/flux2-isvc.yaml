@@ -1,0 +1,37 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: flux2-klein-4b
+  annotations:
+    openshift.io/display-name: FLUX.2-klein-4B
+    serving.kserve.io/deploymentMode: RawDeployment
+    security.opendatahub.io/enable-auth: "false"
+  labels:
+    opendatahub.io/dashboard: "true"
+    networking.kserve.io/visibility: exposed
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: flux2-klein-4b
+      # Storage: S3 connection named "flux2-klein-4b"
+      # If using PVC, change to: storageUri: pvc://your-pvc-name/path/to/model
+      storage:
+        key: flux2-klein-4b
+        path: black-forest-labs/FLUX.2-klein-4B
+      resources:
+        requests:
+          cpu: "1"
+          memory: 12Gi
+          nvidia.com/gpu: "1"
+        limits:
+          cpu: "2"
+          memory: 24Gi
+          nvidia.com/gpu: "1"
+    tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
