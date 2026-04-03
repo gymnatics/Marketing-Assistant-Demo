@@ -55,6 +55,30 @@ else
 fi
 
 ################################################################################
+# Step 1b: Guardrails (optional)
+################################################################################
+echo "--- Step 1b: Guardrails ---"
+echo ""
+
+GUARDRAILS_COUNT=$(oc get deployment -n "$NAMESPACE" --no-headers 2>/dev/null | grep -cE "guardrails|hap|prompt-injection|chunker|lingua" || echo "0")
+
+if [ "$GUARDRAILS_COUNT" -ge 3 ]; then
+    echo "Found $GUARDRAILS_COUNT guardrails components — skipping."
+    echo ""
+else
+    read -p "Deploy TrustyAI guardrails? (y/N): " DEPLOY_GUARDRAILS
+    if [ "$DEPLOY_GUARDRAILS" = "y" ] || [ "$DEPLOY_GUARDRAILS" = "Y" ]; then
+        if [ -f k8s/guardrails/minio-secret-example.yaml ]; then
+            echo "Applying MinIO secret for guardrails..."
+            oc apply -f k8s/guardrails/minio-secret-example.yaml -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+        fi
+        echo "Applying guardrails manifests..."
+        oc apply -k k8s/guardrails/ -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+        echo ""
+    fi
+fi
+
+################################################################################
 # Step 2: Detect model endpoints
 ################################################################################
 echo "--- Step 2: Model Endpoints ---"
@@ -242,7 +266,7 @@ echo "Frontend:"
 FRONTEND_URL=$(oc get route -n $NAMESPACE -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "not found")
 echo "  https://${FRONTEND_URL}"
 echo ""
-echo "Next steps (if first time):"
-echo "  - Deploy guardrails: see k8s/guardrails/README.md"
-echo "  - Reset demo: ./reset-demo.sh"
+echo "Useful commands:"
+echo "  ./reset-demo.sh          # Clean slate (remove generated campaigns)"
+echo "  ./build-and-push.sh      # Rebuild container images after code changes"
 echo ""
