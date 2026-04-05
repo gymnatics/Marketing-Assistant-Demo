@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from a2a.types import AgentCard, AgentSkill, AgentCapabilities, SecurityScheme, HTTPAuthSecurityScheme
 
 from agent_executor import PolicyGuardianExecutor
 
@@ -17,7 +17,7 @@ host = "0.0.0.0"
 agent_card = AgentCard(
     name="Policy Guardian",
     description="Validates marketing campaign content against business policies using LLM reasoning",
-    url=f"http://{host}:{port}/",
+    url=os.getenv("AGENT_ENDPOINT", f"http://{host}:{port}").rstrip("/") + "/",
     version="1.0.0",
     defaultInputModes=["text", "text/plain"],
     defaultOutputModes=["text", "text/plain"],
@@ -30,6 +30,11 @@ agent_card = AgentCard(
             tags=["policy", "guardrails", "validation"],
         ),
     ],
+    securitySchemes={
+        "Bearer": SecurityScheme(root=HTTPAuthSecurityScheme(
+            type="http", scheme="bearer", bearerFormat="JWT", description="OAuth 2.0 JWT token"
+        ))
+    },
 )
 
 handler = DefaultRequestHandler(
@@ -45,7 +50,8 @@ async def health_check(request):
     return JSONResponse({"status": "healthy", "agent": "Policy Guardian"})
 
 
-app.routes.insert(0, Route("/healthz", health_check, methods=["GET"]))
+app.routes.insert(0, Route("/.well-known/agent-card.json", server._handle_get_agent_card, methods=["GET"]))
+app.routes.insert(1, Route("/healthz", health_check, methods=["GET"]))
 app.routes.insert(1, Route("/readyz", health_check, methods=["GET"]))
 
 if __name__ == "__main__":

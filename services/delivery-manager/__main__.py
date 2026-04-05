@@ -7,7 +7,7 @@ import uvicorn
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from a2a.types import AgentCard, AgentSkill, AgentCapabilities, SecurityScheme, HTTPAuthSecurityScheme
 from starlette.routing import Route
 from starlette.responses import JSONResponse
 
@@ -19,7 +19,7 @@ port = int(os.environ.get("PORT", 8083))
 agent_card = AgentCard(
     name="Delivery Manager",
     description="Generates marketing emails and deploys campaigns to OpenShift",
-    url=f"http://{host}:{port}/",
+    url=os.getenv("AGENT_ENDPOINT", f"http://{host}:{port}").rstrip("/") + "/",
     version="1.0.0",
     defaultInputModes=["text", "text/plain"],
     defaultOutputModes=["text", "text/plain"],
@@ -38,6 +38,11 @@ agent_card = AgentCard(
                    description="Send marketing emails to customer list (simulated)",
                    tags=["email", "send", "simulated"]),
     ],
+    securitySchemes={
+        "Bearer": SecurityScheme(root=HTTPAuthSecurityScheme(
+            type="http", scheme="bearer", bearerFormat="JWT", description="OAuth 2.0 JWT token"
+        ))
+    },
 )
 
 http_handler = DefaultRequestHandler(
@@ -53,7 +58,8 @@ async def health_check(request):
     return JSONResponse({"status": "healthy", "agent": "Delivery Manager"})
 
 
-app.routes.insert(0, Route("/healthz", health_check, methods=["GET"]))
+app.routes.insert(0, Route("/.well-known/agent-card.json", server._handle_get_agent_card, methods=["GET"]))
+app.routes.insert(1, Route("/healthz", health_check, methods=["GET"]))
 app.routes.insert(1, Route("/readyz", health_check, methods=["GET"]))
 
 if __name__ == "__main__":

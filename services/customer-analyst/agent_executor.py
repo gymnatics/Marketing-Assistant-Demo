@@ -33,7 +33,10 @@ class CustomerAnalystExecutor(AgentExecutor):
 
         try:
             user_input = context.get_user_input()
-            params = json.loads(user_input)
+            try:
+                params = json.loads(user_input)
+            except (json.JSONDecodeError, TypeError):
+                params = {"target_audience": user_input, "campaign_id": "chat"}
             result = await self.agent.get_customers(params)
             result_json = json.dumps(result, ensure_ascii=False, default=str)
 

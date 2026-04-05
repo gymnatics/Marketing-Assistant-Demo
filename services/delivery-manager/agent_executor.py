@@ -33,14 +33,13 @@ class DeliveryManagerExecutor(AgentExecutor):
 
         updater = TaskUpdater(event_queue, task.id, task.context_id)
 
+        raw_input = context.get_user_input()
         try:
-            raw_input = context.get_user_input()
             params = json.loads(raw_input)
-        except (json.JSONDecodeError, TypeError) as e:
-            await updater.update_status(
-                TaskState.failed,
-                message=new_agent_text_message(f"Invalid JSON input: {e}", task.context_id, task.id),
-            )
+        except (json.JSONDecodeError, TypeError):
+            parts = [Part(root=TextPart(text="I'm the Delivery Manager agent. I handle email generation and campaign deployment. Please send structured task parameters via the Campaign Director."))]
+            await updater.add_artifact(parts)
+            await updater.complete()
             return
 
         skill = params.pop("skill", "")

@@ -2,12 +2,28 @@
 MongoDB MCP Server - FastMCP wrapper for customer database access.
 
 Provides tools for retrieving VIP customer profiles for marketing campaigns.
+Supports role-based filtering via 'allowed_tiers' parameter for KAgenti integration.
 """
 import os
 from typing import List, Optional
 from fastmcp import FastMCP
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
+
+TIER_SCOPES = {
+    "tier-admin": ["diamond", "platinum", "gold"],
+    "tier-diamond": ["diamond", "platinum", "gold"],
+    "tier-platinum": ["platinum", "gold"],
+    "tier-gold": ["gold"],
+}
+
+
+def filter_by_allowed_tiers(customers: list, allowed_tiers: str = "") -> list:
+    """Filter customer list by allowed tiers. Empty = no filter (backward compatible)."""
+    if not allowed_tiers:
+        return customers
+    tiers = TIER_SCOPES.get(allowed_tiers, allowed_tiers.split(","))
+    return [c for c in customers if c.get("tier", "") in tiers]
 
 
 # Initialize FastMCP server
@@ -238,12 +254,13 @@ def get_prospects(limit: int = 50) -> List[dict]:
 
 
 @mcp.tool
-def get_all_vip_customers(limit: int = 100) -> List[dict]:
+def get_all_vip_customers(limit: int = 100, allowed_tiers: str = "") -> List[dict]:
     """
     Retrieve all VIP customers regardless of tier.
     
     Args:
         limit: Maximum number of customers to return
+        allowed_tiers: Optional role-based filter (e.g., 'tier-admin', 'tier-gold'). Empty = all tiers.
     
     Returns:
         List of all VIP customer profiles
@@ -252,7 +269,7 @@ def get_all_vip_customers(limit: int = 100) -> List[dict]:
     
     if client is None:
         print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
-        return MOCK_CUSTOMERS[:limit]
+        return filter_by_allowed_tiers(MOCK_CUSTOMERS, allowed_tiers)[:limit]
     
     try:
         db = client[os.environ.get("MONGODB_DATABASE", "casino_crm")]
@@ -260,10 +277,10 @@ def get_all_vip_customers(limit: int = 100) -> List[dict]:
         for c in customers:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
-        return customers
+        return filter_by_allowed_tiers(customers, allowed_tiers)
     except Exception as e:
         print(f"[MongoDB MCP] Query error: {e}")
-        return MOCK_CUSTOMERS[:limit]
+        return filter_by_allowed_tiers(MOCK_CUSTOMERS, allowed_tiers)[:limit]
     finally:
         client.close()
 

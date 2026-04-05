@@ -30,7 +30,10 @@ class PolicyGuardianExecutor(AgentExecutor):
 
         try:
             user_input = context.get_user_input()
-            params = json.loads(user_input)
+            try:
+                params = json.loads(user_input)
+            except (json.JSONDecodeError, TypeError):
+                params = {"campaign_name": user_input, "campaign_description": user_input}
             result = await self.agent.validate(params)
             result_json = json.dumps(result, ensure_ascii=False)
 

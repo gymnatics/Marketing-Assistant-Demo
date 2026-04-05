@@ -374,7 +374,7 @@ sequenceDiagram
     Note over MCP: Store in image_store[id]
     MCP-->>CP: {image_url: "https://.../images/img-xxx.png"}
 
-    Note over CP: URL injected into HTML via placeholder
+    Note over CP: Hero URL merged into final skeleton HTML
 
     Browser->>MCP: GET /images/img-xxx.png (via public Route)
     MCP-->>Browser: PNG bytes
@@ -397,7 +397,7 @@ flowchart LR
     DeployPreview --> End2((END))
 ```
 
-- `generate_landing_page_node`: A2A → Creative Producer → ImageGen MCP (hero image) + Qwen Coder (HTML)
+- `generate_landing_page_node`: A2A → Creative Producer → ImageGen MCP (hero image) + Qwen Coder (Digital Brand Architect: CSS + content keys merged into `base_template.html`)
 - `deploy_preview_node`: A2A → Delivery Manager → K8s API (ConfigMap + Deployment + Service + Route in dev namespace)
 
 ### Workflow 2: Email Preview
@@ -412,7 +412,7 @@ flowchart LR
 ```
 
 - `retrieve_customers_node`: A2A → Customer Analyst → Qwen3 LLM (tool selection) → MCP → MongoDB
-- `generate_email_node`: A2A → Delivery Manager → Qwen3 LLM (email content EN + ZH)
+- `generate_email_node`: A2A → Delivery Manager → Qwen3 LLM (email content, English only)
 
 ### Workflow 3: Go Live
 
@@ -452,8 +452,6 @@ class CampaignState(TypedDict):
     production_url: str
     email_subject_en: str
     email_body_en: str
-    email_subject_zh: str
-    email_body_zh: str
     customer_list: List[dict]
     customer_count: int
     error_message: str
@@ -501,7 +499,7 @@ sequenceDiagram
     "campaign_id": "abc123",
     "event_type": "agent_started",
     "agent": "Creative Producer",
-    "task": "Generating hero image with AI",
+    "task": "Creating campaign visuals...",
     "data": {},
     "timestamp": "2026-03-31T15:00:00"
 }
@@ -525,20 +523,23 @@ flowchart TD
 
 ### Namespace Layout
 
+The **primary application namespace** defaults to **`0-marketing-assistant-demo`**. Override before running `./deploy.sh` with `NAMESPACE=your-namespace` (the script patches Kustomize, `namespace.yaml`, ConfigMap URLs, and RBAC targets to match).
+
 | Namespace | Purpose |
 |-----------|---------|
-| `marketing-assistant-v2` | All application services (10 pods) |
-| `0-marketing-assistant-demo-dev` | Preview campaign deployments |
-| `0-marketing-assistant-demo-prod` | Production campaign deployments |
-| `0-marketing-assistant-demo` | Model serving (vLLM, vLLM-Omni) |
+| `{NAMESPACE}` (default `0-marketing-assistant-demo`) | Full stack: API, agents, MCP servers, MongoDB, frontend, guardrails, and model ServingRuntimes (as deployed on the cluster) |
+| `{NAMESPACE}-dev` (default `…-dev`) | Per-campaign preview deployments (Express campaign-landing) |
+| `{NAMESPACE}-prod` (default `…-prod`) | Per-campaign production deployments |
 
 ### RBAC
 
-`k8s/rbac.yaml` grants `edit` role to `system:serviceaccount:marketing-assistant-v2:default` in both dev and prod namespaces.
+`k8s/rbac.yaml` grants `edit` to the **default** ServiceAccount in the app namespace (`system:serviceaccount:{NAMESPACE}:default`) on both dev and prod namespaces so the Delivery Manager can create Routes and ConfigMaps for campaign pods.
 
 ---
 
 ## 10. Frontend Architecture
+
+**Campaign brief (Step 0):** **Hotel / casino** is chosen from a **dropdown of five fictional venues** (Simon Casino Resort, Simon Imperial Palace, Simon Oceanview Resort, Simon Golden Bay Hotel, Simon Jade Garden Spa & Resort)—aligned with guardrail-safe, demo-only naming.
 
 ### Nginx Proxy Configuration
 
@@ -585,7 +586,7 @@ flowchart LR
 
 | GPU | Model | Served By | Used By |
 |-----|-------|-----------|---------|
-| L40S #1 (48GB) | Qwen2.5-Coder-32B-FP8 | vLLM (KServe) | Creative Producer (HTML generation) |
+| L40S #1 (48GB) | RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic | vLLM (KServe) | Creative Producer (skeleton merge: CSS + content keys) |
 | L40S #2 (48GB) | Qwen3-32B-FP8-Dynamic | vLLM (KServe) | Delivery Manager (email gen), Customer Analyst (tool calling) |
 | L40S #3 (48GB) | FLUX.2-klein-4B | vLLM-Omni 0.18.0 (KServe) | ImageGen MCP (hero banner images) |
 
@@ -593,6 +594,7 @@ flowchart LR
 
 ```
 Code Model:  https://qwen25-coder-32b-fp8-0-marketing-assistant-demo.{CLUSTER_DOMAIN}/v1
+             (served model id: RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic)
 Lang Model:  https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.{CLUSTER_DOMAIN}/v1
 Image Model: https://flux2-klein-4b-0-marketing-assistant-demo.{CLUSTER_DOMAIN}/v1
 ```
@@ -627,9 +629,11 @@ All endpoints use kube-rbac-proxy authentication (Bearer token from ServiceAccou
 
 ### Creative Producer
 
+The Creative Producer uses the **“Bones & Beauty”** pattern: a fixed **`base_template.html`** supplies document structure and **structural CSS** that must not be overridden by the model. The LLM adopts the persona **Digital Brand Architect** and returns a **CSS style block** plus **content key-value pairs**—not a full HTML document. Post-processing merges these into the template (documented under **Creative Producer Post-Processing**).
+
 | Skill | Handler | External Calls |
 |-------|---------|----------------|
-| `generate_landing_page` | `CreativeProducerAgent.generate()` | MCP → ImageGen MCP (`generate_campaign_image`), LLM → Qwen Coder (`/v1/chat/completions`, streaming) |
+| `generate_landing_page` | `CreativeProducerAgent.generate()` | MCP → ImageGen MCP (`generate_campaign_image`); LLM → Qwen Coder (`RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic`, streaming) for theme-aware styles and copy slots (merge pipeline in **Creative Producer Post-Processing**) |
 
 ### Customer Analyst
 
@@ -684,46 +688,57 @@ app.kubernetes.io/name: <service-name>
 
 ## 13. Personalization Architecture
 
+### Campaign theme palettes
+
+Themes drive CSS variables injected during skeleton merge. Enum key `modern_black` is labeled **Modern Minimal** in the UI.
+
+| Theme | Role | Palette (hex) |
+|-------|------|----------------|
+| **Luxury Gold** | Base / gold / shimmer accent | `#0F172A` (base), `#D4AF37` (gold), `#FDE047` (shimmer) |
+| **Festive Red** | Maroon / crimson / gold | `#450A0A` (maroon), `#C41E3A` (crimson), `#B8860B` (gold) |
+| **Modern Minimal** (formerly Modern Black) | White shell / dark controls | `#FFFFFF` (background), `#0F172A` (buttons / primary text) |
+| **Classic Casino** | Emerald / amber | `#064E3B` (emerald), `#F59E0B` (amber) |
+
 ### How Personalized Landing Pages Work
 
 ```mermaid
 sequenceDiagram
     participant Browser
     participant ExpressJS as Campaign Landing (Express.js)
-    participant MCP as MongoDB MCP<br/>(marketing-assistant-v2)
+    participant MCP as MongoDB MCP<br/>(app namespace)
     participant DB as MongoDB
 
-    Browser->>ExpressJS: GET /?c=VIP-001
+    Browser->>ExpressJS: GET /?c=VIP-001 or ?c=PROSPECT-001
     ExpressJS->>ExpressJS: Read /data/template.html (ConfigMap)
     ExpressJS->>MCP: POST /mcp (initialize + tools/call)
-    Note over ExpressJS,MCP: Cross-namespace: mongodb-mcp.marketing-assistant-v2.svc:8090
-    MCP->>DB: db.customers.find()
-    DB-->>MCP: customer documents
-    MCP-->>ExpressJS: customer list (SSE format)
+    Note over ExpressJS,MCP: FQDN: mongodb-mcp.{NAMESPACE}.svc:8090 (landing pods often run in dev/prod NS)
+    MCP->>DB: Resolve VIP customers and/or prospects (tool-specific queries)
+    DB-->>MCP: Customer + prospect documents
+    MCP-->>ExpressJS: Records (SSE JSON)
+    Note over ExpressJS: VIP: real names; Prospect: "Distinguished Guest" / "Exclusive Invitee"
     Note over ExpressJS: Replace {{GREETING}}, {{CUSTOMER_TIER_BADGE}}, etc.
-    Note over ExpressJS: Catch hardcoded "Guest" patterns (fallback)
-    ExpressJS-->>Browser: Personalized HTML
+    Note over ExpressJS: Regex fallback for hardcoded "Guest" style strings
+    ExpressJS-->>Browser: Personalized HTML (English only)
 ```
 
 ### Data Flow
 
-1. **Step 1-2**: Creative Producer generates HTML with placeholders (`{{GREETING}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_FIRST_NAME}}`)
-2. **Step 1-2**: Delivery Manager deploys Express.js pod with hardcoded cross-namespace MCP URL
-3. **On page load**: Express.js fetches customer data from MongoDB MCP in real-time (no ConfigMap needed)
-4. **Step 3+**: Frontend enables VIP dropdown after email prep completes
-5. **VIP Dropdown**: User selects a customer from dropdown → opens `{url}?c=VIP-001` → sees personalized page
+1. **Step 1–2**: Creative Producer outputs merged HTML from `base_template.html` with content placeholders (`{{GREETING}}`, `{{CUSTOMER_TIER_BADGE}}`, `{{CUSTOMER_FIRST_NAME}}`, …).
+2. **Step 1–2**: Delivery Manager deploys the Express.js campaign-landing pod; it calls MongoDB MCP using a **fully qualified** in-cluster URL to the **app** namespace (default `0-marketing-assistant-demo`, overridable via `deploy.sh` / `NAMESPACE`).
+3. **On each request**: Campaign-landing loads **VIP customers** and **prospects** from MongoDB MCP (tools such as tier queries and `get_prospects`) so both audiences can be addressed by `?c=` without ConfigMap seeding of customer rows.
+4. **Step 3+**: Frontend enables recipient dropdown after email prep completes.
+5. **Dropdown**: User picks a VIP or prospect → opens `{url}?c={id}` → sees personalized copy (English only).
 
 ### Personalization Placeholders
 
-| Placeholder | Example (English) | Example (Chinese) |
-|-------------|-------------------|-------------------|
-| `{{GREETING}}` | Your Exclusive Experience Awaits, John | 约翰，您的专属体验已就绪 |
-| `{{CUSTOMER_NAME}}` | John Smith | 李明 |
-| `{{CUSTOMER_FIRST_NAME}}` | John | 李明 |
-| `{{CUSTOMER_TIER_BADGE}}` | Platinum VIP | Diamond Elite |
-| `{{CUSTOMER_TIER_BADGE_ZH}}` | 铂金贵宾 | 钻石尊享会员 |
+All visible strings are **English**. There are no `_ZH` fields or secondary-language lines.
 
-Bilingual: primary language first (larger), secondary below (smaller). Determined by `preferred_language` field.
+| Placeholder | Example |
+|-------------|---------|
+| `{{GREETING}}` | Your Exclusive Experience Awaits, John |
+| `{{CUSTOMER_NAME}}` | John Smith |
+| `{{CUSTOMER_FIRST_NAME}}` | John |
+| `{{CUSTOMER_TIER_BADGE}}` | Platinum VIP |
 
 ### Campaign Landing Service
 
@@ -731,49 +746,45 @@ Bilingual: primary language first (larger), secondary below (smaller). Determine
 - **Base**: `registry.access.redhat.com/ubi9/nodejs-18`
 - **Port**: 8080
 - **Data mount**: `/data/` (ConfigMap with `template.html`, `campaign.json`)
-- **Customer data**: Fetched from MongoDB MCP at request time (NOT from ConfigMap)
-- **MCP URL**: `http://mongodb-mcp.marketing-assistant-v2.svc:8090` (hardcoded cross-namespace, NOT from env var)
+- **VIP + prospects**: Fetched from MongoDB MCP at request time (not bulk-synced via ConfigMap)
+- **MCP URL**: `http://mongodb-mcp.{NAMESPACE}.svc:8090` with `{NAMESPACE}` = app namespace (e.g. `0-marketing-assistant-demo`). Must be FQDN from dev/prod campaign pods.
 - **MCP protocol**: Requires `Accept: application/json, text/event-stream` header, `protocolVersion: "2024-11-05"`, `clientInfo`. Responses are SSE format (parsed via `parseSseJson()`)
 - **Cache**: 60-second TTL, falls back to ConfigMap `customers.json` if MCP unavailable
 - **Routes**: `GET /` (personalized page), `GET /healthz`, `GET /readyz`
-- **Hardcoded text fallback**: `personalize()` catches LLM-hardcoded "Honored Guest" → tier name, "Guest" → first name, etc.
-- **Generic view** (no `?c=`): "Honored Guest" / "尊贵来宾"
-- **Prospect view** (`?c=PROSPECT-001`): "Exclusive Invitee" / "特邀嘉宾"
-- **Zero delay**: No pod restart needed for personalization — instant via MCP
+- **Hardcoded text fallback**: `personalize()` maps generic LLM strings (e.g. "Honored Guest", "Guest") to tier or first name when MCP data is present
+- **Generic view** (no `?c=`): e.g. "Honored Guest" (English)
+- **Prospect view** (`?c=PROSPECT-…`): **Distinguished Guest** / **Exclusive Invitee** — **no real personal names**
+- **Zero delay**: No pod restart needed for personalization — data is live from MCP
 
 ### Fake Inbox
 
 - **Route**: `/inbox` (React page, link in top nav)
-- **Default recipient**: Wei Zhang (`wei.zhang@example.com`)
-- **Pre-populated**: 3 "read" emails per known customer (membership renewal, wine tasting, suite upgrade)
-- **Campaign email**: Delivery Manager POSTs personalized email per recipient on Go Live (unread, bold)
-- **Email links**: CTA button href uses `{{campaign_link}}` placeholder, replaced per recipient with `{production_url}?c={customer_id}`
-- **API**: `GET /api/inbox?email=...`, `POST /api/inbox`, `POST /api/inbox/{id}/read` (on campaign-api)
+- **Default recipient**: **Wei Zhang** (`wei.zhang@example.com`)
+- **Pre-populated**: Three **read** emails per known customer (English-only subjects and bodies: membership renewal, wine tasting, suite upgrade)
+- **Campaign email**: Delivery Manager POSTs one personalized **English** email per recipient on Go Live (unread, bold)
+- **Email links**: CTA uses `{{campaign_link}}`, replaced per recipient with `{production_url}?c={customer_id}`
+- **API**: `GET /api/inbox?email=...`, `POST /api/inbox`, `POST /api/inbox/{id}/read` (campaign-api)
 - **Auto-refresh**: Every 10 seconds
-- **Per-VIP view**: Dropdown filter selects inbox per recipient
+- **Per-recipient view**: Dropdown filter selects inbox per recipient
 
-### Bilingual Strategy
+### Creative Producer Post-Processing (skeleton merge)
 
-- **English is always primary** (large text), Chinese is subtitle (smaller, below)
-- Greeting: "Your Exclusive Experience Awaits, John" + "约翰，您的专属体验已就绪"
-- Tier badges are split: `{{CUSTOMER_TIER_BADGE}}` = English only, `{{CUSTOMER_TIER_BADGE_ZH}}` = Chinese only
-- Never mixed within the same line
+After the LLM returns **styles + content keys** (not full HTML), the Creative Producer builds the deployable document:
 
-### Creative Producer Post-Processing
+1. **Load** `base_template.html` (fixed structure; structural CSS cannot be broken by the model).
+2. **Inject theme CSS variables** from the selected campaign theme (see **Campaign theme palettes** above).
+3. **Inject the LLM CSS style block** into the designated region (scoped to template slots).
+4. **Replace content placeholders** with LLM-provided key-value copy.
+5. **Inject the hero image URL** from ImageGen MCP (public URL) into the hero slot.
 
-After HTML generation, the Creative Producer injects fixes before deployment:
-1. **Hero image**: `HERO_IMAGE_PLACEHOLDER` → actual public image URL
-2. **Overflow safety CSS**: Minimal `<style id="overflow-safety">` with `overflow-x: hidden` and `max-width: 100vw` — prevents horizontal scroll without breaking LLM layouts
-3. **Proofreading**: LLM prompt instructs fixing typos/capitalization in campaign names
-
-**Note:** Previous attempts at comprehensive CSS injection (wildcard selectors like `[class*="nav"]`, `[class*="grid"]`) caused severe layout conflicts. Keep post-processing minimal — all layout rules belong in the prompt.
+**Note:** Avoid injecting broad wildcard CSS (e.g. `[class*="nav"]`) after merge — layout integrity comes from the template + LLM-scoped styles. A minimal overflow safety rule is acceptable when it does not fight template layout.
 
 ### Frontend VIP Preview
 
-- **Dropdown selector** (not buttons) — scales to any number of customers
-- **Personalization readiness polling**: after email prep, frontend polls `{preview_url}?c=VIP-001` every 5 seconds until `{{GREETING}}` placeholder is gone (Express.js pod has restarted with customer data)
-- **Dynamic QR code**: updates when a VIP is selected from dropdown
-- **Disabled state**: dropdown is greyed out with "Syncing..." spinner until personalization is confirmed ready
+- **Dropdown selector** (not buttons) — scales to any number of customers and prospects
+- **Personalization readiness polling**: after email prep, frontend polls `{preview_url}?c=…` until rendered HTML no longer shows raw `{{…}}` placeholders (MCP-backed data, no dependency on ConfigMap restarts)
+- **Dynamic QR code**: updates when a recipient is selected from the dropdown
+- **Disabled state**: dropdown is greyed out with a "Syncing…" spinner until personalization is confirmed ready
 
 ---
 
@@ -835,7 +846,8 @@ k8s/
 ```bash
 # Edit secret.yaml with your model tokens first
 oc apply -k k8s/overlays/dev
-oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
+# Use the same namespace as deploy.sh (default 0-marketing-assistant-demo)
+oc exec deployment/mongodb-mcp -n 0-marketing-assistant-demo -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py
 ```
 
 ### Base Images
@@ -843,6 +855,15 @@ oc exec deployment/mongodb-mcp -- env MONGODB_URI=mongodb://mongodb:27017 python
 All Python services: `registry.access.redhat.com/ubi9/python-311:latest`
 Campaign Landing: `registry.access.redhat.com/ubi9/nodejs-18:latest`
 Frontend: `nginxinc/nginx-unprivileged:alpine` (prebuilt React)
+
+### Operational scripts
+
+| Script | Purpose |
+|--------|---------|
+| `deploy.sh` | Interactive OpenShift deploy; honors `NAMESPACE` (default `0-marketing-assistant-demo`), writes dev/prod namespace names, patches Kustomize and RBAC, applies manifests, optional guardrails |
+| `update-app.sh` | Restarts core app Deployments in `NAMESPACE`, waits for rollouts, re-runs MongoDB seed via `mongodb-mcp` |
+| `reset-demo.sh` | Deletes preview/prod campaign Deployments/Routes/ConfigMaps (keeps `campaign-basic-preview` in dev by default), restarts services to clear in-memory state |
+| `seed-basic-campaign.sh` | Applies a static nginx “basic campaign” preview into `DEV_NS` (default `0-marketing-assistant-demo-dev`) from `k8s/basic-campaign.html` |
 
 ---
 
@@ -854,7 +875,7 @@ All campaign content passes through 4 guardrail layers before creation:
 
 ```mermaid
 flowchart TD
-    User["User clicks Next"] --> Regex["Layer 1: Regex\n(competitor names)"]
+    User["User clicks Next"] --> Regex["Layer 1: Regex\n(fictional competitors)"]
     Regex -->|instant| HAP["Layer 2: TrustyAI HAP\n(Granite Guardian, CPU)"]
     HAP -->|~100ms| PI["Layer 3: TrustyAI Prompt Injection\n(DeBERTa v3, CPU)"]
     PI -->|~100ms| Policy["Layer 4: Policy Guardian\n(Qwen3 A2A Agent)"]
@@ -867,14 +888,14 @@ flowchart TD
 
 | Layer | Detector | Location | Resources |
 |-------|----------|----------|-----------|
-| 1. Regex | Competitor names pattern | Campaign API (in-code) | None |
-| 2. HAP | Granite Guardian 125M | KServe InferenceService (CPU) | 4-8GB RAM |
-| 3. Prompt Injection | DeBERTa v3 | KServe InferenceService (CPU) | 16-24GB RAM |
+| 1. Regex | Fictional competitor-name patterns (e.g. Jennifer Casino Resort) | Campaign API (in-code) | None |
+| 2. HAP | Granite Guardian 125M | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
+| 3. Prompt Injection | DeBERTa v3 | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
 | 4. Policy Guardian | Qwen3-32B (A2A agent) | Reuses L40S #2 | No extra GPU |
 
 ### TrustyAI Components
 
-Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guardrails/`:
+Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guardrails/`. **HAP and Prompt Injection detector InferenceServices are CPU-only** (no `nvidia.com/gpu` resource requests).
 
 | Component | Purpose |
 |-----------|---------|
@@ -912,7 +933,7 @@ Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guard
 | # | Agent | Port | Model | Protocol | Purpose |
 |---|-------|------|-------|----------|---------|
 | 1 | Campaign Director | 8080 | — (orchestration) | A2A | LangGraph workflow coordination |
-| 2 | Creative Producer | 8081 | Qwen Coder (L40S #1) | A2A | AI image + HTML landing page |
+| 2 | Creative Producer | 8081 | RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic (L40S #1) | A2A | AI image + Bones & Beauty skeleton merge |
 | 3 | Customer Analyst | 8082 | Qwen3 (L40S #2) | A2A + MCP | LLM tool calling for customer DB |
 | 4 | Delivery Manager | 8083 | Qwen3 (L40S #2) | A2A | Email gen + K8s deployment |
 | 5 | Policy Guardian | 8084 | Qwen3 (L40S #2) | A2A | Business policy validation |

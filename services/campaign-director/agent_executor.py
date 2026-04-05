@@ -19,9 +19,12 @@ class CampaignDirectorExecutor(AgentExecutor):
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         user_input = context.get_user_input()
-        params = json.loads(user_input)
-
-        skill = params.pop("skill", "create_campaign")
+        try:
+            params = json.loads(user_input)
+            skill = params.pop("skill", "create_campaign")
+        except (json.JSONDecodeError, TypeError):
+            params = {"text": user_input}
+            skill = "chat"
 
         task = context.current_task
         if task is None:

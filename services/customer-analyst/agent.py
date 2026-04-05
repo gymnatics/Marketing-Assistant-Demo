@@ -106,10 +106,13 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
         print(f"[Customer Analyst] Failed to publish event: {e}")
 
 
-async def call_mcp_tool(tool_name: str, arguments: dict) -> list:
+async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
     """Call a tool on the MongoDB MCP server via proper MCP protocol."""
     from fastmcp import Client
-    async with Client(f"{MONGODB_MCP_URL}/mcp") as mcp_client:
+    client_kwargs = {}
+    if auth_headers:
+        client_kwargs["headers"] = auth_headers
+    async with Client(f"{MONGODB_MCP_URL}/mcp", **client_kwargs) as mcp_client:
         result = await mcp_client.call_tool(tool_name, arguments)
         if result and result.content:
             return json.loads(result.content[0].text)

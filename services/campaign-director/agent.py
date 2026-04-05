@@ -61,7 +61,7 @@ class CampaignState(TypedDict):
     messages: Annotated[list, operator.add]
 
 
-async def call_a2a_agent(agent_url: str, skill: str, params: dict) -> dict:
+async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: str = "") -> dict:
     """Call an A2A agent via JSON-RPC (a2a-sdk protocol)."""
     from a2a.client import A2AClient
     from a2a.types import MessageSendParams, SendMessageRequest, TextPart, Part
@@ -76,7 +76,10 @@ async def call_a2a_agent(agent_url: str, skill: str, params: dict) -> dict:
     request = SendMessageRequest(id=str(uuid.uuid4()), params=message_params)
 
     timeout = httpx.Timeout(connect=30.0, read=600.0, write=30.0, pool=30.0)
-    async with httpx.AsyncClient(timeout=timeout) as httpx_client:
+    headers = {}
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}" if not auth_token.startswith("Bearer") else auth_token
+    async with httpx.AsyncClient(timeout=timeout, headers=headers) as httpx_client:
         client = A2AClient(httpx_client=httpx_client, url=agent_url)
         response = await client.send_message(request)
 
@@ -470,8 +473,23 @@ class CampaignDirectorAgent:
             return await self._prepare_email_preview(params)
         elif skill == "go_live":
             return await self._go_live(params)
+        elif skill == "chat":
+            return self._handle_chat(params)
         else:
             return {"error": f"Unknown skill: {skill}"}
+
+    def _handle_chat(self, params: dict) -> dict:
+        text = params.get("text", "")
+        campaigns = list(campaigns_store.values())
+        summary = f"I'm the Campaign Director for Simon Casino Resort. I orchestrate marketing campaign creation using AI agents.\n\n"
+        if campaigns:
+            summary += f"Currently managing {len(campaigns)} campaign(s):\n"
+            for c in campaigns[-5:]:
+                summary += f"- {c.campaign_name} ({c.status.value})\n"
+        else:
+            summary += "No active campaigns. Use the Campaign Wizard UI to create one, or send structured parameters.\n"
+        summary += f"\nAvailable skills: create_campaign, generate_landing_page, prepare_email_preview, go_live"
+        return {"response": summary}
 
     async def _create_campaign(self, params: dict) -> dict:
         req = CampaignRequest(**params)

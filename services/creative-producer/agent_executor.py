@@ -19,7 +19,12 @@ class CreativeProducerExecutor(AgentExecutor):
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         user_input = context.get_user_input()
-        params = json.loads(user_input)
+        try:
+            params = json.loads(user_input)
+        except (json.JSONDecodeError, TypeError):
+            params = {"campaign_name": "Chat Request", "campaign_description": user_input,
+                      "hotel_name": "Simon Casino Resort", "theme": "luxury_gold",
+                      "start_date": "2026-05-01", "end_date": "2026-06-01"}
 
         task = context.current_task
         if task is None:
