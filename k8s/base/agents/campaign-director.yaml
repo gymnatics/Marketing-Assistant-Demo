@@ -59,7 +59,8 @@ metadata:
   name: campaign-director
 spec:
   ports:
-  - port: 8080
+  - name: a2a
+    port: 8080
     targetPort: 8080
   selector:
     app: campaign-director

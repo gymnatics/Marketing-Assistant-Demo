@@ -61,5 +61,9 @@ spec:
   selector:
     app: policy-guardian
   ports:
-    - port: 8084
+    - name: a2a
+      port: 8080
+      targetPort: 8084
+    - name: original
+      port: 8084
       targetPort: 8084
