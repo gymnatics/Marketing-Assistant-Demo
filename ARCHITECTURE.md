@@ -1,8 +1,8 @@
 # Architecture Document
 # Marketing Campaign Assistant v2 — Microservices Architecture
 
-**Version:** 5.0  
-**Last Updated:** April 3, 2026  
+**Version:** 6.0  
+**Last Updated:** April 5, 2026  
 **Platform:** Red Hat OpenShift AI 3.3
 
 ---
@@ -21,6 +21,7 @@
 10. [Frontend Architecture](#10-frontend-architecture)
 11. [GPU & Model Assignment](#11-gpu--model-assignment)
 12. [Detailed Service Reference](#12-detailed-service-reference)
+18. [KAgenti Integration](#18-kagenti-integration)
 
 ---
 
@@ -33,7 +34,7 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | Protocol | Purpose | Implementation |
 |----------|---------|----------------|
 | **A2A** (Agent-to-Agent) | Inter-agent communication | `a2a-sdk` JSON-RPC 2.0 over HTTP |
-| **MCP** (Model Context Protocol) | Tool access (database, image gen) | FastMCP streamable-http transport |
+| **MCP** (Model Context Protocol) | Tool access (database, image gen) | FastMCP 3.x http transport |
 | **OpenAI API** | LLM inference (Qwen models) | vLLM-compatible `/v1/chat/completions` |
 | **SSE** (Server-Sent Events) | Real-time UI updates | Flask-based Event Hub |
 
@@ -41,26 +42,26 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 
 ## 2. Service Inventory
 
-| Service | Port | Technology | Role |
-|---------|------|------------|------|
-| **Frontend** | 8080 (nginx) | React 18, TypeScript, nginx | Static SPA + API/SSE proxy |
-| **Campaign API** | 5000 | Flask, Flask-CORS | REST gateway, A2A client to Director |
-| **Event Hub** | 5001 | Flask | SSE pub/sub for real-time agent status |
-| **Campaign Director** | 8080 | a2a-sdk, LangGraph, Starlette | Orchestrator, workflow coordination |
-| **Creative Producer** | 8081 | a2a-sdk, FastMCP Client | “Bones & Beauty” skeleton template merge (theme CSS + LLM content) |
-| **Customer Analyst** | 8082 | a2a-sdk, FastMCP Client, Qwen3 | LLM-driven customer retrieval via MCP |
-| **Delivery Manager** | 8083 | a2a-sdk, Kubernetes client | Email generation + K8s deployment |
-| **Policy Guardian** | 8084 | a2a-sdk, Qwen3 | Business policy validation |
-| **MongoDB MCP** | 8090 | FastMCP streamable-http | Customer database tools |
-| **ImageGen MCP** | 8091 | FastMCP hybrid + Starlette | AI image generation + serving |
-| **Campaign Landing** | 8080 (per-campaign) | Express.js, UBI9 Node 18 | Personalized landing pages (?c=VIP-001) |
-| **TrustyAI HAP Detector** | 8000 | Granite Guardian 125M (CPU) | Hate/abuse/profanity detection |
-| **TrustyAI Prompt Injection** | 8000 | DeBERTa v3 (CPU) | Prompt injection detection |
-| **GuardrailsOrchestrator** | 8032 | fms-guardrails-orchestrator | Detector coordination |
-| **MongoDB** | 27017 | mongo:7 | Customer/prospect database |
-| **vLLM (Qwen Coder)** | KServe | vLLM, L40S #1 | Style block + content key-values (skeleton merge) |
-| **vLLM (Qwen3)** | KServe | vLLM, L40S #2 | Email gen + tool calling |
-| **vLLM-Omni (FLUX.2)** | KServe | vLLM-Omni 0.18.0, L40S #3 | Image generation |
+| Service | Port | K8s a2a Port | KAgenti Labels | Technology | Role |
+|---------|------|--------------|----------------|------------|------|
+| **Frontend** | 8080 (nginx) | — | — | React 18, TypeScript, nginx | Static SPA + API/SSE proxy |
+| **Campaign API** | 5000 | — | — | Flask, Flask-CORS | REST gateway, A2A client to Director |
+| **Event Hub** | 5001 | — | — | Flask | SSE pub/sub for real-time agent status |
+| **Campaign Director** | 8080 | 8080 | agent, LangGraph | a2a-sdk, LangGraph, Starlette | Orchestrator, workflow coordination |
+| **Creative Producer** | 8081 | 8080 | agent, custom | a2a-sdk, FastMCP Client | Bones & Beauty skeleton template merge |
+| **Customer Analyst** | 8082 | 8080 | agent, custom | a2a-sdk, FastMCP Client, Qwen3 | LLM-driven customer retrieval via MCP |
+| **Delivery Manager** | 8083 | 8080 | agent, custom | a2a-sdk, Kubernetes client | Email generation + K8s deployment |
+| **Policy Guardian** | 8084 | 8080 | agent, custom | a2a-sdk, Qwen3 | Business policy validation |
+| **MongoDB MCP** | 8090 | — | tool, MCP, streamable_http | FastMCP 3.x http | Customer database tools |
+| **ImageGen MCP** | 8091 | — | tool, MCP, streamable_http | FastMCP 3.x hybrid + Starlette | AI image generation + serving |
+| **Campaign Landing** | 8080/pod | — | — | Express.js, UBI9 Node 18 | Personalized landing pages (?c=VIP-001) |
+| **TrustyAI HAP Detector** | 8000 | — | — | Granite Guardian 125M (CPU) | Hate/abuse/profanity detection |
+| **TrustyAI Prompt Injection** | 8000 | — | — | DeBERTa v3 (CPU) | Prompt injection detection |
+| **GuardrailsOrchestrator** | 8032 | — | — | fms-guardrails-orchestrator | Detector coordination |
+| **MongoDB** | 27017 | — | — | mongo:7 | Customer/prospect database |
+| **vLLM (Qwen Coder)** | KServe | — | — | vLLM, L40S #1 | Style block + content key-values (skeleton merge) |
+| **vLLM (Qwen3)** | KServe | — | — | vLLM, L40S #2 | Email gen + tool calling |
+| **vLLM-Omni (FLUX.2)** | KServe | — | — | vLLM-Omni 0.18.0, L40S #3 | Image generation |
 
 ---
 
@@ -320,7 +321,7 @@ sequenceDiagram
 
 ### Transport: Streamable-HTTP
 
-Both MCP servers use FastMCP's `streamable-http` transport at `/mcp`.
+Both MCP servers use FastMCP 3.x's `http` transport at `/mcp` (Streamable HTTP protocol).
 
 ### MCP Client-Server Communication
 
@@ -673,16 +674,27 @@ The Creative Producer uses the **“Bones & Beauty”** pattern: a fixed **`base
 | `GET /images/{id}.png` | Serve generated images from in-memory store |
 | `GET /health` | Health check with stored image count |
 
-### KAgent Discovery Labels
+### KAgenti Discovery Labels
 
-Both MCP deployments carry these labels for KAgent integration:
+All agent and MCP deployments carry labels for [KAgenti](https://github.com/kagenti/kagenti) discovery:
 
+**A2A Agents:**
+```yaml
+kagenti.io/type: agent
+protocol.kagenti.io/a2a: ""
+kagenti.io/framework: LangGraph   # Campaign Director
+kagenti.io/framework: custom      # all other agents
+```
+
+**MCP Tool Servers:**
 ```yaml
 kagenti.io/type: tool
 protocol.kagenti.io/mcp: ""
 kagenti.io/transport: streamable_http
 app.kubernetes.io/name: <service-name>
 ```
+
+See [Section 18: KAgenti Integration](#18-kagenti-integration) for full details on port normalization, security schemes, dual-mode input, and role-based access control.
 
 ---
 
@@ -940,8 +952,133 @@ Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guard
 
 | # | MCP Server | Port | Transport | Purpose |
 |---|------------|------|-----------|---------|
-| 1 | MongoDB MCP | 8090 | streamable-http | Customer database tools |
-| 2 | ImageGen MCP | 8091 | streamable-http (hybrid) | AI image generation + serving |
+| 1 | MongoDB MCP | 8090 | http (Streamable HTTP) | Customer database tools |
+| 2 | ImageGen MCP | 8091 | http (hybrid + Starlette) | AI image generation + serving |
+
+---
+
+## 18. KAgenti Integration
+
+[KAgenti](https://github.com/kagenti/kagenti) is a Kubernetes-native agent management framework that discovers and catalogs A2A agents and MCP tools via Kubernetes labels. This section documents all integration points.
+
+### Discovery Labels
+
+All agent and MCP deployments carry labels on `Deployment.metadata.labels`:
+
+| Service | `kagenti.io/type` | Protocol Label | `kagenti.io/framework` | `kagenti.io/transport` |
+|---------|-------------------|----------------|------------------------|------------------------|
+| Campaign Director | `agent` | `protocol.kagenti.io/a2a: ""` | `LangGraph` | — |
+| Creative Producer | `agent` | `protocol.kagenti.io/a2a: ""` | `custom` | — |
+| Customer Analyst | `agent` | `protocol.kagenti.io/a2a: ""` | `custom` | — |
+| Delivery Manager | `agent` | `protocol.kagenti.io/a2a: ""` | `custom` | — |
+| Policy Guardian | `agent` | `protocol.kagenti.io/a2a: ""` | `custom` | — |
+| MongoDB MCP | `tool` | `protocol.kagenti.io/mcp: ""` | — | `streamable_http` |
+| ImageGen MCP | `tool` | `protocol.kagenti.io/mcp: ""` | — | `streamable_http` |
+
+### Service Port Normalization
+
+KAgenti expects A2A agents on port **8080**. Each agent's K8s Service exposes a named `a2a` port at 8080 that maps to the container's actual port:
+
+```yaml
+# Example: creative-producer Service
+spec:
+  ports:
+  - name: a2a
+    port: 8080
+    targetPort: 8081      # container runs on 8081
+  - name: original
+    port: 8081
+    targetPort: 8081      # backward compat for internal A2A calls
+```
+
+| Agent | Container Port | K8s Service `a2a` (8080 →) |
+|-------|---------------|---------------------------|
+| Campaign Director | 8080 | 8080 (native) |
+| Creative Producer | 8081 | 8080 → 8081 |
+| Customer Analyst | 8082 | 8080 → 8082 |
+| Delivery Manager | 8083 | 8080 → 8083 |
+| Policy Guardian | 8084 | 8080 → 8084 |
+
+### Agent Card Discovery
+
+All agents register two discovery endpoints:
+- `GET /.well-known/agent.json` — a2a-sdk auto-generated (standard A2A)
+- `GET /.well-known/agent-card.json` — explicit Starlette route (KAgenti compatibility)
+
+The `url` field uses `os.getenv("AGENT_ENDPOINT", f"http://0.0.0.0:{port}")` so KAgenti can inject the agent's cluster-resolvable URL.
+
+### Security Schemes
+
+All five agent cards declare a Bearer JWT security scheme:
+
+```python
+from a2a.types import SecurityScheme, HTTPAuthSecurityScheme
+
+securitySchemes={
+    "Bearer": SecurityScheme(root=HTTPAuthSecurityScheme(
+        type="http", scheme="bearer", bearerFormat="JWT",
+        description="OAuth 2.0 JWT token"
+    ))
+}
+```
+
+This advertises the expected authentication mechanism. Token validation is handled by the platform (OpenShift OAuth proxy or KAgenti auth).
+
+### Dual-Mode Input (Structured + Chat)
+
+Each agent executor supports both JSON skill dispatch (from Campaign API / Director) and plain-text natural language (from KAgenti chat UI):
+
+```mermaid
+flowchart TD
+    Input["User Input"] --> Parse{json.loads?}
+    Parse -->|JSON| Skill["Extract 'skill' key → dispatch"]
+    Parse -->|Plain text| Chat["Fallback behavior"]
+```
+
+| Agent | JSON Path | Plain-Text Fallback |
+|-------|-----------|---------------------|
+| Campaign Director | `skill` + params → LangGraph dispatch | `chat` skill → conversational campaign summary |
+| Creative Producer | Full params → generate landing page | Text used as `campaign_description`, defaults filled |
+| Customer Analyst | Full params → MCP tool calling | Text used as `target_audience` |
+| Policy Guardian | Full params → validate campaign | Text used as both `campaign_name` and `campaign_description` |
+| Delivery Manager | `skill` + params → skill dispatch | Returns guidance message (structured input required) |
+
+### MongoDB MCP Role-Based Access
+
+The MongoDB MCP server includes KAgenti-aware tier filtering via `allowed_tiers`:
+
+```python
+TIER_SCOPES = {
+    "tier-admin":    ["diamond", "platinum", "gold"],
+    "tier-diamond":  ["diamond", "platinum", "gold"],
+    "tier-platinum": ["platinum", "gold"],
+    "tier-gold":     ["gold"],
+}
+
+@mcp.tool
+def get_all_vip_customers(limit: int = 100, allowed_tiers: str = "") -> List[dict]:
+    # Empty string = no filter (backward compatible with direct usage)
+    # Role string from KAgenti = scoped to matching tiers
+```
+
+### KAgenti Chat Flow
+
+```mermaid
+sequenceDiagram
+    participant K as KAgenti Dashboard
+    participant Svc as K8s Service (:8080)
+    participant Agent as Agent Executor
+
+    K->>Svc: Discover via kagenti.io labels
+    K->>Svc: GET /.well-known/agent-card.json
+    Svc-->>K: AgentCard (skills, securitySchemes)
+
+    K->>Svc: POST / (A2A JSON-RPC, plain text message)
+    Svc->>Agent: execute(context)
+    Note over Agent: json.loads fails → chat fallback
+    Agent-->>Svc: Conversational response
+    Svc-->>K: A2A artifact (text)
+```
 
 ---
 

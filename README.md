@@ -1,6 +1,6 @@
 # Simon Casino Resort — AI Campaign Manager
 
-A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI. Generates personalized luxury landing pages, bilingual email campaigns, and AI hero images — all orchestrated by autonomous agents.
+A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI. Generates personalized luxury landing pages, marketing email campaigns, and AI hero images — all orchestrated by autonomous agents. Fully integrated with [KAgenti](https://github.com/kagenti/kagenti) for Kubernetes-native agent discovery and chat-based interaction.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ When a user creates a campaign, here's what happens under the hood:
 
 **2. Customer Retrieval** — The Customer Analyst sends the target audience (e.g., "Platinum members") to Qwen3 on GPU #2, which uses function calling to pick the right MongoDB MCP tool (`get_customers_by_tier`, `get_prospects`, etc.). The MCP server queries the real MongoDB database and returns customer profiles.
 
-**3. Email Generation** — The Delivery Manager calls Qwen3 to write bilingual email content with `{{campaign_link}}` placeholders. On Go Live, each recipient's link is replaced with their personalized URL (`?c=VIP-001`), and emails are posted to the fake inbox.
+**3. Email Generation** — The Delivery Manager calls Qwen3 to write email content (English only) with `{{campaign_link}}` placeholders. On Go Live, each recipient's link is replaced with their personalized URL (`?c=VIP-001`), and emails are posted to the fake inbox.
 
 **4. Personalization** — Each campaign landing page is an Express.js pod that, on every page load, calls MongoDB MCP in real-time (cross-namespace) to fetch the customer data for the `?c=` query parameter. Same page, different URL — completely different personalized experience.
 
@@ -86,7 +86,7 @@ When a user creates a campaign, here's what happens under the hood:
 |------|----|----------|---------|
 | Frontend | Campaign API | REST | Standard web API |
 | Campaign API | Agents | A2A (JSON-RPC) | Standardized agent communication |
-| Agents | MCP Servers | MCP (streamable-http) | Standardized tool access |
+| Agents | MCP Servers | MCP (http / Streamable HTTP) | Standardized tool access |
 | Agents | LLMs (Qwen, FLUX) | OpenAI API (streaming) | vLLM-compatible inference |
 | Agents | Event Hub | HTTP POST | Publish real-time status updates |
 | Event Hub | Frontend | SSE | Push agent activity to browser |
@@ -105,8 +105,8 @@ When a user creates a campaign, here's what happens under the hood:
 | Customer Analyst | 8082 | LLM-driven customer retrieval via MCP |
 | Delivery Manager | 8083 | Email generation + K8s deployment |
 | Policy Guardian | 8084 | Business policy validation (Qwen3 A2A agent) |
-| MongoDB MCP | 8090 | Customer database tools (FastMCP streamable-http) |
-| ImageGen MCP | 8091 | AI image generation + serving (FastMCP hybrid) |
+| MongoDB MCP | 8090 | Customer database tools (FastMCP 3.x) |
+| ImageGen MCP | 8091 | AI image generation + serving (FastMCP 3.x hybrid) |
 | Campaign Landing | 8080/pod | Per-campaign Express.js personalized landing pages |
 | MongoDB | 27017 | Customer/prospect database |
 
@@ -120,6 +120,7 @@ When a user creates a campaign, here's what happens under the hood:
 - **Gmail-Style Inbox** — Fake inbox shows personalized emails per recipient with campaign QR codes
 - **Real-Time Agent Status** — SSE streaming shows agent activity during generation
 - **Preview Before Commit** — Review landing page, emails, and recipients before going live
+- **KAgenti Integration** — All agents discoverable via Kubernetes labels, with Bearer JWT security schemes, dual-mode input (structured + chat), and role-based MCP access
 
 ## Getting Started
 
@@ -222,7 +223,7 @@ flowchart LR
 3. **Select Theme** — Visual style picker (Luxury Gold, Festive Red, Modern Black, Classic Casino)
 4. **Generate Landing Page** — AI generates hero image (FLUX.2) + HTML/CSS (Qwen Coder), deploys preview pod
 5. **Preview + Personalize** — Review landing page, select VIP from dropdown for personalized preview
-6. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (EN + ZH)
+6. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (English only)
 7. **Review** — Email preview, recipient list, campaign summary
 8. **Go Live** — Deploy to production, send personalized emails to fake inbox
 
@@ -254,18 +255,30 @@ flowchart TD
 - **No restart needed** — user edits the input and retries on the same screen
 - **Policy Guardian** validates business rules: no unrealistic discounts (>50%), professional tone, no misleading promises
 
+## KAgenti Integration
+
+All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/kagenti/kagenti) — a Kubernetes-native agent management framework:
+
+- **Auto-Discovery** — Agents carry `kagenti.io/type: agent` + `protocol.kagenti.io/a2a` labels; MCP servers carry `kagenti.io/type: tool` + `protocol.kagenti.io/mcp` labels
+- **Uniform Port** — All agent K8s Services expose port `8080` (named `a2a`) regardless of container port, enabling standard KAgenti discovery
+- **Agent Cards** — `GET /.well-known/agent-card.json` on all agents (securitySchemes, skills, capabilities)
+- **Security** — Bearer JWT `securitySchemes` declared on all AgentCards
+- **Chat Mode** — Agents accept both structured JSON (programmatic A2A) and plain-text natural language (KAgenti dashboard chat)
+- **Role-Based Access** — MongoDB MCP supports `allowed_tiers` for scoped customer data access
+
 ## Technology Stack
 
 - **Frontend**: React 18, TypeScript, Headless UI, Heroicons
 - **API Gateway**: Flask 3.0, Flask-CORS
 - **Agent Protocol**: A2A SDK 0.3.25 (JSON-RPC 2.0, `a2a-sdk[http-server]`)
-- **MCP Transport**: FastMCP 2.12+ (streamable-http at `/mcp`)
+- **MCP Transport**: FastMCP 3.x (Streamable HTTP at `/mcp`)
 - **Orchestration**: LangGraph 0.2+, LangChain 0.2+
 - **LLM Inference**: vLLM on RHOAI (Qwen2.5-Coder-32B, Qwen3-32B)
 - **Image Generation**: vLLM-Omni 0.18.0 (FLUX.2-klein-4B)
 - **Guardrails**: TrustyAI (Granite Guardian, DeBERTa v3) + Policy Guardian (Qwen3)
 - **Database**: MongoDB 7
 - **Landing Pages**: Express.js on UBI9 Node 18 (personalized via MCP)
+- **Agent Management**: KAgenti (Kubernetes-native agent discovery + catalog)
 - **Platform**: Red Hat OpenShift AI 3.3, 3x NVIDIA L40S GPUs
 
 ## Models
@@ -307,6 +320,6 @@ flowchart TD
 
 ## Documentation
 
-For deeper technical details — sequence diagrams, A2A/MCP protocol flows, LangGraph workflows, K8s deployment internals, personalization architecture, and observability — see:
+For deeper technical details — sequence diagrams, A2A/MCP protocol flows, LangGraph workflows, KAgenti integration, K8s deployment internals, personalization architecture, and observability — see:
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow, including KAgenti discovery, security schemes, and dual-mode input

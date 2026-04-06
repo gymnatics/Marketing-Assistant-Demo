@@ -411,4 +411,4 @@ if __name__ == "__main__":
 
     print(f"[MongoDB MCP] Starting streamable-http MCP server on 0.0.0.0:{args.port}")
     print(f"[MongoDB MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=args.port)
+    mcp.run(transport="http", host="0.0.0.0", port=args.port)

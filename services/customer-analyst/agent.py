@@ -109,10 +109,16 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
 async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
     """Call a tool on the MongoDB MCP server via proper MCP protocol."""
     from fastmcp import Client
-    client_kwargs = {}
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    mcp_url = f"{MONGODB_MCP_URL}/mcp"
     if auth_headers:
-        client_kwargs["headers"] = auth_headers
-    async with Client(f"{MONGODB_MCP_URL}/mcp", **client_kwargs) as mcp_client:
+        transport = StreamableHttpTransport(url=mcp_url, headers=auth_headers)
+        client = Client(transport)
+    else:
+        client = Client(mcp_url)
+
+    async with client as mcp_client:
         result = await mcp_client.call_tool(tool_name, arguments)
         if result and result.content:
             return json.loads(result.content[0].text)
