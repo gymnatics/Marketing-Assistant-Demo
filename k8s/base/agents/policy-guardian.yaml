@@ -7,7 +7,7 @@ metadata:
     component: agent
     kagenti.io/type: agent
     protocol.kagenti.io/a2a: ""
-    kagenti.io/framework: custom
+    kagenti.io/framework: Python
 spec:
   strategy:
     type: Recreate
