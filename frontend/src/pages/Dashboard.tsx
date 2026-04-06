@@ -8,6 +8,7 @@ interface Campaign {
   status: string;
   target_audience: string;
   theme: string;
+  hero_image_url?: string;
   hotel_name?: string;
   start_date?: string;
   end_date?: string;
@@ -180,20 +181,29 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         {campaigns.map((campaign) => {
           const status = statusConfig[campaign.status] || statusConfig.draft;
-          const image = themeImages[campaign.theme] || themeImages.luxury_gold;
+          const image = campaign.hero_image_url || themeImages[campaign.theme] || themeImages.luxury_gold;
           
           return (
             <div 
               key={campaign.id} 
               onClick={() => navigate(`/campaign/${campaign.id}`)}
-              className="bg-surface-container-lowest rounded-[2rem] overflow-hidden flex flex-col group transition-all duration-300 hover:scale-[1.01] cursor-pointer"
+              className="bg-surface-container-lowest rounded-[2rem] overflow-hidden flex flex-col group transition-all duration-300 hover:scale-[1.01] cursor-pointer shadow-[0_18px_40px_-24px_rgba(15,23,42,0.35)]"
             >
-              <div className="h-48 w-full relative">
-                <img 
-                  className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-500" 
-                  src={image} 
-                  alt={campaign.campaign_name} 
-                />
+              <div className="relative overflow-hidden bg-[linear-gradient(135deg,#f8fafc_0%,#e2e8f0_100%)] px-6 pt-6">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.8),transparent_45%)]" />
+                <div className="absolute inset-x-6 top-6 h-[1px] bg-white/70" />
+                <div className="relative mx-auto h-52 w-full max-w-[30rem] rotate-[-1.5deg] rounded-[1.75rem] border border-black/5 bg-white p-3 shadow-[0_26px_50px_-30px_rgba(15,23,42,0.45)] transition-transform duration-500 group-hover:rotate-0 group-hover:scale-[1.01]">
+                  <div className="absolute left-6 top-4 h-6 w-14 rounded-full bg-white/75 shadow-sm backdrop-blur-sm" />
+                  <div className="absolute right-6 top-4 h-6 w-14 rounded-full bg-white/65 shadow-sm backdrop-blur-sm" />
+                  <div className="relative h-full w-full overflow-hidden rounded-[1.1rem] bg-slate-950">
+                    <img 
+                      className="h-full w-full object-cover transition-all duration-700 group-hover:scale-105" 
+                      src={image} 
+                      alt={campaign.campaign_name} 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-950/5 to-white/10" />
+                  </div>
+                </div>
                 <div className="absolute top-6 left-6 flex gap-2">
                   <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-sm ${status.color}`}>
                     {status.label}
@@ -203,6 +213,9 @@ export default function Dashboard() {
                       Priority
                     </span>
                   )}
+                </div>
+                <div className="relative px-2 pb-6 pt-4 text-[10px] font-bold uppercase tracking-[0.28em] text-on-surface-variant/70">
+                  Campaign Snapshot
                 </div>
               </div>
               <div className="p-8 flex flex-col flex-1">

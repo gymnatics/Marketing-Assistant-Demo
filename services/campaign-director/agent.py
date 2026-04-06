@@ -49,6 +49,7 @@ class CampaignState(TypedDict):
     end_date: str
     status: str
     landing_page_html: str
+    hero_image_url: str
     preview_url: str
     production_url: str
     email_subject_en: str
@@ -168,6 +169,7 @@ async def generate_landing_page_node(state: CampaignState) -> CampaignState:
         state["status"] = "failed"
     else:
         state["landing_page_html"] = result.get("html", "")
+        state["hero_image_url"] = result.get("hero_image_url", "") or ""
         state["messages"] = [{"role": "assistant", "agent": "Creative Producer",
                               "content": "Landing page generated successfully"}]
     return state
@@ -373,7 +375,7 @@ async def _run_landing_page_workflow(campaign_id: str, campaign):
             "start_date": campaign.start_date,
             "end_date": campaign.end_date,
             "status": "generating",
-            "landing_page_html": "", "preview_url": "", "production_url": "",
+            "landing_page_html": "", "hero_image_url": "", "preview_url": "", "production_url": "",
             "email_subject_en": "", "email_body_en": "",
             "email_subject_zh": "", "email_body_zh": "",
             "customer_list": [], "customer_count": 0,
@@ -382,6 +384,7 @@ async def _run_landing_page_workflow(campaign_id: str, campaign):
         workflow = build_landing_page_workflow()
         final_state = await workflow.ainvoke(initial_state)
         campaign.landing_page_html = final_state.get("landing_page_html", "")
+        campaign.hero_image_url = final_state.get("hero_image_url", "") or None
         campaign.preview_url = final_state.get("preview_url", "")
         campaign.status = CampaignStatus(final_state.get("status", "preview_ready"))
         campaign.error_message = final_state.get("error_message")
@@ -404,6 +407,7 @@ async def _run_email_preview_workflow(campaign_id: str, campaign):
             "end_date": campaign.end_date,
             "status": campaign.status.value,
             "landing_page_html": campaign.landing_page_html or "",
+            "hero_image_url": campaign.hero_image_url or "",
             "preview_url": campaign.preview_url or "",
             "production_url": campaign.production_url or "",
             "email_subject_en": "", "email_body_en": "",
@@ -440,6 +444,7 @@ async def _run_go_live_workflow(campaign_id: str, campaign):
             "end_date": campaign.end_date,
             "status": "approved",
             "landing_page_html": campaign.landing_page_html or "",
+            "hero_image_url": campaign.hero_image_url or "",
             "preview_url": campaign.preview_url or "",
             "production_url": "",
             "email_subject_en": campaign.email_subject_en or "",

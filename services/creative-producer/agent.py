@@ -392,7 +392,7 @@ class CreativeProducerAgent:
                 data={"html_length": len(html)}
             )
 
-            return {"html": html, "status": "success"}
+            return {"html": html, "hero_image_url": hero_image_url, "status": "success"}
 
         except Exception as e:
             await publish_event(
@@ -403,4 +403,4 @@ class CreativeProducerAgent:
                 data={"error": str(e)}
             )
 
-            return {"html": "", "status": "error", "error": str(e)}
+            return {"html": "", "hero_image_url": None, "status": "error", "error": str(e)}

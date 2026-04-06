@@ -24,6 +24,19 @@ export interface CampaignState {
   customer_count?: number;
   customer_list?: Array<{customer_id?: string; name: string; name_en?: string; email: string; tier: string}>;
   error?: string;
+  guardrailError?: GuardrailResult;
+}
+
+interface GuardrailResult {
+  passed: boolean;
+  layer?: {
+    id: string;
+    name: string;
+  } | null;
+  title?: string;
+  reason?: string;
+  guidance?: string;
+  details?: Record<string, string | number | boolean | null | undefined>;
 }
 
 const THEMES: Record<string, { name: string; tag: string; color: string; desc: string; img: string }> = {
@@ -238,6 +251,7 @@ export default function CampaignCreate() {
 
   const handleDataChange = (data: Partial<CampaignData>) => {
     setCampaignData(prev => ({ ...prev, ...data }));
+    setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
   };
 
   const totalSteps = 4;
@@ -398,7 +412,7 @@ export default function CampaignCreate() {
       // Validate through guardrails before proceeding
       setLoading(true);
       setAgentStatus('Validating campaign through safety checks...');
-      setCampaignState(prev => ({ ...prev, error: undefined }));
+      setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
       try {
         const validateResp = await fetch('/api/campaigns/validate', {
           method: 'POST',
@@ -407,7 +421,11 @@ export default function CampaignCreate() {
         });
         const validateResult = await validateResp.json();
         if (validateResult.valid === false) {
-          setCampaignState(prev => ({ ...prev, error: validateResult.reason }));
+          setCampaignState(prev => ({
+            ...prev,
+            error: validateResult.reason,
+            guardrailError: validateResult.guardrail
+          }));
           setLoading(false);
           setAgentStatus('');
           return;
@@ -1148,9 +1166,55 @@ export default function CampaignCreate() {
 
   const activeNav = SIDE_NAV_MAP[currentStep] || 'strategy';
 
+  const guardrailDetailEntries = Object.entries(campaignState.guardrailError?.details || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
+  const guardrailSummary = campaignState.guardrailError;
+
   const renderStatusBanner = () => (
     <>
-      {campaignState.error && (
+      {guardrailSummary && (
+        <div className="mb-8 rounded-2xl border border-error/20 bg-error-container p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl bg-error text-on-error shadow-sm">
+              <span className="material-symbols-outlined">shield_locked</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm font-bold uppercase tracking-widest text-error">Campaign blocked</p>
+                {guardrailSummary.layer?.name && (
+                  <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-on-error-container">
+                    {guardrailSummary.layer.name}
+                  </span>
+                )}
+              </div>
+              <h3 className="mt-3 text-lg font-headline font-bold text-on-error-container">
+                {guardrailSummary.title || 'Guardrail rejection'}
+              </h3>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-on-error-container">
+                {guardrailSummary.reason || campaignState.error}
+              </p>
+              {guardrailSummary.guidance && (
+                <p className="mt-3 rounded-xl bg-white/60 px-4 py-3 text-sm text-on-error-container">
+                  <span className="font-bold">How to fix:</span> {guardrailSummary.guidance}
+                </p>
+              )}
+              {guardrailDetailEntries.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {guardrailDetailEntries.map(([key, value]) => (
+                    <span key={key} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-on-error-container">
+                      {key.replace(/_/g, ' ')}: {String(value)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }))} className="text-on-error-container/60 hover:text-on-error-container">
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {campaignState.error && !guardrailSummary && (
         <div className="mb-8 p-4 bg-error-container border border-error/20 rounded-xl flex items-center gap-3">
           <span className="material-symbols-outlined text-error">error</span>
           <span className="text-on-error-container text-sm font-medium">{campaignState.error}</span>

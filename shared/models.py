@@ -111,6 +111,7 @@ class CampaignData(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     landing_page_html: Optional[str] = None
+    hero_image_url: Optional[str] = None
     preview_url: Optional[str] = None
     production_url: Optional[str] = None
     

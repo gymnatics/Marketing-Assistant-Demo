@@ -114,6 +114,7 @@ When a user creates a campaign, here's what happens under the hood:
 
 - **AI-Generated Landing Pages** — Qwen Coder creates unique HTML/CSS with every generation
 - **AI Hero Images** — FLUX.2 generates atmospheric campaign banners via MCP
+- **Hero Image Dashboard Cards** — Campaign overview cards reuse each campaign's generated hero image as a thumbnail for richer demo storytelling
 - **Hyper-Personalization** — Landing pages personalize per VIP customer (`?c=VIP-001`) via real-time MCP lookup
 - **Professional Templates** — Skeleton-based "Bones & Beauty" architecture ensures polished layouts every time
 - **4-Layer Guardrails** — Regex → TrustyAI HAP → TrustyAI Prompt Injection → Policy Guardian (Qwen3)
@@ -254,6 +255,7 @@ flowchart TD
 
 - **No restart needed** — user edits the input and retries on the same screen
 - **Policy Guardian** validates business rules: no unrealistic discounts (>50%), professional tone, no misleading promises
+- **Descriptive rejection banners** — the UI shows which guardrail layer failed, why it failed, and how to revise the campaign brief
 
 ## KAgenti Integration
 

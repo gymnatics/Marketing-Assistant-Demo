@@ -38,8 +38,22 @@ GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by gu
 COMPETITOR_PATTERN = r"(?i)(jennifer casino|jennifer resort|lucky star casino|jade emperor palace|phoenix bay resort|emerald fortune club|royal lotus gaming)"
 
 
+def guardrail_failure(layer_id: str, layer_name: str, title: str, reason: str, guidance: str, details: dict | None = None) -> dict:
+    return {
+        "passed": False,
+        "layer": {
+            "id": layer_id,
+            "name": layer_name,
+        },
+        "title": title,
+        "reason": reason,
+        "guidance": guidance,
+        "details": details or {},
+    }
+
+
 def check_guardrails(campaign_name: str, description: str) -> dict:
-    """Run campaign through TrustyAI detectors + policy agent. Returns {passed: bool, reason: str}."""
+    """Run campaign through TrustyAI detectors + policy agent."""
     import re
     text = f"{campaign_name} {description}"
 
@@ -47,7 +61,15 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
     match = re.search(COMPETITOR_PATTERN, text)
     if match:
         GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
-        return {"passed": False, "reason": "Campaign references a competitor brand. Please revise."}
+        blocked_term = match.group(0)
+        return guardrail_failure(
+            "regex_competitor",
+            "Layer 1: Competitor Name Check",
+            "Competitor reference detected",
+            f'The campaign mentions "{blocked_term}", which is blocked by the competitor-name guardrail.',
+            "Remove competitor brand names and rewrite the campaign in Simon property terms only.",
+            {"matched_text": blocked_term},
+        )
 
     # Layer 2: TrustyAI HAP detector — hate/abuse/profanity
     try:
@@ -63,7 +85,16 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                     for det in results[0]:
                         if det.get("score", 0) > 0.5:
                             GUARDRAILS_BLOCKED.labels(detector="hap").inc()
-                            return {"passed": False, "reason": "Content flagged as inappropriate. Please revise."}
+                            label = det.get("label") or det.get("name") or "unsafe content"
+                            score = round(det.get("score", 0), 3)
+                            return guardrail_failure(
+                                "hap",
+                                "Layer 2: TrustyAI HAP",
+                                "Inappropriate language detected",
+                                f"The content was flagged by the HAP safety model for {label} (score: {score}).",
+                                "Remove profanity, abusive language, or other inappropriate wording and keep the tone premium and professional.",
+                                {"label": label, "score": score},
+                            )
     except Exception as e:
         print(f"[Guardrails] HAP check failed (non-blocking): {e}")
 
@@ -81,7 +112,16 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                     for det in results[0]:
                         if det.get("score", 0) > 0.5:
                             GUARDRAILS_BLOCKED.labels(detector="prompt_injection").inc()
-                            return {"passed": False, "reason": "Invalid input detected. Please revise."}
+                            label = det.get("label") or det.get("name") or "prompt injection risk"
+                            score = round(det.get("score", 0), 3)
+                            return guardrail_failure(
+                                "prompt_injection",
+                                "Layer 3: TrustyAI Prompt Injection",
+                                "Prompt injection pattern detected",
+                                f"The input was flagged as {label} by the prompt-injection detector (score: {score}).",
+                                "Remove instruction-like text such as attempts to override the system, reveal secrets, or manipulate the AI's behavior.",
+                                {"label": label, "score": score},
+                            )
     except Exception as e:
         print(f"[Guardrails] Prompt injection check failed (non-blocking): {e}")
 
@@ -122,11 +162,26 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
 
         if result.get("approved") is False:
             GUARDRAILS_BLOCKED.labels(detector="policy_guardian").inc()
-            return {"passed": False, "reason": result.get("reason", "Campaign does not meet policy requirements. Please revise.")}
+            reason = result.get("reason", "Campaign does not meet policy requirements.")
+            return guardrail_failure(
+                "policy_guardian",
+                "Layer 4: Policy Guardian",
+                "Business policy violation",
+                reason,
+                "Adjust the offer so it stays realistic, premium, and compliant with Simon campaign policy.",
+                {"policy_reason": reason},
+            )
     except Exception as e:
         print(f"[Guardrails] Policy Guardian check failed (non-blocking): {e}")
 
-    return {"passed": True, "reason": ""}
+    return {
+        "passed": True,
+        "layer": None,
+        "title": "",
+        "reason": "",
+        "guidance": "",
+        "details": {},
+    }
 
 
 
@@ -235,8 +290,12 @@ def validate_campaign():
         desc = data.get("campaign_description", "")
         result = check_guardrails(name, desc)
         if not result["passed"]:
-            return jsonify({"valid": False, "reason": result["reason"]}), 200
-        return jsonify({"valid": True, "reason": ""}), 200
+            return jsonify({
+                "valid": False,
+                "reason": result["reason"],
+                "guardrail": result,
+            }), 200
+        return jsonify({"valid": True, "reason": "", "guardrail": result}), 200
     except Exception as e:
         return jsonify({"valid": True, "reason": ""}), 200
 
@@ -252,7 +311,11 @@ def create_campaign():
             data.get("campaign_description", "")
         )
         if not guardrails["passed"]:
-            return jsonify({"error": guardrails["reason"], "guardrail_blocked": True}), 400
+            return jsonify({
+                "error": guardrails["reason"],
+                "guardrail_blocked": True,
+                "guardrail": guardrails,
+            }), 400
 
         AGENT_CALLS.labels(skill="create_campaign").inc()
         result = call_director_a2a_sync("create_campaign", data)
