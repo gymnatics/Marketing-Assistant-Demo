@@ -18,6 +18,8 @@ metadata:
     kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False
   name: customer-analyst
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:

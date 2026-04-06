@@ -10,6 +10,8 @@ metadata:
     protocol.kagenti.io/mcp: ''
   name: mongodb-mcp
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:

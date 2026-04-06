@@ -6,6 +6,8 @@ metadata:
     app: mongodb
     component: database
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:

@@ -9,6 +9,8 @@ metadata:
     protocol.kagenti.io/a2a: ''
   name: creative-producer
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
