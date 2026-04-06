@@ -19,3 +19,6 @@ data:
   CAMPAIGN_API_URL: "http://campaign-api:5000"
   POLICY_GUARDIAN_URL: "http://policy-guardian:8084"
   EVENT_HUB_URL: "http://event-hub:5001"
+
+  # Sample permission  
+  ALLOWED_PLATINUM_TIER: alice

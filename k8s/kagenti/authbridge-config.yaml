@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  ISSUER: PLACE_HOLDER
+  KEYCLOAK_REALM: kagenti
+  KEYCLOAK_URL: PLACE_HOLDER
+  SPIRE_ENABLED: 'False'
+  TOKEN_URL: PLACE_HOLDER
+kind: ConfigMap
+metadata:
+  name: authbridge-config  

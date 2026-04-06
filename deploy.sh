@@ -237,8 +237,12 @@ echo ""
 ################################################################################
 echo "--- Step 4: Deploying App ---"
 
+
 echo "Applying Kustomize overlay..."
 oc apply -k "$OVERLAY" 2>&1 | grep -E "created|configured|unchanged" | head -20
+
+#echo "Applying Kagenti CRB for namespace: ${NAMESPACE}"
+#sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f -
 
 echo "Applying secret..."
 oc apply -f /tmp/marketing-assistant-secret.yaml

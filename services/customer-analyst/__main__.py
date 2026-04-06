@@ -1,9 +1,20 @@
 """
 Customer Analyst A2A Server - Entry point.
 """
+import logging
 import os
 
 import uvicorn
+
+_log_level = getattr(
+    logging,
+    os.environ.get("LOG_LEVEL", "INFO").upper(),
+    logging.INFO,
+)
+logging.basicConfig(
+    level=_log_level,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore

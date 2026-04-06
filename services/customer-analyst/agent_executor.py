@@ -2,7 +2,11 @@
 Customer Analyst A2A AgentExecutor - Bridge between a2a-sdk and business logic.
 """
 import json
+import logging
+import os
 import traceback
+
+logger = logging.getLogger(__name__)
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -19,6 +23,21 @@ class CustomerAnalystExecutor(AgentExecutor):
         self.agent = CustomerAnalystAgent()
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+
+        headers = {}
+        MONGODB_TOKEN = os.environ.get("MONGODB_TOKEN", "")
+        if MONGODB_TOKEN:
+            headers["Authorization"] = f"Bearer {MONGODB_TOKEN}"
+        elif context.call_context and (context.call_context.state or {}).get("headers", {}).get("authorization"):
+            headers["Authorization"] = context.call_context.state["headers"]["authorization"]
+            logger.info(f"Authorization={headers['Authorization']}")
+        else:
+            logger.warning(
+                "No MONGODB_TOKEN or inbound Authorization header; outbound requests will be unauthenticated"
+            )
+
+        self.agent.headers = headers
+
         task = context.current_task
         if task is None:
             task = new_task(context.message)
@@ -48,7 +67,7 @@ class CustomerAnalystExecutor(AgentExecutor):
             )
         except Exception:
             tb = traceback.format_exc()
-            print(f"[Customer Analyst Executor] Error: {tb}")
+            logger.exception(f"Customer Analyst executor failed {tb}")
             await updater.update_status(
                 TaskState.failed,
                 message=new_agent_text_message(f"Customer retrieval failed: {tb}", task.context_id, task.id),

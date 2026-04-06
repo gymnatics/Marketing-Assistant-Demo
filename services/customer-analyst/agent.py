@@ -4,10 +4,12 @@ Customer Analyst Agent - Retrieves VIP customer profiles using LLM tool calling 
 Uses Qwen3 LLM to reason about which MCP tools to call based on the target audience,
 then executes those tools against the MongoDB MCP server via proper MCP protocol.
 """
-import os
 import json
+import logging
+import os
 import httpx
-from typing import List
+
+logger = logging.getLogger(__name__)
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -103,33 +105,33 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
                 timeout=5.0
             )
     except Exception as e:
-        print(f"[Customer Analyst] Failed to publish event: {e}")
+        logger.warning("Failed to publish event to event-hub: %s", e)
 
 
 async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
     """Call a tool on the MongoDB MCP server via proper MCP protocol."""
     from fastmcp import Client
-    from fastmcp.client.transports import StreamableHttpTransport
 
-    mcp_url = f"{MONGODB_MCP_URL}/mcp"
+    token = None
+
     if auth_headers:
-        transport = StreamableHttpTransport(url=mcp_url, headers=auth_headers)
-        client = Client(transport)
-    else:
-        client = Client(mcp_url)
+        auth_value = auth_headers.get("Authorization", "")
+        if auth_value.startswith("Bearer "):
+            token = auth_value.removeprefix("Bearer ").strip()
 
-    async with client as mcp_client:
+    async with Client(f"{MONGODB_MCP_URL}/mcp", auth=token) as mcp_client:
         result = await mcp_client.call_tool(tool_name, arguments)
         if result and result.content:
             return json.loads(result.content[0].text)
         return []
 
-
-async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tuple[list, str]:
+async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
     """Use Qwen3 LLM to decide which MCP tool to call, then execute it."""
     url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
     headers = {"Content-Type": "application/json"}
-
+    if auth_headers:
+        headers.update(auth_headers)
+    
     payload = {
         "model": LANG_MODEL_NAME,
         "messages": [
@@ -172,7 +174,10 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tup
                     continue
 
     if not tool_call_name:
-        print(f"[Customer Analyst] LLM did not select a tool, using keyword fallback for: {target_audience}")
+        logger.info(
+            "LLM did not select a tool; using keyword fallback (audience=%r)",
+            target_audience,
+        )
         audience_lower = target_audience.lower()
         if "new" in audience_lower or "prospect" in audience_lower:
             tool_call_name = "get_prospects"
@@ -201,9 +206,13 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tup
     if "limit" not in arguments:
         arguments["limit"] = limit
 
-    print(f"[Customer Analyst] LLM selected tool: {tool_call_name}({json.dumps(arguments)})")
+    logger.info(
+        "LLM selected MCP tool=%s arguments=%s",
+        tool_call_name,
+        json.dumps(arguments, default=str),
+    )
 
-    result = await call_mcp_tool(tool_call_name, arguments)
+    result = await call_mcp_tool(tool_call_name, arguments, headers)
 
     recipient_type = "prospects" if tool_call_name == "get_prospects" else "customers"
     return result, recipient_type
@@ -212,10 +221,19 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50) -> tup
 class CustomerAnalystAgent:
     """Retrieves VIP customer profiles using LLM reasoning + MCP tools."""
 
+    headers = {}
+
     async def get_customers(self, params: dict) -> dict:
         campaign_id = params.get("campaign_id", "unknown")
         target_audience = params.get("target_audience", "all VIP")
         limit = params.get("limit", 50)
+
+        logger.info(
+            "get_customers start campaign_id=%s target_audience=%r limit=%s",
+            campaign_id,
+            target_audience,
+            limit,
+        )
 
         await publish_event(
             campaign_id=campaign_id,
@@ -234,7 +252,8 @@ class CustomerAnalystAgent:
 
             customers_data, recipient_type = await llm_select_and_call_tool(
                 target_audience=target_audience,
-                limit=limit
+                limit=limit,
+                auth_headers=self.headers,
             )
 
             customers = [
@@ -261,6 +280,13 @@ class CustomerAnalystAgent:
                 data={"count": len(customers), "recipient_type": recipient_type}
             )
 
+            logger.info(
+                "get_customers success campaign_id=%s count=%s recipient_type=%s",
+                campaign_id,
+                len(customers),
+                recipient_type,
+            )
+
             return GetTargetCustomersOutput(
                 customers=customers,
                 count=len(customers),
@@ -269,6 +295,11 @@ class CustomerAnalystAgent:
             ).model_dump()
 
         except Exception as e:
+            logger.exception(
+                "get_customers failed campaign_id=%s target_audience=%r",
+                campaign_id,
+                target_audience,
+            )
             await publish_event(
                 campaign_id=campaign_id,
                 event_type="agent_error",

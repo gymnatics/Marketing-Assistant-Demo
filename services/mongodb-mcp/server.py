@@ -4,11 +4,19 @@ MongoDB MCP Server - FastMCP wrapper for customer database access.
 Provides tools for retrieving VIP customer profiles for marketing campaigns.
 Supports role-based filtering via 'allowed_tiers' parameter for KAgenti integration.
 """
+import base64
+import json
+import logging
 import os
-from typing import List, Optional
+import re
+from typing import Any, List, Mapping, Optional
+
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_http_headers
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
+
+logger = logging.getLogger("mongodb_mcp")
 
 TIER_SCOPES = {
     "tier-admin": ["diamond", "platinum", "gold"],
@@ -16,7 +24,6 @@ TIER_SCOPES = {
     "tier-platinum": ["platinum", "gold"],
     "tier-gold": ["gold"],
 }
-
 
 def filter_by_allowed_tiers(customers: list, allowed_tiers: str = "") -> list:
     """Filter customer list by allowed tiers. Empty = no filter (backward compatible)."""
@@ -26,9 +33,100 @@ def filter_by_allowed_tiers(customers: list, allowed_tiers: str = "") -> list:
     return [c for c in customers if c.get("tier", "") in tiers]
 
 
+def _log_http_headers(headers: Mapping[str, Any]) -> None:
+    logger.debug("HTTP headers: %s", headers)
+
+def _normalize_scope_claim(value: Any) -> Optional[str]:
+    """Keycloak usually sends `scope` as a space-separated string; normalize other shapes."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip() or None    
+    return value
+
+def decode_jwt_payload_unverified(token: str) -> dict[str, Any]:
+    """
+    Decode JWT payload without verifying the signature.
+    Use only when the token is already validated by an API gateway or IdP proxy.
+    """
+    parts = token.strip().split(".")
+    if len(parts) != 3:
+        raise ValueError("JWT must have three segments")
+    payload_b64 = parts[1]
+    pad = "=" * ((4 - len(payload_b64) % 4) % 4)
+    raw = base64.urlsafe_b64decode(payload_b64 + pad)
+    return json.loads(raw.decode("utf-8"))
+
+
+def parse_authorization_bearer_jwt(headers: Mapping[str, Any]) -> dict[str, Any]:
+    """
+    Read `Authorization: Bearer <jwt>` from headers and return Keycloak-oriented claims.
+
+    Returns a dict with ``preferred_username``, ``scope``, and optionally ``error``
+    if the header is missing, not Bearer, or the JWT payload cannot be decoded.
+    Signature is not verified (see ``decode_jwt_payload_unverified``).
+    """
+    auth: Any = None
+    for key in headers:
+        if str(key).lower() == "authorization":
+            auth = headers[key]
+            break
+    if auth is None:
+        return {"preferred_username": None, "scope": None, "error": "missing_authorization"}
+    if isinstance(auth, (list, tuple)):
+        auth = auth[0] if auth else None
+    if not auth or not isinstance(auth, str):
+        return {"preferred_username": None, "scope": None, "error": "invalid_authorization_header"}
+    m = re.match(r"^\s*Bearer\s+(\S+)\s*$", auth, re.IGNORECASE)
+    if not m:
+        return {"preferred_username": None, "scope": None, "error": "not_bearer_token"}
+    token = m.group(1)
+    try:
+        claims = decode_jwt_payload_unverified(token)
+    except Exception as e:
+        logger.debug("JWT payload decode failed: %s", e)
+        return {"preferred_username": None, "scope": None, "error": "jwt_decode_failed"}
+    return {
+        "preferred_username": claims.get("preferred_username"),
+        "scope": _normalize_scope_claim(claims.get("scope")),
+    }
+
+
+def get_bearer_auth_context() -> dict[str, Any]:
+    """
+    Authorization helper for MCP tools: decode the incoming Bearer JWT from the HTTP request.
+
+    Must be called from tool code running in a request that supplies ``Authorization``
+    (same pattern as ``get_http_headers(include={"authorization"})``).
+    """
+    headers = get_http_headers(include={"authorization"})
+    return parse_authorization_bearer_jwt(headers)
+
+def filter_customers_by_user_perm(customers: list) -> list:
+    headers = get_http_headers(include={"authorization"})
+    
+    auth_ctx = parse_authorization_bearer_jwt(headers)
+    
+    if auth_ctx.get('preferred_username'):
+
+        preferred_username = auth_ctx.get("preferred_username")
+        scope = auth_ctx.get("scope")
+        logger.info(f"JWT claims: preferred_username={preferred_username} scope={scope}")
+
+        user_allowed_for_plat_tier = os.getenv("ALLOWED_PLATINUM_TIER", None)
+
+        if user_allowed_for_plat_tier == preferred_username:
+            return customers
+        else: # not allowed, filter out
+            logger.info (f"{preferred_username} has no permisison to list platinum members")
+            return [c for c in customers if c.get('tier') != "platinum"]
+    else:
+        logger.info("No JWT token recieved")
+        return customers
+    
+
 # Initialize FastMCP server
 mcp = FastMCP("Customer Database MCP")
-
 
 # Mock data for when MongoDB is unavailable
 MOCK_CUSTOMERS = [
@@ -184,7 +282,7 @@ def get_mongodb_client() -> Optional[MongoClient]:
         client.server_info()
         return client
     except ConnectionFailure as e:
-        print(f"[MongoDB MCP] Connection failed: {e}")
+        logger.warning("MongoDB connection failed: %s", e)
         return None
 
 
@@ -203,8 +301,8 @@ def get_customers_by_tier(tier: str, limit: int = 50) -> List[dict]:
     client = get_mongodb_client()
     
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
-        return [c for c in MOCK_CUSTOMERS if c["tier"] == tier][:limit]
+        logger.warning("Using mock data (MongoDB unavailable)")
+        return filter_customers_by_user_perm([c for c in MOCK_CUSTOMERS if c["tier"] == tier])[:limit]
     
     try:
         db = client[os.environ.get("MONGODB_DATABASE", "casino_crm")]
@@ -212,10 +310,10 @@ def get_customers_by_tier(tier: str, limit: int = 50) -> List[dict]:
         for c in customers:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
-        return customers
+        return filter_customers_by_user_perm(customers)
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
-        return [c for c in MOCK_CUSTOMERS if c["tier"] == tier][:limit]
+        logger.error("Query error in get_customers_by_tier: %s", e)
+        return filter_customers_by_user_perm([c for c in MOCK_CUSTOMERS if c["tier"] == tier])[:limit]
     finally:
         client.close()
 
@@ -233,10 +331,11 @@ def get_prospects(limit: int = 50) -> List[dict]:
     Returns:
         List of prospect profiles
     """
+
     client = get_mongodb_client()
-    
+
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
+        logger.warning("Using mock data (MongoDB unavailable)")
         return MOCK_PROSPECTS[:limit]
     
     try:
@@ -245,10 +344,10 @@ def get_prospects(limit: int = 50) -> List[dict]:
         for p in prospects:
             if "_id" in p:
                 p["_id"] = str(p["_id"])
-        return prospects
+        return filter_customers_by_user_perm(prospects)
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
-        return MOCK_PROSPECTS[:limit]
+        logger.error("Query error in get_prospects: %s", e)
+        return filter_customers_by_user_perm(MOCK_PROSPECTS)[:limit]
     finally:
         client.close()
 
@@ -266,9 +365,9 @@ def get_all_vip_customers(limit: int = 100, allowed_tiers: str = "") -> List[dic
         List of all VIP customer profiles
     """
     client = get_mongodb_client()
-    
+
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
+        logger.warning("Using mock data (MongoDB unavailable)")
         return filter_by_allowed_tiers(MOCK_CUSTOMERS, allowed_tiers)[:limit]
     
     try:
@@ -277,9 +376,9 @@ def get_all_vip_customers(limit: int = 100, allowed_tiers: str = "") -> List[dic
         for c in customers:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
-        return filter_by_allowed_tiers(customers, allowed_tiers)
+        return filter_customers_by_user_perm(filter_by_allowed_tiers(customers, allowed_tiers))
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
+        logger.error("Query error in get_all_vip_customers: %s", e)
         return filter_by_allowed_tiers(MOCK_CUSTOMERS, allowed_tiers)[:limit]
     finally:
         client.close()
@@ -300,8 +399,8 @@ def get_high_spend_customers(min_spend: int = 500000, limit: int = 50) -> List[d
     client = get_mongodb_client()
     
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
-        return [c for c in MOCK_CUSTOMERS if c.get("total_spend", 0) >= min_spend][:limit]
+        logger.warning("Using mock data (MongoDB unavailable)")
+        return filter_customers_by_user_perm([c for c in MOCK_CUSTOMERS if c.get("total_spend", 0) >= min_spend])[:limit]
     
     try:
         db = client[os.environ.get("MONGODB_DATABASE", "casino_crm")]
@@ -309,10 +408,10 @@ def get_high_spend_customers(min_spend: int = 500000, limit: int = 50) -> List[d
         for c in customers:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
-        return customers
+        return filter_customers_by_user_perm(customers)
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
-        return [c for c in MOCK_CUSTOMERS if c.get("total_spend", 0) >= min_spend][:limit]
+        logger.error("Query error in get_high_spend_customers: %s", e)
+        return filter_customers_by_user_perm([c for c in MOCK_CUSTOMERS if c.get("total_spend", 0) >= min_spend])[:limit]
     finally:
         client.close()
 
@@ -333,13 +432,13 @@ def search_customers(query: str, limit: int = 20) -> List[dict]:
     query_lower = query.lower()
     
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
-        return [
+        logger.warning("Using mock data (MongoDB unavailable)")
+        return filter_customers_by_user_perm([
             c for c in MOCK_CUSTOMERS 
             if query_lower in c.get("name", "").lower() 
             or query_lower in c.get("name_en", "").lower()
             or query_lower in c.get("email", "").lower()
-        ][:limit]
+        ])[:limit]
     
     try:
         db = client[os.environ.get("MONGODB_DATABASE", "casino_crm")]
@@ -353,15 +452,15 @@ def search_customers(query: str, limit: int = 20) -> List[dict]:
         for c in customers:
             if "_id" in c:
                 c["_id"] = str(c["_id"])
-        return customers
+        return filter_customers_by_user_perm(customers)
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
-        return [
+        logger.error("Query error in search_customers: %s", e)
+        return filter_customers_by_user_perm([
             c for c in MOCK_CUSTOMERS 
             if query_lower in c.get("name", "").lower() 
             or query_lower in c.get("name_en", "").lower()
             or query_lower in c.get("email", "").lower()
-        ][:limit]
+        ])[:limit]
     finally:
         client.close()
 
@@ -377,9 +476,9 @@ def get_customer_count_by_tier() -> dict:
     client = get_mongodb_client()
     
     if client is None:
-        print("[MongoDB MCP] Using mock data (MongoDB unavailable)")
+        logger.warning("Using mock data (MongoDB unavailable)")
         counts = {}
-        for c in MOCK_CUSTOMERS:
+        for c in filter_customers_by_user_perm(MOCK_CUSTOMERS):
             tier = c.get("tier", "unknown")
             counts[tier] = counts.get(tier, 0) + 1
         return counts
@@ -389,12 +488,12 @@ def get_customer_count_by_tier() -> dict:
         pipeline = [
             {"$group": {"_id": "$tier", "count": {"$sum": 1}}}
         ]
-        result = list(db.customers.aggregate(pipeline))
+        result = filter_customers_by_user_perm(list(db.customers.aggregate(pipeline)))
         return {r["_id"]: r["count"] for r in result}
     except Exception as e:
-        print(f"[MongoDB MCP] Query error: {e}")
+        logger.error("Query error in get_customer_count_by_tier: %s", e)
         counts = {}
-        for c in MOCK_CUSTOMERS:
+        for c in filter_customers_by_user_perm(MOCK_CUSTOMERS):
             tier = c.get("tier", "unknown")
             counts[tier] = counts.get(tier, 0) + 1
         return counts
@@ -405,10 +504,17 @@ def get_customer_count_by_tier() -> dict:
 if __name__ == "__main__":
     import argparse
 
+    level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
     parser = argparse.ArgumentParser(description="MongoDB MCP Server")
     parser.add_argument("--port", type=int, default=8090)
     args = parser.parse_args()
 
-    print(f"[MongoDB MCP] Starting streamable-http MCP server on 0.0.0.0:{args.port}")
-    print(f"[MongoDB MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
-    mcp.run(transport="http", host="0.0.0.0", port=args.port)
+    logger.info(f"[MongoDB MCP] Starting streamable-http MCP server on 0.0.0.0:{args.port}")
+    logger.info(f"[MongoDB MCP] MCP endpoint: http://0.0.0.0:{args.port}/mcp")
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=args.port)

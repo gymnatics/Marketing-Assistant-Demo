@@ -21,21 +21,9 @@ spec:
     spec:
       containers:
       - image: quay.io/rh-ee-dayeo/marketing-assistant:event-hub
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 5001
-          initialDelaySeconds: 10
-          periodSeconds: 30
         name: hub
         ports:
         - containerPort: 5001
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 5001
-          initialDelaySeconds: 5
-          periodSeconds: 10
         resources:
           limits:
             cpu: 200m

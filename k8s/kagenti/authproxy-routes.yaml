@@ -1,0 +1,9 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: authproxy-routes
+data:
+  routes.yaml: |
+    - host: "mongodb-mcp"
+      target_audience: "mongodb-tool"
+      token_scopes: "openid mongodb-tool-aud mongodb-full-access"
