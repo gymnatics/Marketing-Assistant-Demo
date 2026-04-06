@@ -1,0 +1,10 @@
+# Single ImageStream; each BuildConfig pushes a different tag (e.g. :campaign-api).
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: marketing-assistant
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  lookupPolicy:
+    local: true

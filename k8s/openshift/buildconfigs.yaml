@@ -1,0 +1,222 @@
+# Binary Docker builds: upload context from your laptop via `oc start-build ... --from-dir=`.
+# Repo-root services use context = repository root; frontend uses context = ./frontend.
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: mongodb-mcp
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/mongodb-mcp/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:mongodb-mcp
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: imagegen-mcp
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/imagegen-mcp/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:imagegen-mcp
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: event-hub
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/event-hub/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:event-hub
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: creative-producer
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/creative-producer/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:creative-producer
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: customer-analyst
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/customer-analyst/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:customer-analyst
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: delivery-manager
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/delivery-manager/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:delivery-manager
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: campaign-director
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/campaign-director/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:campaign-director
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: policy-guardian
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/policy-guardian/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:policy-guardian
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: campaign-api
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/campaign-api/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:campaign-api
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: campaign-landing
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: services/campaign-landing/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:campaign-landing
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/part-of: marketing-assistant
+spec:
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: marketing-assistant:frontend
