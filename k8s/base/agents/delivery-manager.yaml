@@ -1,8 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    app.openshift.io/connects-to: '["mongodb-mcp"]'
   labels:
     app: delivery-manager
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: delivery-manager
+    app.kubernetes.io/part-of: simon-casino-agents
+    app.openshift.io/runtime: python
     component: agent
     kagenti.io/framework: Python
     kagenti.io/type: agent
@@ -22,6 +28,10 @@ spec:
         sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: delivery-manager
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: delivery-manager
+        app.kubernetes.io/part-of: simon-casino-agents
+        app.openshift.io/runtime: python
         component: agent
     spec:
       containers:

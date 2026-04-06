@@ -4,6 +4,74 @@ A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and
 
 ## Architecture
 
+### High-Level Overview
+
+```mermaid
+flowchart TD
+    subgraph identity [Identity and Access]
+        Keycloak["Keycloak\n(OAuth 2.0 / OIDC)"]
+        KAgenti["KAgenti\n(Agent Discovery + AuthBridge)"]
+    end
+
+    subgraph app [Application]
+        Dashboard["React Dashboard"]
+        API["Campaign API"]
+    end
+
+    subgraph runtime [Agent Runtime]
+        Director["Campaign Director\n(Orchestrator)"]
+        Creative["Creative Producer\n(Landing Pages)"]
+        Analyst["Customer Analyst\n(Customer Data)"]
+        Delivery["Delivery Manager\n(Email + Deploy)"]
+        Guardian["Policy Guardian\n(Guardrails)"]
+    end
+
+    subgraph tools [MCP Tool Servers]
+        CustomerDB["Customer Database"]
+        ImageGen["AI Image Generator"]
+    end
+
+    subgraph models [GPU Models - OpenShift AI]
+        CoderLLM["Qwen2.5-Coder-32B"]
+        LangLLM["Qwen3-32B"]
+        FluxImg["FLUX.2-klein-4B"]
+    end
+
+    subgraph guardrails [Guardrails - TrustyAI]
+        HAP["Hate/Profanity Detection"]
+        PromptInj["Prompt Injection Detection"]
+    end
+
+    subgraph infra [Infrastructure]
+        MongoDB[(MongoDB)]
+        Landing["Personalized Landing Pages"]
+    end
+
+    Dashboard -->|REST| API
+    API -->|A2A| Director
+    API -->|validate| Guardian
+    API -->|validate| HAP
+    API -->|validate| PromptInj
+    Director -->|A2A| Creative
+    Director -->|A2A| Analyst
+    Director -->|A2A| Delivery
+    Creative -->|MCP| ImageGen
+    Creative -->|LLM| CoderLLM
+    Analyst -->|MCP| CustomerDB
+    Analyst -->|LLM| LangLLM
+    Delivery -->|LLM| LangLLM
+    Delivery -->|deploy| Landing
+    Guardian -->|LLM| LangLLM
+    ImageGen -->|inference| FluxImg
+    CustomerDB --> MongoDB
+    Keycloak -.->|"JWT tokens"| KAgenti
+    KAgenti -.->|"token exchange"| runtime
+    KAgenti -.->|"discovery"| runtime
+    KAgenti -.->|"token exchange"| tools
+```
+
+### Detailed Architecture
+
 ```mermaid
 flowchart TD
     subgraph ui [User Interface]

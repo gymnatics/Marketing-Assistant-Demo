@@ -7,8 +7,14 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    app.openshift.io/connects-to: '["mongodb-mcp"]'
   labels:
     app: customer-analyst
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: customer-analyst
+    app.kubernetes.io/part-of: simon-casino-agents
+    app.openshift.io/runtime: python
     component: agent
     kagenti.io/framework: Python
     kagenti.io/type: agent
@@ -31,6 +37,10 @@ spec:
         sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: customer-analyst
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: customer-analyst
+        app.kubernetes.io/part-of: simon-casino-agents
+        app.openshift.io/runtime: python
         component: agent
         kagenti.io/inject: disabled # Enable to test AuthBridge
         kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False

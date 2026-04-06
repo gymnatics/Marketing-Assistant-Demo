@@ -3,7 +3,11 @@ kind: Deployment
 metadata:
   labels:
     app: imagegen-mcp
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: imagegen-mcp
     app.kubernetes.io/name: imagegen-mcp
+    app.kubernetes.io/part-of: simon-casino-tools
+    app.openshift.io/runtime: python
     component: mcp
     kagenti.io/transport: streamable_http
     kagenti.io/type: tool
@@ -23,7 +27,11 @@ spec:
         sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: imagegen-mcp
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: imagegen-mcp
         app.kubernetes.io/name: imagegen-mcp
+        app.kubernetes.io/part-of: simon-casino-tools
+        app.openshift.io/runtime: python
         component: mcp
         kagenti.io/transport: streamable_http
         kagenti.io/type: tool

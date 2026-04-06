@@ -4,6 +4,10 @@ metadata:
   name: mongodb
   labels:
     app: mongodb
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: mongodb
+    app.kubernetes.io/part-of: simon-casino-tools
+    app.openshift.io/runtime: mongodb
     component: database
 spec:
   strategy:
@@ -16,6 +20,10 @@ spec:
     metadata:
       labels:
         app: mongodb
+        app.kubernetes.io/component: database
+        app.kubernetes.io/instance: mongodb
+        app.kubernetes.io/part-of: simon-casino-tools
+        app.openshift.io/runtime: mongodb
         component: database
     spec:
       containers:

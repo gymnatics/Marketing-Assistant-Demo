@@ -4,6 +4,10 @@ metadata:
   name: policy-guardian
   labels:
     app: policy-guardian
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: policy-guardian
+    app.kubernetes.io/part-of: simon-casino-agents
+    app.openshift.io/runtime: python
     component: agent
     kagenti.io/type: agent
     protocol.kagenti.io/a2a: ""
@@ -19,6 +23,10 @@ spec:
     metadata:
       labels:
         app: policy-guardian
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: policy-guardian
+        app.kubernetes.io/part-of: simon-casino-agents
+        app.openshift.io/runtime: python
         component: agent
       annotations:
         instrumentation.opentelemetry.io/inject-python: "true"

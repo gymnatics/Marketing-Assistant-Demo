@@ -38,6 +38,72 @@ The Marketing Campaign Assistant is a multi-agent AI system that generates luxur
 | **OpenAI API** | LLM inference (Qwen models) | vLLM-compatible `/v1/chat/completions` |
 | **SSE** (Server-Sent Events) | Real-time UI updates | Flask-based Event Hub |
 
+### High-Level Architecture
+
+```mermaid
+flowchart TD
+    subgraph identity [Identity and Access]
+        Keycloak["Keycloak\n(OAuth 2.0 / OIDC)"]
+        KAgenti["KAgenti\n(Agent Discovery + AuthBridge)"]
+    end
+
+    subgraph app [Application]
+        Dashboard["React Dashboard"]
+        API["Campaign API"]
+    end
+
+    subgraph runtime [Agent Runtime]
+        Director["Campaign Director\n(Orchestrator)"]
+        Creative["Creative Producer\n(Landing Pages)"]
+        Analyst["Customer Analyst\n(Customer Data)"]
+        Delivery["Delivery Manager\n(Email + Deploy)"]
+        Guardian["Policy Guardian\n(Guardrails)"]
+    end
+
+    subgraph tools [MCP Tool Servers]
+        CustomerDB["Customer Database"]
+        ImageGen["AI Image Generator"]
+    end
+
+    subgraph models [GPU Models - OpenShift AI]
+        CoderLLM["Qwen2.5-Coder-32B"]
+        LangLLM["Qwen3-32B"]
+        FluxImg["FLUX.2-klein-4B"]
+    end
+
+    subgraph guardrails [Guardrails - TrustyAI]
+        HAP["Hate/Profanity Detection"]
+        PromptInj["Prompt Injection Detection"]
+    end
+
+    subgraph infra [Infrastructure]
+        MongoDB[(MongoDB)]
+        Landing["Personalized Landing Pages"]
+    end
+
+    Dashboard -->|REST| API
+    API -->|A2A| Director
+    API -->|validate| Guardian
+    API -->|validate| HAP
+    API -->|validate| PromptInj
+    Director -->|A2A| Creative
+    Director -->|A2A| Analyst
+    Director -->|A2A| Delivery
+    Creative -->|MCP| ImageGen
+    Creative -->|LLM| CoderLLM
+    Analyst -->|MCP| CustomerDB
+    Analyst -->|LLM| LangLLM
+    Delivery -->|LLM| LangLLM
+    Delivery -->|deploy| Landing
+    Guardian -->|LLM| LangLLM
+    ImageGen -->|inference| FluxImg
+    CustomerDB --> MongoDB
+    Keycloak -.->|"JWT tokens"| KAgenti
+    KAgenti -.->|"token exchange"| runtime
+    KAgenti -.->|"discovery"| runtime
+    KAgenti -.->|"token exchange"| tools
+```
+
 ---
 
 ## 2. Service Inventory
@@ -1022,8 +1088,6 @@ securitySchemes={
 }
 ```
 
-This advertises the expected authentication mechanism. Token validation is handled by the platform (OpenShift OAuth proxy or KAgenti auth).
-
 ### Dual-Mode Input (Structured + Chat)
 
 Each agent executor supports both JSON skill dispatch (from Campaign API / Director) and plain-text natural language (from KAgenti chat UI):
@@ -1043,23 +1107,140 @@ flowchart TD
 | Policy Guardian | Full params → validate campaign | Text used as both `campaign_name` and `campaign_description` |
 | Delivery Manager | `skill` + params → skill dispatch | Returns guidance message (structured input required) |
 
-### MongoDB MCP Role-Based Access
+### AuthBridge (Zero-Trust Token Exchange)
 
-The MongoDB MCP server includes KAgenti-aware tier filtering via `allowed_tiers`:
+When deployed with KAgenti, agent pods receive AuthBridge sidecars that handle JWT validation and token exchange transparently. The application code does not need to validate tokens — Envoy + ext-proc handle it.
+
+**Pod containers with KAgenti enabled:**
+
+| Container | Purpose |
+|-----------|---------|
+| `agent` | Application code (A2A agent or MCP server) |
+| `envoy-proxy` | Envoy + ext-proc: inbound JWT validation, outbound token exchange |
+| `spiffe-helper` | Fetches SPIFFE SVID from SPIRE agent (workload identity) |
+| `kagenti-client-registration` | Auto-registers agent as Keycloak client using SPIFFE ID |
+| `proxy-init` (init) | iptables rules for transparent traffic interception |
+
+**Inbound flow** (requests arriving at the agent):
+1. Envoy intercepts → ext-proc validates JWT (signature, issuer, expiry via JWKS)
+2. Paths matching `/.well-known/*`, `/healthz`, `/readyz` bypass validation
+3. Invalid tokens → 401 Unauthorized (request never reaches agent)
+4. Valid tokens → forwarded to agent with Authorization header intact
+
+**Outbound flow** (agent calling downstream services like MCP tools):
+1. Agent makes HTTP call to mongodb-mcp:8090
+2. Envoy intercepts → ext-proc checks `authproxy-routes` for matching host
+3. If route matches → performs OAuth 2.0 Token Exchange (RFC 8693) with Keycloak
+4. Replaces Authorization header with exchanged token (scoped audience for the tool)
+5. If no route matches → passthrough (no exchange)
+
+```mermaid
+sequenceDiagram
+    participant UI as KAgenti UI
+    participant Envoy_In as Envoy Inbound
+    participant Agent as Customer Analyst
+    participant Envoy_Out as Envoy Outbound
+    participant KC as Keycloak
+    participant MCP as MongoDB MCP
+
+    UI->>Envoy_In: POST / + Bearer user_token
+    Envoy_In->>Envoy_In: Validate JWT (sig, iss, exp)
+    Envoy_In->>Agent: Forward (valid)
+    Agent->>Agent: LLM selects tool
+    Agent->>Envoy_Out: GET mongodb-mcp:8090/mcp + Bearer user_token
+    Envoy_Out->>KC: Token Exchange (subject=user_token, audience=mongodb-tool)
+    KC-->>Envoy_Out: New token (aud=mongodb-tool, sub=user)
+    Envoy_Out->>MCP: Forward + Bearer exchanged_token
+    MCP->>MCP: Decode JWT, read preferred_username
+    MCP-->>Agent: Filtered customer data
+    Agent-->>UI: A2A response
+```
+
+**Token transformation at each hop:**
+
+| Hop | Token Audience | Purpose |
+|-----|---------------|---------|
+| UI → Agent | `spiffe://...customer-analyst` | User can talk to this agent only |
+| Agent → MCP Tool | `mongodb-tool` | Scoped for this specific tool only |
+
+### AuthBridge Configuration
+
+AuthBridge is configured via ConfigMaps in `k8s/kagenti/`:
+
+**`authbridge-config`** — Global ext-proc settings:
+
+```yaml
+data:
+  ISSUER: https://keycloak-keycloak.apps.<cluster>/realms/kagenti  # Must match iss claim in JWTs
+  KEYCLOAK_REALM: kagenti
+  KEYCLOAK_URL: http://keycloak-service.keycloak.svc:8080          # Internal URL for API calls
+  SPIRE_ENABLED: "false"                                           # Use client_secret auth (not SPIFFE federated)
+```
+
+> **Important:** `ISSUER` must be the **external/Route URL** (matching the `iss` claim in Keycloak tokens). `KEYCLOAK_URL` is the **internal** service URL for token exchange API calls.
+
+**`authproxy-routes`** — Per-host outbound token exchange rules:
+
+```yaml
+data:
+  routes.yaml: |
+    - host: "mongodb-mcp"
+      target_audience: "mongodb-tool"
+      token_scopes: "openid mongodb-tool-aud mongodb-full-access"
+```
+
+When the ext-proc sees outbound traffic to `mongodb-mcp`, it exchanges the user token for one with `aud: mongodb-tool` and the specified scopes. Hosts without a route entry are passed through unchanged.
+
+### Keycloak Configuration
+
+KAgenti deploys Keycloak as part of its platform. The `kagenti` realm contains:
+
+**Clients:**
+
+| Client ID | Type | Purpose |
+|-----------|------|---------|
+| `kagenti` | Public | KAgenti dashboard login |
+| `simon-casino-ui` | Public | Our React frontend login |
+| `spiffe://...customer-analyst` | Confidential | Agent identity (auto-registered by client-registration sidecar) |
+| `mongodb-tool` | Confidential | Token exchange target for MCP tool |
+
+**Client Scopes (audience mappers):**
+
+| Scope Name | Type | Contains | Assigned To |
+|------------|------|----------|-------------|
+| `agent-...-customer-analyst-aud` | Audience mapper for agent SPIFFE ID | DEFAULT on `kagenti` + `simon-casino-ui` clients |
+| `mongodb-tool-aud` | Audience mapper for `mongodb-tool` | OPTIONAL (realm-level, requested by ext-proc during exchange) |
+| `mongodb-full-access` | Permission scope | OPTIONAL (realm-level, requested by ext-proc during exchange) |
+
+DEFAULT scopes are automatically included in user tokens. OPTIONAL scopes are only included when explicitly requested (by the ext-proc during token exchange, not by the browser).
+
+### MongoDB MCP JWT-Based Filtering
+
+The MongoDB MCP server reads the `preferred_username` from the exchanged JWT to implement per-user data filtering:
 
 ```python
-TIER_SCOPES = {
-    "tier-admin":    ["diamond", "platinum", "gold"],
-    "tier-diamond":  ["diamond", "platinum", "gold"],
-    "tier-platinum": ["platinum", "gold"],
-    "tier-gold":     ["gold"],
-}
+from fastmcp.server.dependencies import get_http_headers
 
-@mcp.tool
-def get_all_vip_customers(limit: int = 100, allowed_tiers: str = "") -> List[dict]:
-    # Empty string = no filter (backward compatible with direct usage)
-    # Role string from KAgenti = scoped to matching tiers
+def filter_customers_by_user_perm(customers: list) -> list:
+    headers = get_http_headers(include={"authorization"})
+    auth_ctx = parse_authorization_bearer_jwt(headers)
+    
+    if auth_ctx.get("preferred_username"):
+        username = auth_ctx["preferred_username"]
+        allowed_user = os.getenv("ALLOWED_PLATINUM_TIER", None)
+        if allowed_user == username:
+            return customers  # full access
+        else:
+            return [c for c in customers if c.get("tier") != "platinum"]
+    else:
+        return customers  # no JWT = no filtering (backward compatible)
 ```
+
+This uses FastMCP 3.x's `get_http_headers(include={"authorization"})` to access the Authorization header (stripped by default in 3.x for security).
+
+**Dual-mode behavior:**
+- **Without KAgenti** (our React app, Campaign API): No JWT on MCP calls → no filtering → all data returned
+- **With KAgenti** (chat via KAgenti UI): JWT present → `preferred_username` extracted → per-user filtering applied
 
 ### KAgenti Chat Flow
 
@@ -1073,12 +1254,23 @@ sequenceDiagram
     K->>Svc: GET /.well-known/agent-card.json
     Svc-->>K: AgentCard (skills, securitySchemes)
 
-    K->>Svc: POST / (A2A JSON-RPC, plain text message)
+    K->>Svc: POST / (A2A JSON-RPC + Bearer JWT)
+    Note over Svc: AuthBridge validates inbound JWT
     Svc->>Agent: execute(context)
     Note over Agent: json.loads fails → chat fallback
     Agent-->>Svc: Conversational response
     Svc-->>K: A2A artifact (text)
 ```
+
+### Known Limitations
+
+1. **Scope forwarding not implemented** ([kagenti-extensions#139](https://github.com/kagenti/kagenti-extensions/issues/139)): The `token_scopes` in `authproxy-routes` is static per-route. All exchanged tokens include the same scopes regardless of the user. Per-user scope differentiation requires the ext-proc to forward scopes from the inbound token to the exchange request.
+
+2. **SPIFFE federated auth requires Keycloak plugin**: When `SPIRE_ENABLED=true`, the ext-proc uses JWT-SVID client assertion for the token exchange. This requires a Keycloak SPIFFE identity provider plugin. Without the plugin, use `SPIRE_ENABLED=false` (client_secret authentication).
+
+3. **Client-registration scope accumulation**: The `kagenti-client-registration` sidecar creates a new audience scope on each pod restart (with the ReplicaSet hash in the name). Stale scopes accumulate in Keycloak and should be periodically cleaned up.
+
+4. **`realm_access.roles` not preserved in exchanged tokens**: User realm roles are not carried through the token exchange. Per-user filtering uses `preferred_username` (which IS preserved) mapped to permissions in application code.
 
 ---
 
