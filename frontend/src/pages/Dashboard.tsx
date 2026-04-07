@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
+import { authFetch } from '../auth/authFetch';
 
 interface Campaign {
   id: string;
@@ -46,7 +47,7 @@ export default function Dashboard() {
 
   const fetchCampaigns = async () => {
     try {
-      const response = await fetch('/api/campaigns');
+      const response = await authFetch('/api/campaigns');
       if (!response.ok) throw new Error('Failed to fetch campaigns');
       const data = await response.json();
       setCampaigns(data);

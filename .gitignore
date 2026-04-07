@@ -60,3 +60,5 @@ stitch-template/
 
 # Slides / presentations
 slides/
+tests/mlflow-tracing/*.db
+tests/mlflow-tracing/mlruns/

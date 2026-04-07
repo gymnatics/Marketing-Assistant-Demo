@@ -8,3 +8,4 @@ data:
   PROD_NAMESPACE: "0-marketing-assistant-demo-prod"
   APP_NAMESPACE: "0-marketing-assistant-demo"
   IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
+  MLFLOW_TRACKING_URI: "https://mlflow-route-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"

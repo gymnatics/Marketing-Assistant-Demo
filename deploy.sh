@@ -100,6 +100,44 @@ else
 fi
 
 ################################################################################
+# Step 1c: MLflow (optional)
+################################################################################
+echo "--- Step 1c: MLflow Tracking ---"
+echo ""
+MLFLOW_ROUTE=""
+MLFLOW_COUNT=$(oc get deployment -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "mlflow-deployment" 2>/dev/null || true)
+MLFLOW_COUNT=$(echo "$MLFLOW_COUNT" | tr -dc '0-9')
+MLFLOW_COUNT=${MLFLOW_COUNT:-0}
+
+if [ "$MLFLOW_COUNT" -ge 1 ]; then
+    echo "MLflow already deployed — ensuring CLUSTER_DOMAIN is current."
+    oc set env deployment/mlflow-deployment -n "$NAMESPACE" "CLUSTER_DOMAIN=${CLUSTER_DOMAIN}" 2>/dev/null || true
+    MLFLOW_ROUTE=$(oc get route mlflow-route -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+else
+    read -p "Deploy MLflow tracking server? (y/N): " DEPLOY_MLFLOW
+    if [ "$DEPLOY_MLFLOW" = "y" ] || [ "$DEPLOY_MLFLOW" = "Y" ]; then
+        echo "Applying MLflow manifests..."
+        for f in k8s/mlflow/01-mlflow-postgres.yml k8s/mlflow/02-mlflow-minio.yml k8s/mlflow/03-mlflow-server.yml; do
+            echo "  Applying $f..."
+            oc apply -f "$f" -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+        done
+        echo "  Patching MLflow CLUSTER_DOMAIN → ${CLUSTER_DOMAIN}"
+        oc set env deployment/mlflow-deployment -n "$NAMESPACE" "CLUSTER_DOMAIN=${CLUSTER_DOMAIN}"
+        echo ""
+        echo "Waiting for MLflow stack to be ready..."
+        oc rollout status deployment/mlflow-postgresql-deployment -n "$NAMESPACE" --timeout=120s 2>/dev/null || echo "  PostgreSQL not ready yet"
+        oc rollout status deployment/mlflow-minio-deployment -n "$NAMESPACE" --timeout=120s 2>/dev/null || echo "  MinIO not ready yet"
+        oc rollout status deployment/mlflow-deployment -n "$NAMESPACE" --timeout=180s 2>/dev/null || echo "  MLflow not ready yet"
+        MLFLOW_ROUTE=$(oc get route mlflow-route -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    fi
+fi
+
+if [ -n "$MLFLOW_ROUTE" ]; then
+    echo "MLflow UI: https://${MLFLOW_ROUTE}"
+fi
+echo ""
+
+################################################################################
 # Step 2: Detect model endpoints
 ################################################################################
 echo "--- Step 2: Model Endpoints ---"
@@ -205,6 +243,11 @@ data:
   APP_NAMESPACE: "${NAMESPACE}"
   IMAGEGEN_MCP_SELF_URL: "https://imagegen-mcp-${NAMESPACE}.${CLUSTER_DOMAIN}"
 EOF
+
+if [ -n "$MLFLOW_ROUTE" ]; then
+    echo '  MLFLOW_TRACKING_URI: "https://'"${MLFLOW_ROUTE}"'"' >> k8s/overlays/dev/configmap-patch.yaml
+    echo "  MLflow tracking URI added to configmap"
+fi
 echo "  ConfigMap patch generated"
 
 # Update Kustomize namespace to match
@@ -331,6 +374,11 @@ echo "Frontend:"
 FRONTEND_URL=$(oc get route -n $NAMESPACE -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "not found")
 echo "  https://${FRONTEND_URL}"
 echo ""
+if [ -n "$MLFLOW_ROUTE" ]; then
+    echo "MLflow:"
+    echo "  https://${MLFLOW_ROUTE}"
+    echo ""
+fi
 echo "Useful commands:"
 echo "  ./reset-demo.sh          # Clean slate (remove generated campaigns)"
 echo "  ./build-and-push.sh      # Rebuild container images after code changes"

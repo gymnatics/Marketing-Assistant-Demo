@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../auth/KeycloakProvider';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,6 +10,7 @@ interface LayoutProps {
 
 const TopNavBar: React.FC = () => {
   const location = useLocation();
+  const { authenticated, user, login, logout, enabled } = useAuth();
   const isOnCampaigns = location.pathname === '/' || location.pathname.startsWith('/campaign');
   
   return (
@@ -40,10 +42,39 @@ const TopNavBar: React.FC = () => {
         <button className="p-2 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all">
           <span className="material-symbols-outlined text-slate-900 dark:text-slate-50">notifications</span>
         </button>
-        <button className="flex items-center gap-2 p-1 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all">
-          <span className="material-symbols-outlined text-slate-900 dark:text-slate-50" style={{fontVariationSettings: "'FILL' 1"}}>account_circle</span>
-          <span className="hidden lg:block text-sm font-medium text-slate-900 dark:text-slate-50">Executive Profile</span>
-        </button>
+        {enabled && !authenticated ? (
+          <button
+            onClick={login}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-sm font-semibold hover:opacity-90 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">login</span>
+            Sign In
+          </button>
+        ) : (
+          <div className="relative group">
+            <button className="flex items-center gap-2 p-1 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all">
+              <span className="material-symbols-outlined text-slate-900 dark:text-slate-50" style={{fontVariationSettings: "'FILL' 1"}}>account_circle</span>
+              <span className="hidden lg:block text-sm font-medium text-slate-900 dark:text-slate-50">
+                {user?.name || 'Executive Profile'}
+              </span>
+            </button>
+            {enabled && authenticated && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Signed in as</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">{user?.username}</p>
+                </div>
+                <button
+                  onClick={logout}
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-b-lg flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

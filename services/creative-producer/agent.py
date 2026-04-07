@@ -349,7 +349,10 @@ class CreativeProducerAgent:
         )
         
         try:
-            with set_tracing_context_from_http_request_headers(self.headers):
+            from contextlib import nullcontext
+            trace_ctx = (set_tracing_context_from_http_request_headers(self.headers)
+                         if self.headers.get("traceparent") else nullcontext())
+            with trace_ctx:
                 with mlflow.start_span("creative producer", span_type = SpanType.AGENT) as span:
                     hero_image_url = await generate_hero_image(
                         campaign_name=params["campaign_name"],

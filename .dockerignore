@@ -1,0 +1,13 @@
+.git
+frontend/node_modules
+node_modules
+tests
+*.pyc
+__pycache__
+.env
+.cursor
+.vscode
+k8s/mlflow
+k8s/guardrails
+k8s/kagenti
+k8s/models

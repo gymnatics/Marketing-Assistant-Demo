@@ -22,7 +22,7 @@ data:
 
   # MLflow GenAI tracing (Campaign Director); set MLFLOW_TRACKING_URI in overlay to enable
   MLFLOW_EXPERIMENT_NAME: "marketing-assistant"
-  MLFLOW_TRACKING_URI: "mlflow-service:5000"
+  MLFLOW_TRACKING_URI: ""
 
   # Sample permission  
   ALLOWED_PLATINUM_TIER: alice

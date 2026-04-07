@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { authFetch } from '../auth/authFetch';
 
 
 interface Email {
@@ -31,7 +32,7 @@ export default function Inbox() {
       const url = filterEmail
         ? `/api/inbox?email=${encodeURIComponent(filterEmail)}`
         : '/api/inbox';
-      const resp = await fetch(url);
+      const resp = await authFetch(url);
       if (resp.ok) {
         const data = await resp.json();
         setEmails(data);
@@ -42,7 +43,7 @@ export default function Inbox() {
   const openEmail = async (email: Email) => {
     setSelected(email);
     if (!email.read) {
-      await fetch(`/api/inbox/${email.id}/read`, { method: 'POST' });
+      await authFetch(`/api/inbox/${email.id}/read`, { method: 'POST' });
       setEmails(prev => prev.map(e => e.id === email.id ? { ...e, read: true } : e));
     }
   };

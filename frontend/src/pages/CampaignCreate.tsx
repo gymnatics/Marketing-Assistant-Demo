@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
+import { authFetch } from '../auth/authFetch';
 
 export interface CampaignData {
   campaign_name: string;
@@ -126,7 +127,7 @@ export default function CampaignCreate() {
     if (!urlCampaignId) return;
     (async () => {
       try {
-        const resp = await fetch(`/api/campaigns/${urlCampaignId}`);
+        const resp = await authFetch(`/api/campaigns/${urlCampaignId}`);
         if (!resp.ok) { navigate('/'); return; }
         const data = await resp.json();
         setCampaignData({
@@ -263,7 +264,7 @@ export default function CampaignCreate() {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, 3000));
       try {
-        const resp = await fetch(`/api/campaigns/${campaignId}`);
+        const resp = await authFetch(`/api/campaigns/${campaignId}`);
         if (!resp.ok) continue;
         const data = await resp.json();
         if (targetStatuses.includes(data.status)) return data;
@@ -281,7 +282,7 @@ export default function CampaignCreate() {
     setLoading(true);
     setAgentStatus('Campaign Director: Initializing campaign...');
     try {
-      const response = await fetch('/api/campaigns', {
+      const response = await authFetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campaignData)
@@ -308,7 +309,7 @@ export default function CampaignCreate() {
     startProgressSimulation();
     await new Promise(r => setTimeout(r, 1500));
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/generate`, { method: 'POST' });
+      const response = await authFetch(`/api/campaigns/${campaignId}/generate`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start generation');
       
       const result = await pollCampaignStatus(campaignId, ['preview_ready']);
@@ -340,7 +341,7 @@ export default function CampaignCreate() {
     startProgressSimulation();
     await new Promise(r => setTimeout(r, 1500));
     try {
-      const response = await fetch(`/api/campaigns/${campaignState.id}/preview-email`, { method: 'POST' });
+      const response = await authFetch(`/api/campaigns/${campaignState.id}/preview-email`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start email preview');
       
       const result = await pollCampaignStatus(campaignState.id, ['email_ready']);
@@ -384,7 +385,7 @@ export default function CampaignCreate() {
     startProgressSimulation();
     await new Promise(r => setTimeout(r, 1500));
     try {
-      const response = await fetch(`/api/campaigns/${campaignState.id}/approve`, { method: 'POST' });
+      const response = await authFetch(`/api/campaigns/${campaignState.id}/approve`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to start deployment');
       
       const result = await pollCampaignStatus(campaignState.id, ['live']);
@@ -414,7 +415,7 @@ export default function CampaignCreate() {
       setAgentStatus('Validating campaign through safety checks...');
       setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
       try {
-        const validateResp = await fetch('/api/campaigns/validate', {
+        const validateResp = await authFetch('/api/campaigns/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(campaignData)
@@ -428,6 +429,7 @@ export default function CampaignCreate() {
           }));
           setLoading(false);
           setAgentStatus('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
       } catch {
