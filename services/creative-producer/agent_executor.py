@@ -11,6 +11,8 @@ from a2a.utils import new_task, new_agent_text_message
 
 from agent import CreativeProducerAgent
 
+import mlflow
+from mlflow.tracing import set_tracing_context_from_http_request_headers
 
 class CreativeProducerExecutor(AgentExecutor):
 
@@ -18,6 +20,9 @@ class CreativeProducerExecutor(AgentExecutor):
         self.agent = CreativeProducerAgent()
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+
+        self.agent.headers = (getattr(context.call_context, "state", {}) or {}).get("headers", {})
+        
         user_input = context.get_user_input()
         try:
             params = json.loads(user_input)

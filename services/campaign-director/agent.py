@@ -65,8 +65,6 @@ class CampaignState(TypedDict):
     error_message: str
     messages: Annotated[list, operator.add]
 
-# Not needed. 
-# @mlflow.trace(name="a2a_call", span_type=SpanType.AGENT)
 async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: str = "") -> dict:
     """Call an A2A agent via JSON-RPC (a2a-sdk protocol)."""
     from a2a.client import A2AClient
@@ -86,9 +84,9 @@ async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: s
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}" if not auth_token.startswith("Bearer") else auth_token
     
-    #trace_headers = get_tracing_context_headers_for_http_request()
-    #headers.update(trace_headers)
-    
+    trace_headers = get_tracing_context_headers_for_http_request()
+    headers.update(trace_headers)
+
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as httpx_client:
         client = A2AClient(httpx_client=httpx_client, url=agent_url)
         response = await client.send_message(request)

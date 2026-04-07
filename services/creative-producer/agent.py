@@ -10,10 +10,15 @@ import os
 import sys
 import json
 import httpx
+import mlflow
+import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
+from shared.mlflow_bootstrap import update_trace_session
 
+from mlflow.tracing import set_tracing_context_from_http_request_headers
+from mlflow.entities import SpanType
 
 CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
@@ -335,66 +340,78 @@ class CreativeProducerAgent:
 
     async def generate(self, params: dict) -> dict:
         campaign_id = params.get("campaign_id", "unknown")
-
+                
         await publish_event(
             campaign_id=campaign_id,
             event_type="agent_started",
             agent="Creative Producer",
             task="Creating campaign visuals..."
         )
-
+        
         try:
-            hero_image_url = await generate_hero_image(
-                campaign_name=params["campaign_name"],
-                hotel_name=params["hotel_name"],
-                theme=params["theme"],
-                description=params["campaign_description"],
-            )
+            with set_tracing_context_from_http_request_headers(self.headers):
+                with mlflow.start_span("creative producer", span_type = SpanType.AGENT) as span:
+                    hero_image_url = await generate_hero_image(
+                        campaign_name=params["campaign_name"],
+                        hotel_name=params["hotel_name"],
+                        theme=params["theme"],
+                        description=params["campaign_description"],
+                    )
 
-            if hero_image_url:
-                await publish_event(
-                    campaign_id=campaign_id,
-                    event_type="agent_completed",
-                    agent="Creative Producer",
-                    task="Campaign visuals ready",
-                    data={"image_url": hero_image_url}
-                )
-            else:
-                await publish_event(
-                    campaign_id=campaign_id,
-                    event_type="workflow_status",
-                    agent="Creative Producer",
-                    task="Applying theme design..."
-                )
+                    if hero_image_url:
+                        await publish_event(
+                            campaign_id=campaign_id,
+                            event_type="agent_completed",
+                            agent="Creative Producer",
+                            task="Campaign visuals ready",
+                            data={"image_url": hero_image_url}
+                        )
+                    else:
+                        await publish_event(
+                            campaign_id=campaign_id,
+                            event_type="workflow_status",
+                            agent="Creative Producer",
+                            task="Applying theme design..."
+                        )
 
-            await publish_event(
-                campaign_id=campaign_id,
-                event_type="agent_started",
-                agent="Creative Producer",
-                task="Designing your landing page..."
-            )
+                    await publish_event(
+                        campaign_id=campaign_id,
+                        event_type="agent_started",
+                        agent="Creative Producer",
+                        task="Designing your landing page..."
+                    )
 
-            html = await generate_html_with_streaming(
-                campaign_name=params["campaign_name"],
-                campaign_description=params["campaign_description"],
-                hotel_name=params["hotel_name"],
-                theme=params["theme"],
-                start_date=params["start_date"],
-                end_date=params["end_date"],
-                hero_image_url=hero_image_url,
-            )
+                    html = await generate_html_with_streaming(
+                        campaign_name=params["campaign_name"],
+                        campaign_description=params["campaign_description"],
+                        hotel_name=params["hotel_name"],
+                        theme=params["theme"],
+                        start_date=params["start_date"],
+                        end_date=params["end_date"],
+                        hero_image_url=hero_image_url,
+                    )
 
-            await publish_event(
-                campaign_id=campaign_id,
-                event_type="agent_completed",
-                agent="Creative Producer",
-                task="Landing page ready",
-                data={"html_length": len(html)}
-            )
+                    await publish_event(
+                        campaign_id=campaign_id,
+                        event_type="agent_completed",
+                        agent="Creative Producer",
+                        task="Landing page ready",
+                        data={"html_length": len(html)}
+                    )
 
-            return {"html": html, "hero_image_url": hero_image_url, "status": "success"}
-
+                    update_trace_session(
+                        {
+                            "mlflow.trace.session": campaign_id,
+                            "workflow": "landing_page",
+                            "campaign_name": params["campaign_name"],
+                            "image_url": hero_image_url
+                        }
+                    )
+                    
+                    return {"html": html, "hero_image_url": hero_image_url, "status": "success"}
         except Exception as e:
+            traceback.print_exc()
+
             await publish_event(
                 campaign_id=campaign_id,
                 event_type="agent_error",
