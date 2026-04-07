@@ -27,7 +27,8 @@ def ensure_mlflow_initialized() -> None:
         try:
             import langchain
             mlflow.langchain.autolog(run_tracer_inline=True)
-        except ImportError: pass
+        except ImportError: 
+            print("Unable to autolog mlflow")
                 
     except Exception as e:
         print(f"[mlflow_bootstrap] MLflow init failed ({e}); tracing may be disabled.", file=sys.stderr)
