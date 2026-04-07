@@ -15,8 +15,11 @@ from starlette.routing import Route
 from starlette.responses import JSONResponse
 from starlette.requests import Request
 
+from shared.mlflow_bootstrap import ensure_mlflow_initialized
 from agent_executor import CampaignDirectorExecutor
 from agent import campaigns_store
+
+ensure_mlflow_initialized()
 
 host = "0.0.0.0"
 port = int(os.environ.get("PORT", 8080))

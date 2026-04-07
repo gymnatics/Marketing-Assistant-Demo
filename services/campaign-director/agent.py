@@ -13,10 +13,14 @@ import traceback
 import httpx
 from typing import TypedDict, Annotated, List
 import operator
+import mlflow
 
+from mlflow.entities import SpanType
+from mlflow.tracing import get_tracing_context_headers_for_http_request
 from langgraph.graph import StateGraph, START, END
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from shared.mlflow_bootstrap import update_trace_session
 from shared.models import (
     CampaignRequest,
     CampaignData,
@@ -61,7 +65,8 @@ class CampaignState(TypedDict):
     error_message: str
     messages: Annotated[list, operator.add]
 
-
+# Not needed. 
+# @mlflow.trace(name="a2a_call", span_type=SpanType.AGENT)
 async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: str = "") -> dict:
     """Call an A2A agent via JSON-RPC (a2a-sdk protocol)."""
     from a2a.client import A2AClient
@@ -80,11 +85,16 @@ async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: s
     headers = {}
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}" if not auth_token.startswith("Bearer") else auth_token
+    
+    #trace_headers = get_tracing_context_headers_for_http_request()
+    #headers.update(trace_headers)
+    
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as httpx_client:
         client = A2AClient(httpx_client=httpx_client, url=agent_url)
         response = await client.send_message(request)
-
+    
     resp = response.root
+
     if hasattr(resp, 'error') and resp.error:
         return {"status": "error", "error": f"A2A error: {resp.error.message}"}
 
@@ -153,7 +163,7 @@ async def validate_policy_node(state: CampaignState) -> CampaignState:
 async def generate_landing_page_node(state: CampaignState) -> CampaignState:
     await publish_event(state["campaign_id"], "workflow_status", "Campaign Director",
                         "Starting creative design...", {"step": "generating_landing_page"})
-
+    
     result = await call_a2a_agent(CREATIVE_PRODUCER_URL, "generate_landing_page", {
         "campaign_id": state["campaign_id"],
         "campaign_name": state["campaign_name"],
@@ -363,7 +373,15 @@ def build_go_live_workflow():
 
 # ── Background Workflow Runners ──
 
+@mlflow.trace(name="workflow_landing_page")
 async def _run_landing_page_workflow(campaign_id: str, campaign):
+    update_trace_session(
+        {
+            "mlflow.trace.session": campaign_id,
+            "workflow": "landing_page",
+            "campaign_name": campaign.campaign_name,
+        }
+    )
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -394,7 +412,15 @@ async def _run_landing_page_workflow(campaign_id: str, campaign):
         campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
 
 
+@mlflow.trace(name="workflow_email_preview")
 async def _run_email_preview_workflow(campaign_id: str, campaign):
+    update_trace_session(
+        {
+            "mlflow.trace.session": campaign_id,
+            "workflow": "email_preview",
+            "campaign_name": campaign.campaign_name,
+        }
+    )
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -431,7 +457,15 @@ async def _run_email_preview_workflow(campaign_id: str, campaign):
         campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
 
 
+@mlflow.trace(name="workflow_go_live")
 async def _run_go_live_workflow(campaign_id: str, campaign):
+    update_trace_session(
+        {
+            "mlflow.trace.session": campaign_id,
+            "workflow": "go_live",
+            "campaign_name": campaign.campaign_name,
+        }
+    )
     try:
         initial_state: CampaignState = {
             "campaign_id": campaign_id,
@@ -483,6 +517,7 @@ class CampaignDirectorAgent:
         else:
             return {"error": f"Unknown skill: {skill}"}
 
+    @mlflow.trace(name="skill_chat")
     def _handle_chat(self, params: dict) -> dict:
         text = params.get("text", "")
         campaigns = list(campaigns_store.values())
@@ -496,6 +531,7 @@ class CampaignDirectorAgent:
         summary += f"\nAvailable skills: create_campaign, generate_landing_page, prepare_email_preview, go_live"
         return {"response": summary}
 
+    @mlflow.trace(name="skill_create_campaign")
     async def _create_campaign(self, params: dict) -> dict:
         req = CampaignRequest(**params)
         campaign_id = str(uuid.uuid4())[:8]
@@ -511,6 +547,13 @@ class CampaignDirectorAgent:
             status=CampaignStatus.DRAFT
         )
         campaigns_store[campaign_id] = campaign
+        update_trace_session(
+            {
+                "mlflow.trace.session": campaign_id,
+                "skill": "create_campaign",
+                "campaign_name": campaign.campaign_name,
+            }
+        )
         await publish_event(campaign_id, "campaign_created", "Campaign Director",
                             "Campaign created", {"campaign_id": campaign_id})
         return {"campaign_id": campaign_id, "status": "created"}

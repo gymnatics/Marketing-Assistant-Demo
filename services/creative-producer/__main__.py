@@ -13,6 +13,10 @@ from starlette.responses import JSONResponse
 
 from agent_executor import CreativeProducerExecutor
 
+from shared.mlflow_bootstrap import ensure_mlflow_initialized
+
+ensure_mlflow_initialized()
+
 host = "0.0.0.0"
 port = int(os.environ.get("PORT", 8081))
 
