@@ -18,9 +18,6 @@ spec:
       app: event-hub
   template:
     metadata:
-      annotations:
-        instrumentation.opentelemetry.io/inject-python: 'true'
-        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: event-hub
         app.kubernetes.io/component: backend

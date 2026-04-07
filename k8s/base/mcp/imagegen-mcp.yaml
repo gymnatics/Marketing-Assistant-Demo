@@ -22,9 +22,6 @@ spec:
       app: imagegen-mcp
   template:
     metadata:
-      annotations:
-        instrumentation.opentelemetry.io/inject-python: 'true'
-        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: imagegen-mcp
         app.kubernetes.io/component: backend

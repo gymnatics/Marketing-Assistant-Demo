@@ -21,11 +21,9 @@ spec:
   template:
     metadata:
       annotations:
-        instrumentation.opentelemetry.io/inject-python: 'true'
         prometheus.io/scrape: "true"
         prometheus.io/port: "5000"
-        prometheus.io/path: "/metrics"
-        sidecar.opentelemetry.io/inject: app-sidecar
+        prometheus.io/path: "/metrics"        
       labels:
         app: campaign-api
         app.kubernetes.io/component: backend

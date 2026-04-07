@@ -22,10 +22,7 @@ spec:
     matchLabels:
       app: campaign-director
   template:
-    metadata:
-      annotations:
-        instrumentation.opentelemetry.io/inject-python: 'true'
-        sidecar.opentelemetry.io/inject: app-sidecar
+    metadata:      
       labels:
         app: campaign-director
         app.kubernetes.io/component: backend

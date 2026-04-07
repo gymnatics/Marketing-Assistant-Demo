@@ -27,10 +27,7 @@ spec:
         app.kubernetes.io/instance: policy-guardian
         app.kubernetes.io/part-of: simon-casino-agents
         app.openshift.io/runtime: python
-        component: agent
-      annotations:
-        instrumentation.opentelemetry.io/inject-python: "true"
-        sidecar.opentelemetry.io/inject: app-sidecar
+        component: agent      
     spec:
       containers:
         - name: agent

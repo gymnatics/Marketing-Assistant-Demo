@@ -23,9 +23,6 @@ spec:
       app: creative-producer
   template:
     metadata:
-      annotations:
-        instrumentation.opentelemetry.io/inject-python: 'true'
-        sidecar.opentelemetry.io/inject: app-sidecar
       labels:
         app: creative-producer
         app.kubernetes.io/component: backend
