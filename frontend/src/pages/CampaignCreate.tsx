@@ -250,6 +250,10 @@ export default function CampaignCreate() {
     };
   }, [stopSSE]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentStep]);
+
   const handleDataChange = (data: Partial<CampaignData>) => {
     setCampaignData(prev => ({ ...prev, ...data }));
     setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
@@ -1199,15 +1203,7 @@ export default function CampaignCreate() {
                   <span className="font-bold">How to fix:</span> {guardrailSummary.guidance}
                 </p>
               )}
-              {guardrailDetailEntries.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {guardrailDetailEntries.map(([key, value]) => (
-                    <span key={key} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-on-error-container">
-                      {key.replace(/_/g, ' ')}: {String(value)}
-                    </span>
-                  ))}
-                </div>
-              )}
+              
             </div>
             <button onClick={() => setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }))} className="text-on-error-container/60 hover:text-on-error-container">
               <span className="material-symbols-outlined text-sm">close</span>

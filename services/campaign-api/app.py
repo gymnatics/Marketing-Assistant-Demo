@@ -64,7 +64,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
         blocked_term = match.group(0)
         return guardrail_failure(
             "regex_competitor",
-            "Layer 1: Competitor Name Check",
+            "Brand Compliance",
             "Competitor reference detected",
             f'The campaign mentions "{blocked_term}", which is blocked by the competitor-name guardrail.',
             "Remove competitor brand names and rewrite the campaign in Simon property terms only.",
@@ -89,10 +89,10 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                             score = round(det.get("score", 0), 3)
                             return guardrail_failure(
                                 "hap",
-                                "Layer 2: TrustyAI HAP",
+                                "Content Safety Check",
                                 "Inappropriate language detected",
-                                f"The content was flagged by the HAP safety model for {label} (score: {score}).",
-                                "Remove profanity, abusive language, or other inappropriate wording and keep the tone premium and professional.",
+                                "The campaign contains language that does not meet our professional standards. Please ensure all wording is appropriate for a luxury brand audience.",
+                                "Revise the campaign name and description to use professional, premium language suitable for high-value customers.",
                                 {"label": label, "score": score},
                             )
     except Exception as e:
@@ -116,10 +116,10 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
                             score = round(det.get("score", 0), 3)
                             return guardrail_failure(
                                 "prompt_injection",
-                                "Layer 3: TrustyAI Prompt Injection",
-                                "Prompt injection pattern detected",
-                                f"The input was flagged as {label} by the prompt-injection detector (score: {score}).",
-                                "Remove instruction-like text such as attempts to override the system, reveal secrets, or manipulate the AI's behavior.",
+                                "Input Validation",
+                                "Suspicious input pattern detected",
+                                "The campaign description contains instruction-like patterns that could interfere with content generation. Please use natural marketing language only.",
+                                "Rewrite the description as a straightforward campaign brief — avoid technical instructions, system commands, or directive language.",
                                 {"label": label, "score": score},
                             )
     except Exception as e:
@@ -165,7 +165,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
             reason = result.get("reason", "Campaign does not meet policy requirements.")
             return guardrail_failure(
                 "policy_guardian",
-                "Layer 4: Policy Guardian",
+                "Campaign Policy Review",
                 "Business policy violation",
                 reason,
                 "Adjust the offer so it stays realistic, premium, and compliant with Simon campaign policy.",
