@@ -85,6 +85,7 @@ async def call_a2a_agent(agent_url: str, skill: str, params: dict, auth_token: s
         headers["Authorization"] = f"Bearer {auth_token}" if not auth_token.startswith("Bearer") else auth_token
     
     trace_headers = get_tracing_context_headers_for_http_request()
+    print(f"trace context headers: {trace_headers}")
     headers.update(trace_headers)
 
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as httpx_client:
