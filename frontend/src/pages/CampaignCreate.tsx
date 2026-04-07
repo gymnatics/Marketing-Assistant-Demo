@@ -1172,7 +1172,6 @@ export default function CampaignCreate() {
 
   const activeNav = SIDE_NAV_MAP[currentStep] || 'strategy';
 
-  const guardrailDetailEntries = Object.entries(campaignState.guardrailError?.details || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
   const guardrailSummary = campaignState.guardrailError;
 
   const renderStatusBanner = () => (
