@@ -62,3 +62,4 @@ stitch-template/
 slides/
 tests/mlflow-tracing/*.db
 tests/mlflow-tracing/mlruns/
+tests/
