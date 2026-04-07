@@ -17,8 +17,15 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
 from shared.mlflow_bootstrap import update_trace_session
 
+from contextlib import nullcontext
 from mlflow.tracing import set_tracing_context_from_http_request_headers
 from mlflow.entities import SpanType
+
+
+def safe_tracing_context(headers):
+    if headers and "traceparent" in headers:
+        return set_tracing_context_from_http_request_headers(headers)
+    return nullcontext()
 
 CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
@@ -349,10 +356,7 @@ class CreativeProducerAgent:
         )
         
         try:
-            from contextlib import nullcontext
-            trace_ctx = (set_tracing_context_from_http_request_headers(self.headers)
-                         if self.headers.get("traceparent") else nullcontext())
-            with trace_ctx:
+            with safe_tracing_context(self.headers):
                 with mlflow.start_span("creative producer", span_type = SpanType.AGENT) as span:
                     hero_image_url = await generate_hero_image(
                         campaign_name=params["campaign_name"],
