@@ -20,5 +20,9 @@ data:
   POLICY_GUARDIAN_URL: "http://policy-guardian:8084"
   EVENT_HUB_URL: "http://event-hub:5001"
 
+  # MLflow GenAI tracing (Campaign Director); set MLFLOW_TRACKING_URI in overlay to enable
+  MLFLOW_EXPERIMENT_NAME: "marketing-assistant"
+  MLFLOW_TRACKING_URI: "mlflow-service:5000"
+
   # Sample permission  
   ALLOWED_PLATINUM_TIER: alice
