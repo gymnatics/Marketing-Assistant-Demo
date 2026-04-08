@@ -12,6 +12,11 @@ import time
 import httpx
 from typing import Optional
 from fastmcp import FastMCP
+from shared.mlflow_bootstrap import ensure_mlflow_initialized, set_safe_tracing_context
+
+import mlflow
+from mlflow.tracing import set_tracing_context_from_http_request_headers
+from mlflow.entities import SpanType
 
 mcp = FastMCP("Image Generation MCP")
 
@@ -32,6 +37,7 @@ THEME_PROMPTS = {
     "classic_casino": "deep emerald green felt, gold and brass accents, classic elegance, vintage glamour",
 }
 
+ensure_mlflow_initialized()
 
 def _build_prompt(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str:
     theme_style = THEME_PROMPTS.get(theme, THEME_PROMPTS["luxury_gold"])
@@ -82,6 +88,7 @@ async def generate_campaign_image(
     description: str = "",
     width: int = 1024,
     height: int = 576,
+    agent_headers: dict = None, 
 ) -> dict:
     """
     Generate a marketing hero banner image for a campaign.
@@ -100,21 +107,41 @@ async def generate_campaign_image(
     Returns:
         Dict with image_url, image_id, and status
     """
-    prompt = _build_prompt(campaign_name, hotel_name, theme, description)
-    image_bytes = await _call_imagegen_api(prompt, width, height)
 
-    image_id = f"img-{uuid.uuid4().hex[:12]}"
-    image_store[image_id] = image_bytes
-    _cleanup_store()
+    print(f"Agent headers recieved: {agent_headers}")
 
-    image_url = f"{SELF_URL}/images/{image_id}.png"
-    return {
-        "image_url": image_url,
-        "image_id": image_id,
-        "prompt": prompt,
-        "status": "success",
-    }
+    with set_safe_tracing_context(agent_headers):
+        with mlflow.start_span("image gen", span_type = SpanType.TOOL) as span:
+            
+            prompt = _build_prompt(campaign_name, hotel_name, theme, description)
+            image_bytes = await _call_imagegen_api(prompt, width, height)
 
+            span.set_inputs({
+                "campaign_name": campaign_name,
+                "hotel_name": hotel_name,
+                "theme": theme,
+                "description": description
+            })
+
+            span.set_attribute("prompt", prompt)
+
+            image_id = f"img-{uuid.uuid4().hex[:12]}"
+            image_store[image_id] = image_bytes
+            _cleanup_store()
+
+            image_url = f"{SELF_URL}/images/{image_id}.png"
+       
+            span.set_outputs({
+                "image_url": image_url,
+                "image_id": image_id,
+            })
+            
+            return {
+                "image_url": image_url,
+                "image_id": image_id,
+                "prompt": prompt,
+                "status": "success",
+            }
 
 @mcp.tool
 async def generate_campaign_image_b64(
@@ -124,6 +151,7 @@ async def generate_campaign_image_b64(
     description: str = "",
     width: int = 1024,
     height: int = 576,
+    agent_headers: dict = None
 ) -> dict:
     """
     Generate a marketing hero banner and return as base64.
@@ -142,8 +170,13 @@ async def generate_campaign_image_b64(
     Returns:
         Dict with data_uri, image_id, and status
     """
-    prompt = _build_prompt(campaign_name, hotel_name, theme, description)
-    image_bytes = await _call_imagegen_api(prompt, width, height)
+
+    print(f"Agent headers recieved: {agent_headers}")
+
+    with set_safe_tracing_context(agent_headers):
+        with mlflow.start_span("image gen", span_type = SpanType.TOOL) as span:
+            prompt = _build_prompt(campaign_name, hotel_name, theme, description)
+            image_bytes = await _call_imagegen_api(prompt, width, height)
 
     image_id = f"img-{uuid.uuid4().hex[:12]}"
     image_store[image_id] = image_bytes

@@ -2,8 +2,10 @@ import json
 import os
 import sys
 from typing import Any, Mapping
+from contextlib import nullcontext
 
 import mlflow
+from mlflow.tracing import set_tracing_context_from_http_request_headers
 
 _initialized: bool = False
 
@@ -28,7 +30,7 @@ def ensure_mlflow_initialized() -> None:
             import langchain
             mlflow.langchain.autolog(run_tracer_inline=True)
         except ImportError: 
-            print("Unable to autolog mlflow")
+            print("langchain module not detected. Unable to autolog in mlflow")
                 
     except Exception as e:
         print(f"[mlflow_bootstrap] MLflow init failed ({e}); tracing may be disabled.", file=sys.stderr)
@@ -57,3 +59,8 @@ def update_trace_session(metadata: Mapping[str, Any]) -> None:
 #         "runId": "pre-fix",
 #     }
 #     print(json.dumps(payload, default=str), file=sys.stderr, flush=True)
+
+def set_safe_tracing_context(headers):
+    if headers and "traceparent" in headers:
+        return set_tracing_context_from_http_request_headers(headers)
+    return nullcontext()

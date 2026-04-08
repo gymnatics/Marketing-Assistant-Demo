@@ -13,6 +13,18 @@ from agent import CreativeProducerAgent
 
 import mlflow
 from mlflow.tracing import set_tracing_context_from_http_request_headers
+from mlflow.entities import SpanType
+
+def get_a2a_agent_headers(context: RequestContext) -> dict:
+    agent_headers = (getattr(context.call_context, "state", {}) or {}).get("headers", {})
+
+    traceparent = agent_headers.get('traceparent', None)
+    if traceparent:
+        print(f"traceparent header recieved from a2s call: {traceparent}")
+    else:
+        print("No traceparent header found")
+
+    return agent_headers
 
 class CreativeProducerExecutor(AgentExecutor):
 
@@ -21,8 +33,8 @@ class CreativeProducerExecutor(AgentExecutor):
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
 
-        self.agent.headers = (getattr(context.call_context, "state", {}) or {}).get("headers", {})
-        
+        agent_headers = get_a2a_agent_headers(context)        
+
         user_input = context.get_user_input()
         try:
             params = json.loads(user_input)
@@ -46,7 +58,7 @@ class CreativeProducerExecutor(AgentExecutor):
             ),
         )
 
-        result = await self.agent.generate(params)
+        result = await self.agent.generate(params, agent_headers)
 
         result_json = json.dumps(result)
         parts: list[Part] = [Part(root=TextPart(text=result_json))]

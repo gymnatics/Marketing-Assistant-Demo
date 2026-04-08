@@ -15,17 +15,10 @@ import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
-from shared.mlflow_bootstrap import update_trace_session
+from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context
 
-from contextlib import nullcontext
-from mlflow.tracing import set_tracing_context_from_http_request_headers
+from mlflow.tracing import get_tracing_context_headers_for_http_request
 from mlflow.entities import SpanType
-
-
-def safe_tracing_context(headers):
-    if headers and "traceparent" in headers:
-        return set_tracing_context_from_http_request_headers(headers)
-    return nullcontext()
 
 CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
@@ -168,6 +161,10 @@ def merge_template(template: str, theme_config: dict, style_block: str, content:
 async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str | None:
     """Call Image Gen MCP to generate a hero banner image. Returns a public URL or None on failure."""
     try:
+
+        headers = get_tracing_context_headers_for_http_request()
+        print(f"inside generate_hero_image span: TRACE_HEADERS={headers}")
+        
         from fastmcp import Client
         async with Client(f"{IMAGEGEN_MCP_URL}/mcp") as mcp_client:
             result = await mcp_client.call_tool("generate_campaign_image", {
@@ -177,6 +174,7 @@ async def generate_hero_image(campaign_name: str, hotel_name: str, theme: str, d
                 "description": description,
                 "width": 1024,
                 "height": 576,
+                "agent_headers": headers
             })
             if result and result.content:
                 import json as _json
@@ -341,11 +339,10 @@ ALL content must be in English only. Do NOT include any Chinese text."""
 
     return html
 
-
 class CreativeProducerAgent:
     """Pure business logic for the Creative Producer agent."""
 
-    async def generate(self, params: dict) -> dict:
+    async def generate(self, params: dict, agent_headers: dict) -> dict:
         campaign_id = params.get("campaign_id", "unknown")
                 
         await publish_event(
@@ -356,13 +353,16 @@ class CreativeProducerAgent:
         )
         
         try:
-            with safe_tracing_context(self.headers):
+            with set_safe_tracing_context(agent_headers):
                 with mlflow.start_span("creative producer", span_type = SpanType.AGENT) as span:
+
+                    span.set_inputs(params)
+
                     hero_image_url = await generate_hero_image(
                         campaign_name=params["campaign_name"],
                         hotel_name=params["hotel_name"],
                         theme=params["theme"],
-                        description=params["campaign_description"],
+                        description=params["campaign_description"]                    
                     )
 
                     if hero_image_url:
@@ -415,7 +415,10 @@ class CreativeProducerAgent:
                         }
                     )
                     
-                    return {"html": html, "hero_image_url": hero_image_url, "status": "success"}
+                    result = {"html": html, "hero_image_url": hero_image_url, "status": "success"}
+                    span.set_outputs(result)
+                    return result
+                
         except Exception as e:
             traceback.print_exc()
 

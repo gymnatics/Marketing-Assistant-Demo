@@ -5,6 +5,7 @@ WORKDIR /opt/app-root/src
 COPY services/imagegen-mcp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY shared/ /opt/app-root/src/shared/
 COPY services/imagegen-mcp/server.py .
 
 EXPOSE 8091
