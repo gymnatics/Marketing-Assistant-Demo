@@ -413,12 +413,12 @@ export default function CampaignCreate() {
 
   const handleNext = async () => {
     if (busyRef.current) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     if (currentStep === 0) {
       // Validate through guardrails before proceeding
       setLoading(true);
       setAgentStatus('Validating campaign through safety checks...');
       setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       try {
         const validateResp = await authFetch('/api/campaigns/validate', {
           method: 'POST',
