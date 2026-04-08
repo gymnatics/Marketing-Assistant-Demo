@@ -63,3 +63,16 @@ spec:
     targetPort: 8091
   selector:
     app: imagegen-mcp
+---
+# Kagenti currently hardcode this
+# https://github.com/kagenti/kagenti/blob/main/kagenti/ui-v2/src/pages/ToolDetailPage.tsx#L292-L299  
+apiVersion: v1
+kind: Service
+metadata:
+  name: imagegen-mcp-mcp 
+spec:
+  ports:
+  - port: 8091
+    targetPort: 8091
+  selector:
+    app: imagegen-mcp
