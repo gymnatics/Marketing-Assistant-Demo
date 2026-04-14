@@ -569,14 +569,17 @@ else
                 echo "    done"
 
                 # --- Create demo users ---
+                # alice: Senior Marketing Exec (sees all data incl. platinum)
+                # bob:   Junior Marketing Associate (platinum filtered out)
+                # admin: Platform admin
+                # demo-user: Dashboard SSO user
                 echo "  Creating demo users..."
-                for KC_USER_DATA in "admin:admin:Admin:User" "demo-user:password:Demo:User"; do
+                for KC_USER_DATA in "alice:alice:Alice:Chen:Senior Marketing Executive" "bob:bob:Bob:Santos:Junior Marketing Associate" "admin:admin:Admin:User:Platform Administrator" "demo-user:password:Demo:User:Dashboard User"; do
                     KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1)
                     KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
                     KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3)
                     KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
 
-                    # Create user
                     curl -sk -X POST "${KC_REALM_API}/users" \
                         -H "Authorization: Bearer ${KC_TOKEN}" \
                         -H "Content-Type: application/json" \
@@ -596,8 +599,10 @@ else
                     echo "    ${KC_UNAME} / ${KC_UPASS}"
                 done
 
-                # --- Create audience scope for mongodb-tool ---
-                echo "  Creating audience scopes..."
+                # --- Create audience and permission scopes ---
+                echo "  Creating scopes..."
+
+                # mongodb-tool-aud: audience mapper so exchanged tokens include mongodb-tool audience
                 curl -sk -X POST "${KC_REALM_API}/client-scopes" \
                     -H "Authorization: Bearer ${KC_TOKEN}" \
                     -H "Content-Type: application/json" \
@@ -621,7 +626,22 @@ else
                             }
                         }]
                     }" 2>/dev/null | head -c 0
-                echo "    mongodb-tool-aud scope created"
+                echo "    mongodb-tool-aud"
+
+                # mongodb-full-access: permission scope requested during token exchange
+                curl -sk -X POST "${KC_REALM_API}/client-scopes" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                        \"name\": \"mongodb-full-access\",
+                        \"description\": \"Full access permission for MongoDB MCP\",
+                        \"protocol\": \"openid-connect\",
+                        \"attributes\": {
+                            \"include.in.token.scope\": \"true\",
+                            \"display.on.consent.screen\": \"false\"
+                        }
+                    }" 2>/dev/null | head -c 0
+                echo "    mongodb-full-access"
 
                 # --- Enable token exchange on mongodb-tool client ---
                 # Get mongodb-tool internal client ID
@@ -646,11 +666,39 @@ else
                     fi
                 fi
 
+                # --- Create realm role and assign to alice ---
+                echo "  Creating 'platinum-access' realm role..."
+                curl -sk -X POST "${KC_REALM_API}/roles" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                        \"name\": \"platinum-access\",
+                        \"description\": \"Access to platinum-tier customer data\"
+                    }" 2>/dev/null | head -c 0
+
+                # Assign platinum-access role to alice
+                ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                    "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
+                    python3 -c "import sys,json; users=json.load(sys.stdin); print(users[0]['id'] if users else '')" 2>/dev/null || echo "")
+                if [ -n "$ALICE_ID" ]; then
+                    ROLE_JSON=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                        "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
+                    curl -sk -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "[${ROLE_JSON}]" 2>/dev/null | head -c 0
+                    echo "    platinum-access role assigned to alice"
+                else
+                    echo "    WARNING: Could not find alice user to assign role"
+                fi
+                echo "    (bob does NOT have this role — platinum data will be filtered)"
+
                 echo ""
                 echo "  Keycloak realm '${KC_REALM}' configured:"
                 echo "    Clients: simon-casino-ui (public), mongodb-tool (confidential)"
-                echo "    Users: admin/admin, demo-user/password"
-                echo "    Scopes: mongodb-tool-aud (audience mapper)"
+                echo "    Users: alice/alice (platinum-access), bob/bob (no platinum), admin/admin, demo-user/password"
+                echo "    Roles: platinum-access (assigned to alice only)"
+                echo "    Scopes: mongodb-tool-aud, mongodb-full-access"
             fi
 
             KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")

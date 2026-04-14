@@ -72,23 +72,26 @@ def parse_authorization_bearer_jwt(headers: Mapping[str, Any]) -> dict[str, Any]
             auth = headers[key]
             break
     if auth is None:
-        return {"preferred_username": None, "scope": None, "error": "missing_authorization"}
+        return {"preferred_username": None, "scope": None, "roles": [], "error": "missing_authorization"}
     if isinstance(auth, (list, tuple)):
         auth = auth[0] if auth else None
     if not auth or not isinstance(auth, str):
-        return {"preferred_username": None, "scope": None, "error": "invalid_authorization_header"}
+        return {"preferred_username": None, "scope": None, "roles": [], "error": "invalid_authorization_header"}
     m = re.match(r"^\s*Bearer\s+(\S+)\s*$", auth, re.IGNORECASE)
     if not m:
-        return {"preferred_username": None, "scope": None, "error": "not_bearer_token"}
+        return {"preferred_username": None, "scope": None, "roles": [], "error": "not_bearer_token"}
     token = m.group(1)
     try:
         claims = decode_jwt_payload_unverified(token)
     except Exception as e:
         logger.debug("JWT payload decode failed: %s", e)
-        return {"preferred_username": None, "scope": None, "error": "jwt_decode_failed"}
+        return {"preferred_username": None, "scope": None, "roles": [], "error": "jwt_decode_failed"}
+    realm_access = claims.get("realm_access", {})
+    roles = realm_access.get("roles", []) if isinstance(realm_access, dict) else []
     return {
         "preferred_username": claims.get("preferred_username"),
         "scope": _normalize_scope_claim(claims.get("scope")),
+        "roles": roles,
     }
 
 
@@ -102,27 +105,34 @@ def get_bearer_auth_context() -> dict[str, Any]:
     headers = get_http_headers(include={"authorization"})
     return parse_authorization_bearer_jwt(headers)
 
+PLATINUM_ROLE = os.getenv("PLATINUM_ACCESS_ROLE", "platinum-access")
+
 def filter_customers_by_user_perm(customers: list) -> list:
     headers = get_http_headers(include={"authorization"})
-    
     auth_ctx = parse_authorization_bearer_jwt(headers)
-    
-    if auth_ctx.get('preferred_username'):
 
-        preferred_username = auth_ctx.get("preferred_username")
-        scope = auth_ctx.get("scope")
-        logger.info(f"JWT claims: preferred_username={preferred_username} scope={scope}")
-
-        user_allowed_for_plat_tier = os.getenv("ALLOWED_PLATINUM_TIER", None)
-
-        if user_allowed_for_plat_tier == preferred_username:
-            return customers
-        else: # not allowed, filter out
-            logger.info (f"{preferred_username} has no permisison to list platinum members")
-            return [c for c in customers if c.get('tier') != "platinum"]
-    else:
-        logger.info("No JWT token recieved")
+    if not auth_ctx.get("preferred_username"):
+        logger.info("No JWT token received — returning unfiltered data")
         return customers
+
+    username = auth_ctx["preferred_username"]
+    roles = auth_ctx.get("roles", [])
+    scope = auth_ctx.get("scope")
+    logger.info(f"JWT claims: preferred_username={username} roles={roles} scope={scope}")
+
+    # Primary: check Keycloak realm role (managed in Keycloak, no pod restart needed)
+    if PLATINUM_ROLE in roles:
+        logger.info(f"{username} has '{PLATINUM_ROLE}' role — full access")
+        return customers
+
+    # Fallback: legacy env var check (for clusters without Keycloak roles configured)
+    legacy_allowed = os.getenv("ALLOWED_PLATINUM_TIER", "")
+    if legacy_allowed and legacy_allowed == username:
+        logger.info(f"{username} matches ALLOWED_PLATINUM_TIER env var — full access (legacy)")
+        return customers
+
+    logger.info(f"{username} lacks '{PLATINUM_ROLE}' role — filtering out platinum members")
+    return [c for c in customers if c.get("tier") != "platinum"]
     
 
 # Initialize FastMCP server
