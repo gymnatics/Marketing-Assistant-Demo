@@ -62,12 +62,12 @@ echo ""
 
 # --- Ensure all namespaces exist before applying any resources ---
 echo "Ensuring namespaces exist..."
-for NS_TO_CREATE in "$NAMESPACE" "$MODEL_NS" "$DEV_NS" "$PROD_NS"; do
+UNIQUE_NS=$(echo "$NAMESPACE $MODEL_NS $DEV_NS $PROD_NS" | tr ' ' '\n' | sort -u)
+for NS_TO_CREATE in $UNIQUE_NS; do
     if [ -n "$NS_TO_CREATE" ]; then
         oc create namespace "$NS_TO_CREATE" --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
     fi
 done
-echo "  $NAMESPACE, $MODEL_NS, $DEV_NS, $PROD_NS"
 echo ""
 
 ################################################################################
