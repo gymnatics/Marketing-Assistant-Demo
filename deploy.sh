@@ -755,6 +755,17 @@ else
                                 \"temporary\": false
                             }]
                         }" 2>/dev/null > /dev/null
+
+                    # Always reset password (handles case where user already existed from Helm)
+                    KC_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                        "${KC_REALM_API}/users?username=${KC_UNAME}&exact=true" 2>/dev/null | \
+                        python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+                    if [ -n "$KC_UID" ]; then
+                        curl -sk -X PUT "${KC_REALM_API}/users/${KC_UID}/reset-password" \
+                            -H "Authorization: Bearer ${KC_TOKEN}" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}" 2>/dev/null > /dev/null
+                    fi
                     echo "    ${KC_UNAME} / ${KC_UPASS}"
                 done
 
