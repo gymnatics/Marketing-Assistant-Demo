@@ -515,13 +515,30 @@ else
         echo ""
         echo "--- Step 6a: Pre-flight checks ---"
 
+        KAGENTI_EXTRA_SETS=""
+
         # Check for existing cert-manager -- if present, tell KAgenti to skip its own
-        SKIP_CERTMGR=""
         CERTMGR_COUNT=$(oc get deployment -n cert-manager --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
         CERTMGR_COUNT=${CERTMGR_COUNT:-0}
         if [ "$CERTMGR_COUNT" -ge 1 ]; then
-            echo "  Existing cert-manager detected — KAgenti will reuse it (skipping its own)."
-            SKIP_CERTMGR="--set components.certManager.enabled=false"
+            echo "  Existing cert-manager detected — will reuse it."
+            KAGENTI_EXTRA_SETS="$KAGENTI_EXTRA_SETS --set components.certManager.enabled=false"
+        fi
+
+        # Check for existing Istio -- if present, skip KAgenti's and adopt the namespaces
+        ISTIO_COUNT=$(oc get deployment -n istio-system --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
+        ISTIO_COUNT=${ISTIO_COUNT:-0}
+        if [ "$ISTIO_COUNT" -ge 1 ]; then
+            echo "  Existing Istio detected — will reuse it."
+            KAGENTI_EXTRA_SETS="$KAGENTI_EXTRA_SETS --set components.istio.enabled=false"
+            # Label existing namespaces so Helm can adopt them
+            for NS_ADOPT in istio-system istio-cni istio-ztunnel keycloak zero-trust-workload-identity-manager; do
+                if oc get ns "$NS_ADOPT" &>/dev/null 2>&1; then
+                    oc label namespace "$NS_ADOPT" app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null || true
+                    oc annotate namespace "$NS_ADOPT" meta.helm.sh/release-name=kagenti-deps meta.helm.sh/release-namespace=kagenti-system --overwrite 2>/dev/null || true
+                fi
+            done
+            echo "  Labeled existing namespaces for Helm adoption."
         fi
 
         if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
@@ -553,8 +570,8 @@ else
                 --version "${KAGENTI_TAG}" \
                 --set spire.trustDomain="${DOMAIN}" \
                 --set openshift=true \
-                $SKIP_CERTMGR \
-                --wait --timeout 10m 2>&1 | tail -3
+                $KAGENTI_EXTRA_SETS \
+                --wait --timeout 10m 2>&1 | tail -5
 
             # Install MCP Gateway
             echo "  Installing MCP Gateway..."
