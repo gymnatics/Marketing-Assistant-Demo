@@ -114,7 +114,9 @@ export const KeycloakProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const logout = useCallback(() => {
-    kcRef.current?.logout({ redirectUri: window.location.origin });
+    setAuthenticated(false);
+    setUser(null);
+    kcRef.current?.logout({ redirectUri: window.location.origin + '/?logout=1' });
   }, []);
 
   return (
@@ -130,7 +132,14 @@ export const KeycloakProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         enabled,
       }}
     >
-      {children}
+      {enabled && (loading || !authenticated) ? (
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f172a',color:'#fff',fontFamily:'Manrope,sans-serif'}}>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px'}}>Simon Casino Resort</div>
+            <div style={{fontSize:'14px',opacity:0.6}}>Redirecting to sign in...</div>
+          </div>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 };
