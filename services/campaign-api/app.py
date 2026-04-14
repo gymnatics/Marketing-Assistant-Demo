@@ -186,7 +186,7 @@ def check_guardrails(campaign_name: str, description: str) -> dict:
 
 
 
-def call_director_a2a_sync(skill: str, params: dict) -> dict:
+def call_director_a2a_sync(skill: str, params: dict, auth_header: str = "") -> dict:
     """Call Campaign Director via A2A JSON-RPC protocol (synchronous)."""
     from a2a.client import A2AClient
     from a2a.types import MessageSendParams, SendMessageRequest
@@ -203,8 +203,11 @@ def call_director_a2a_sync(skill: str, params: dict) -> dict:
         )
         req = SendMessageRequest(id=str(uuid.uuid4()), params=message_params)
 
+        headers = {}
+        if auth_header:
+            headers["Authorization"] = auth_header
         timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
-        async with httpx.AsyncClient(timeout=timeout) as httpx_client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as httpx_client:
             client = A2AClient(httpx_client=httpx_client, url=CAMPAIGN_DIRECTOR_URL)
             response = await client.send_message(req)
 
@@ -318,7 +321,7 @@ def create_campaign():
             }), 400
 
         AGENT_CALLS.labels(skill="create_campaign").inc()
-        result = call_director_a2a_sync("create_campaign", data)
+        result = call_director_a2a_sync("create_campaign", data, request.headers.get("Authorization", ""))
         if "error" in result and result["error"]:
             return jsonify(result), 500
         CAMPAIGNS_CREATED.inc()
@@ -333,7 +336,7 @@ def generate_landing_page(campaign_id: str):
     try:
         AGENT_CALLS.labels(skill="generate_landing_page").inc()
         start = time.time()
-        result = call_director_a2a_sync("generate_landing_page", {"campaign_id": campaign_id})
+        result = call_director_a2a_sync("generate_landing_page", {"campaign_id": campaign_id}, request.headers.get("Authorization", ""))
         STEP_DURATION.labels(step="generate").observe(time.time() - start)
         return jsonify(result)
     except Exception as e:
@@ -345,7 +348,7 @@ def preview_email(campaign_id: str):
     try:
         AGENT_CALLS.labels(skill="prepare_email_preview").inc()
         start = time.time()
-        result = call_director_a2a_sync("prepare_email_preview", {"campaign_id": campaign_id})
+        result = call_director_a2a_sync("prepare_email_preview", {"campaign_id": campaign_id}, request.headers.get("Authorization", ""))
         STEP_DURATION.labels(step="email_preview").observe(time.time() - start)
         return jsonify(result)
     except Exception as e:
@@ -357,7 +360,7 @@ def approve_campaign(campaign_id: str):
     try:
         AGENT_CALLS.labels(skill="go_live").inc()
         start = time.time()
-        result = call_director_a2a_sync("go_live", {"campaign_id": campaign_id})
+        result = call_director_a2a_sync("go_live", {"campaign_id": campaign_id}, request.headers.get("Authorization", ""))
         STEP_DURATION.labels(step="go_live").observe(time.time() - start)
         CAMPAIGNS_LIVE.inc()
         ACTIVE_CAMPAIGNS.dec()
