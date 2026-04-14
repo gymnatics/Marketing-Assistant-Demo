@@ -668,6 +668,16 @@ Image Model: https://flux2-klein-4b-0-marketing-assistant-demo.{CLUSTER_DOMAIN}/
 
 All endpoints use kube-rbac-proxy authentication (Bearer token from ServiceAccount).
 
+### vLLM Serving Arguments
+
+| Model | Runtime Image | Args |
+|-------|--------------|------|
+| Qwen2.5-Coder-32B | `registry.redhat.io/rhaiis/vllm-cuda-rhel9` (Red Hat vLLM) | `--max-model-len=16384 --gpu-memory-utilization=0.95 --enable-auto-tool-choice --tool-call-parser=hermes` |
+| Qwen3-32B | `registry.redhat.io/rhaiis/vllm-cuda-rhel9` (Red Hat vLLM) | `--dtype=auto --max-model-len=16000 --gpu-memory-utilization=0.90 --enable-auto-tool-choice --tool-call-parser=hermes --tensor-parallel-size=1` |
+| FLUX.2-klein-4B | `vllm/vllm-omni:v0.18.0` | `--omni --gpu-memory-utilization=0.90 --trust-remote-code` + env: `VLLM_ATTENTION_BACKEND=FLASH_ATTN`, `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, `/dev/shm` 12Gi emptyDir |
+
+All GPU models use KServe `RawDeployment` mode (`serving.kserve.io/deploymentMode: RawDeployment`) with 1x `nvidia.com/gpu` per pod. S3 storage keys in `storage-config` secret must match the ISVC `storage.key` field.
+
 ---
 
 ## 12. Detailed Service Reference
