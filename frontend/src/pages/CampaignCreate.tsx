@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 import { authFetch } from '../auth/authFetch';
+import { useAuth } from '../auth/KeycloakProvider';
 
 export interface CampaignData {
   campaign_name: string;
@@ -95,9 +96,20 @@ function statusToStep(status: string): number {
   }
 }
 
+function getUserRoles(token: string | null): string[] {
+  if (!token) return [];
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload?.realm_access?.roles || [];
+  } catch { return []; }
+}
+
 export default function CampaignCreate() {
   const navigate = useNavigate();
   const { campaignId: urlCampaignId } = useParams<{ campaignId?: string }>();
+  const { token } = useAuth();
+  const userRoles = getUserRoles(token);
+  const hasPlatinumAccess = userRoles.includes('platinum-access');
   const [currentStep, setCurrentStep] = useState(0);
   const [initialLoading, setInitialLoading] = useState(!!urlCampaignId);
   const [campaignData, setCampaignData] = useState<CampaignData>({
@@ -415,10 +427,27 @@ export default function CampaignCreate() {
     if (busyRef.current) return;
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (currentStep === 0) {
+      setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
+
+      // Role-based audience restriction (instant, no API call)
+      if (!hasPlatinumAccess && /platinum/i.test(campaignData.target_audience)) {
+        setCampaignState(prev => ({
+          ...prev,
+          error: 'Access restriction',
+          guardrailError: {
+            passed: false,
+            layer: { id: 'role_restriction', name: 'Role Restriction' },
+            title: 'Access Restriction',
+            reason: 'Your role does not permit targeting Platinum-tier members.',
+            guidance: 'Select a different target audience (e.g., Gold members, all VIP customers) or contact your administrator for elevated access.',
+          }
+        }));
+        return;
+      }
+
       // Validate through guardrails before proceeding
       setLoading(true);
       setAgentStatus('Validating campaign through safety checks...');
-      setCampaignState(prev => ({ ...prev, error: undefined, guardrailError: undefined }));
       try {
         const validateResp = await authFetch('/api/campaigns/validate', {
           method: 'POST',
