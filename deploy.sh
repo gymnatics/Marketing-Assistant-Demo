@@ -635,6 +635,18 @@ else
                 echo "  Patching app ConfigMap with Keycloak URL for SSO..."
                 oc patch configmap marketing-assistant-config -n "${NAMESPACE}" --type=merge \
                     -p "{\"data\":{\"KEYCLOAK_URL\":\"https://${KEYCLOAK_ROUTE}\"}}" 2>/dev/null
+
+                # Overwrite frontend-keycloak-config with actual Keycloak URL
+                # (volume-mounted into frontend pod since docker-entrypoint.sh can't write on OpenShift)
+                echo "  Creating frontend-keycloak-config ConfigMap..."
+                oc create configmap frontend-keycloak-config -n "${NAMESPACE}" \
+                    --from-literal="keycloak-config.js=window.__KEYCLOAK_URL__ = \"https://${KEYCLOAK_ROUTE}\";
+window.__KEYCLOAK_REALM__ = \"kagenti\";
+window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
+                    --dry-run=client -o yaml | oc apply -f - 2>/dev/null
+
+                echo "  Restarting frontend to pick up Keycloak config..."
+                oc rollout restart deployment/frontend -n "${NAMESPACE}" 2>/dev/null || true
             fi
 
             echo ""

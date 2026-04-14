@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-keycloak-config
+data:
+  # Overwritten by deploy.sh Step 6 when KAgenti is deployed.
+  # When empty, SSO is disabled and the app works without login.
+  keycloak-config.js: |
+    window.__KEYCLOAK_URL__ = "";
+    window.__KEYCLOAK_REALM__ = "kagenti";
+    window.__KEYCLOAK_CLIENT_ID__ = "simon-casino-ui";
