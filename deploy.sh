@@ -310,83 +310,49 @@ echo ""
 echo "--- Step 2: Model Endpoints ---"
 echo ""
 
-# List available InferenceServices
-ISVC_LIST=$(oc get inferenceservice -n "$MODEL_NS" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}' 2>/dev/null || echo "")
-
-if [ -z "$ISVC_LIST" ]; then
-    echo "No InferenceServices found in $MODEL_NS."
-    echo "Enter model route hostnames manually (without https://):"
-    echo ""
-    read -p "  Code Model route (for HTML generation): " CODE_ROUTE
-    read -p "  Language Model route (for email + tool calling): " LANG_ROUTE
-    read -p "  Image Model route (for image generation): " IMG_ROUTE
-else
-    echo "Available models in $MODEL_NS:"
-    IDX=0
-    declare -a ISVC_NAMES=()
-    declare -a ISVC_ROUTES=()
-    for isvc in $ISVC_LIST; do
-        ROUTE=$(oc get route "${isvc}" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || \
-                oc get route "${isvc}-predictor" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || echo "no-route")
-        ISVC_NAMES+=("$isvc")
-        ISVC_ROUTES+=("$ROUTE")
-        echo "  [$IDX] $isvc → $ROUTE"
-        IDX=$((IDX + 1))
-    done
-    echo ""
-
-    # Auto-detect by name pattern, fallback to user selection
-    auto_detect_route() {
-        local pattern="$1"
-        local label="$2"
-        local default_idx="$3"
-        local found=""
-        for i in "${!ISVC_NAMES[@]}"; do
-            if echo "${ISVC_NAMES[$i]}" | grep -qi "$pattern"; then
-                found="${ISVC_ROUTES[$i]}"
-                echo "  Auto-detected $label: ${ISVC_NAMES[$i]} → $found" >&2
-                echo "$found"
+# Auto-detect model routes by name pattern (skip guardrails models)
+_find_model_route() {
+    local pattern="$1"
+    for isvc in $(oc get inferenceservice -n "$MODEL_NS" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+        if echo "$isvc" | grep -qi "$pattern" && ! echo "$isvc" | grep -qi "guardrail\|detector"; then
+            local route=$(oc get route "$isvc" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || \
+                          oc get route "${isvc}-predictor" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+            if [ -n "$route" ]; then
+                echo "$route"
                 return
             fi
-        done
-        if [ -n "$default_idx" ] && [ -n "${ISVC_ROUTES[$default_idx]}" ]; then
-            echo "${ISVC_ROUTES[$default_idx]}"
-            return
         fi
-        echo ""
-    }
-
-    CODE_ROUTE=$(auto_detect_route "coder\|code" "Code Model" "0")
-    LANG_ROUTE=$(auto_detect_route "qwen3\|lang\|chat" "Language Model" "1")
-    IMG_ROUTE=$(auto_detect_route "flux\|image\|omni" "Image Model" "2")
-
-    # Let user override if auto-detection is wrong
+    done
     echo ""
-    read -p "  Code Model [$CODE_ROUTE] (Enter to keep, or type index/hostname): " CODE_OVERRIDE
-    if [ -n "$CODE_OVERRIDE" ]; then
-        if [[ "$CODE_OVERRIDE" =~ ^[0-9]+$ ]]; then
-            CODE_ROUTE="${ISVC_ROUTES[$CODE_OVERRIDE]}"
-        else
-            CODE_ROUTE="$CODE_OVERRIDE"
-        fi
-    fi
+}
 
-    read -p "  Language Model [$LANG_ROUTE] (Enter to keep): " LANG_OVERRIDE
-    if [ -n "$LANG_OVERRIDE" ]; then
-        if [[ "$LANG_OVERRIDE" =~ ^[0-9]+$ ]]; then
-            LANG_ROUTE="${ISVC_ROUTES[$LANG_OVERRIDE]}"
-        else
-            LANG_ROUTE="$LANG_OVERRIDE"
-        fi
-    fi
+CODE_ROUTE=$(_find_model_route "coder\|code")
+LANG_ROUTE=$(_find_model_route "qwen3\|lang")
+IMG_ROUTE=$(_find_model_route "flux\|omni")
 
-    read -p "  Image Model [$IMG_ROUTE] (Enter to keep): " IMG_OVERRIDE
-    if [ -n "$IMG_OVERRIDE" ]; then
-        if [[ "$IMG_OVERRIDE" =~ ^[0-9]+$ ]]; then
-            IMG_ROUTE="${ISVC_ROUTES[$IMG_OVERRIDE]}"
-        else
-            IMG_ROUTE="$IMG_OVERRIDE"
-        fi
+# Show what was detected
+echo "Detected model endpoints:"
+[ -n "$CODE_ROUTE" ] && echo "  Code Model (HTML gen):      $CODE_ROUTE" || echo "  Code Model (HTML gen):      NOT FOUND"
+[ -n "$LANG_ROUTE" ] && echo "  Language Model (email/tools): $LANG_ROUTE" || echo "  Language Model (email/tools): NOT FOUND"
+[ -n "$IMG_ROUTE" ] && echo "  Image Model (hero images):   $IMG_ROUTE" || echo "  Image Model (hero images):   NOT FOUND"
+echo ""
+
+# Only prompt if something is missing or user wants to override
+if [ -z "$CODE_ROUTE" ] || [ -z "$LANG_ROUTE" ] || [ -z "$IMG_ROUTE" ]; then
+    echo "Some models not detected. Enter hostnames manually (without https://):"
+    [ -z "$CODE_ROUTE" ] && read -p "  Code Model route: " CODE_ROUTE
+    [ -z "$LANG_ROUTE" ] && read -p "  Language Model route: " LANG_ROUTE
+    [ -z "$IMG_ROUTE" ] && read -p "  Image Model route: " IMG_ROUTE
+    echo ""
+else
+    read -p "Press Enter to confirm, or type 'edit' to change: " EDIT_MODELS
+    if [ "$EDIT_MODELS" = "edit" ]; then
+        read -p "  Code Model [$CODE_ROUTE]: " CODE_OVERRIDE
+        [ -n "$CODE_OVERRIDE" ] && CODE_ROUTE="$CODE_OVERRIDE"
+        read -p "  Language Model [$LANG_ROUTE]: " LANG_OVERRIDE
+        [ -n "$LANG_OVERRIDE" ] && LANG_ROUTE="$LANG_OVERRIDE"
+        read -p "  Image Model [$IMG_ROUTE]: " IMG_OVERRIDE
+        [ -n "$IMG_OVERRIDE" ] && IMG_ROUTE="$IMG_OVERRIDE"
     fi
 fi
 
