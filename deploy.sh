@@ -76,33 +76,165 @@ echo ""
 echo "--- Step 1: Model Setup ---"
 echo ""
 
-# Check if models are already served
-ISVC_COUNT=$(oc get inferenceservice -n "$MODEL_NS" --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
-ISVC_COUNT=${ISVC_COUNT:-0}
+# Detect existing InferenceServices by pattern (names may vary slightly)
+ISVC_LIST=$(oc get inferenceservice -n "$MODEL_NS" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null || echo "")
+HAS_CODER=$(echo "$ISVC_LIST" | grep -ci "coder" || true)
+HAS_QWEN3=$(echo "$ISVC_LIST" | grep -ci "qwen3" || true)
+HAS_FLUX=$(echo "$ISVC_LIST" | grep -ci "flux" || true)
+MODELS_FOUND=$((HAS_CODER + HAS_QWEN3 + HAS_FLUX))
 
-if [ "$ISVC_COUNT" -ge 3 ]; then
-    echo "Found $ISVC_COUNT InferenceServices in $MODEL_NS — skipping model deploy."
+if [ "$MODELS_FOUND" -ge 3 ]; then
+    echo "All 3 models already deployed in $MODEL_NS — skipping."
+    echo "  $(echo "$ISVC_LIST" | grep -i "coder" | head -1) (code model)"
+    echo "  $(echo "$ISVC_LIST" | grep -i "qwen3" | head -1) (language model)"
+    echo "  $(echo "$ISVC_LIST" | grep -i "flux" | head -1) (image model)"
     echo ""
 else
-    echo "Found $ISVC_COUNT InferenceServices in $MODEL_NS."
-    read -p "Deploy model manifests from k8s/models/? (y/N): " DEPLOY_MODELS
-    if [ "$DEPLOY_MODELS" = "y" ] || [ "$DEPLOY_MODELS" = "Y" ]; then
+    echo "Found $MODELS_FOUND of 3 required models in $MODEL_NS."
+    [ "$HAS_CODER" -ge 1 ] && echo "  ✓ Code model (Qwen2.5-Coder) found" || echo "  ✗ Code model (Qwen2.5-Coder) missing"
+    [ "$HAS_QWEN3" -ge 1 ] && echo "  ✓ Language model (Qwen3) found" || echo "  ✗ Language model (Qwen3) missing"
+    [ "$HAS_FLUX" -ge 1 ] && echo "  ✓ Image model (FLUX.2) found" || echo "  ✗ Image model (FLUX.2) missing"
+    echo ""
+    echo "Deploy models via:"
+    echo "  (1) RHOAI Dashboard UI (recommended — creates data connections automatically)"
+    echo "  (2) RHOAI-Toolkit scripts (automated S3 setup + serving)"
+    echo "  (3) Kustomize manifests (requires pre-configured S3 data connections)"
+    echo "  (s) Skip for now"
+    read -p "Choose [1/2/3/s]: " MODEL_CHOICE
+
+    if [ "$MODEL_CHOICE" = "3" ]; then
         echo "Applying model manifests to $MODEL_NS..."
         if oc apply -k k8s/models/ -n "$MODEL_NS" 2>&1 | tee /tmp/model-apply.log | grep -E "created|configured|unchanged"; then
             echo ""
         else
             echo ""
             echo "WARNING: Model manifest apply had errors:"
-            cat /tmp/model-apply.log
-            echo ""
-            echo "This usually means RHOAI is not installed (missing InferenceService/ServingRuntime CRDs)"
-            echo "or the namespace '$MODEL_NS' does not exist."
-            echo "You can deploy models manually later. Continuing..."
+            grep -i "error\|failed\|not found" /tmp/model-apply.log 2>/dev/null || cat /tmp/model-apply.log
             echo ""
         fi
         rm -f /tmp/model-apply.log
-        echo "NOTE: Models need S3/PVC data connections configured in RHOAI."
-        echo "      See k8s/models/README.md for storage setup instructions."
+
+        # Ensure storage-config has keys for all 3 models
+        echo "Checking storage-config for model data connections..."
+        STORAGE_KEYS=$(oc get secret storage-config -n "$MODEL_NS" -o jsonpath='{.data}' 2>/dev/null | python3 -c "import sys,json; print(' '.join(json.load(sys.stdin).keys()))" 2>/dev/null || echo "")
+
+        # Try to find a working S3 endpoint from existing data connections
+        S3_ENDPOINT=""
+        S3_BUCKET=""
+        S3_ACCESS=""
+        S3_SECRET=""
+        S3_REGION=""
+        for DC_SECRET in $(oc get secret -n "$MODEL_NS" -o name 2>/dev/null | grep -E "aws-connection|data-connection" | head -5); do
+            DC_NAME=$(echo "$DC_SECRET" | sed 's|secret/||')
+            CANDIDATE_ENDPOINT=$(oc get secret "$DC_NAME" -n "$MODEL_NS" -o jsonpath='{.data.AWS_S3_ENDPOINT}' 2>/dev/null | base64 -d 2>/dev/null)
+            if [ -n "$CANDIDATE_ENDPOINT" ]; then
+                S3_ENDPOINT="$CANDIDATE_ENDPOINT"
+                S3_BUCKET=$(oc get secret "$DC_NAME" -n "$MODEL_NS" -o jsonpath='{.data.AWS_S3_BUCKET}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_ACCESS=$(oc get secret "$DC_NAME" -n "$MODEL_NS" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_SECRET=$(oc get secret "$DC_NAME" -n "$MODEL_NS" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_REGION=$(oc get secret "$DC_NAME" -n "$MODEL_NS" -o jsonpath='{.data.AWS_DEFAULT_REGION}' 2>/dev/null | base64 -d 2>/dev/null)
+                echo "  Found S3 config from $DC_NAME → $S3_ENDPOINT/$S3_BUCKET"
+                break
+            fi
+        done
+
+        # Also check model-storage namespace if no local data connection found
+        if [ -z "$S3_ENDPOINT" ]; then
+            S3_ENDPOINT=$(oc get secret aws-connection-minio -n model-storage -o jsonpath='{.data.AWS_S3_ENDPOINT}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+            if [ -n "$S3_ENDPOINT" ]; then
+                S3_BUCKET=$(oc get secret aws-connection-minio -n model-storage -o jsonpath='{.data.AWS_S3_BUCKET}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_ACCESS=$(oc get secret aws-connection-minio -n model-storage -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_SECRET=$(oc get secret aws-connection-minio -n model-storage -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d 2>/dev/null)
+                S3_REGION=$(oc get secret aws-connection-minio -n model-storage -o jsonpath='{.data.AWS_DEFAULT_REGION}' 2>/dev/null | base64 -d 2>/dev/null)
+                echo "  Found S3 config from model-storage namespace → $S3_ENDPOINT/$S3_BUCKET"
+            fi
+        fi
+
+        if [ -n "$S3_ENDPOINT" ]; then
+            S3_JSON="{\"type\":\"s3\",\"access_key_id\":\"${S3_ACCESS}\",\"secret_access_key\":\"${S3_SECRET}\",\"endpoint_url\":\"${S3_ENDPOINT}\",\"bucket\":\"${S3_BUCKET}\",\"region\":\"${S3_REGION:-us-east-1}\"}"
+
+            # Get ISVC storage key names (may differ from defaults)
+            for ISVC_NAME in $(oc get inferenceservice -n "$MODEL_NS" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+                STORAGE_KEY=$(oc get inferenceservice "$ISVC_NAME" -n "$MODEL_NS" -o jsonpath='{.spec.predictor.model.storage.key}' 2>/dev/null)
+                if [ -n "$STORAGE_KEY" ] && ! echo "$STORAGE_KEYS" | grep -q "$STORAGE_KEY"; then
+                    echo "  Adding storage key '$STORAGE_KEY' to storage-config..."
+                fi
+            done
+
+            # Rebuild storage-config with all needed keys
+            python3 -c "
+import json, base64, subprocess, sys
+
+ns = '${MODEL_NS}'
+s3_json = '${S3_JSON}'
+
+# Get existing storage-config
+result = subprocess.run(['oc', 'get', 'secret', 'storage-config', '-n', ns, '-o', 'json'],
+    capture_output=True, text=True)
+
+if result.returncode == 0:
+    existing = json.loads(result.stdout).get('data', {})
+else:
+    existing = {}
+
+# Get all ISVC storage keys
+result2 = subprocess.run(['oc', 'get', 'inferenceservice', '-n', ns, '-o', 'json'],
+    capture_output=True, text=True)
+if result2.returncode == 0:
+    isvcs = json.loads(result2.stdout).get('items', [])
+    for isvc in isvcs:
+        key = isvc.get('spec', {}).get('predictor', {}).get('model', {}).get('storage', {}).get('key', '')
+        if key and key not in existing:
+            existing[key] = base64.b64encode(s3_json.encode()).decode()
+
+# Write updated secret
+secret = {
+    'apiVersion': 'v1', 'kind': 'Secret',
+    'metadata': {'name': 'storage-config', 'namespace': ns},
+    'type': 'Opaque', 'data': existing,
+}
+with open('/tmp/storage-config-update.json', 'w') as f:
+    json.dump(secret, f)
+" 2>/dev/null
+            if [ -f /tmp/storage-config-update.json ]; then
+                oc apply -f /tmp/storage-config-update.json 2>/dev/null || \
+                    oc create -f /tmp/storage-config-update.json 2>/dev/null || true
+                rm -f /tmp/storage-config-update.json
+                echo "  storage-config updated"
+            fi
+        else
+            echo "  WARNING: No S3 data connection found. Models may fail to start."
+            echo "  Configure data connections in RHOAI Dashboard or run RHOAI-Toolkit first."
+        fi
+        echo ""
+
+    elif [ "$MODEL_CHOICE" = "2" ]; then
+        echo ""
+        echo "Run RHOAI-Toolkit to set up model storage and serving:"
+        echo "  git clone https://github.com/gymnatics/RHOAI-Toolkit.git && cd RHOAI-Toolkit"
+        echo "  export NAMESPACE=$MODEL_NS"
+        echo "  ./scripts/setup-model-storage.sh -n \$NAMESPACE"
+        echo "  ./scripts/download-model.sh s3 RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic"
+        echo "  ./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic"
+        echo "  ./scripts/download-model.sh s3 black-forest-labs/FLUX.2-klein-4B"
+        echo ""
+        echo "Then serve them (see README for full commands). Re-run deploy.sh after."
+        echo ""
+
+    elif [ "$MODEL_CHOICE" = "1" ]; then
+        echo ""
+        echo "Deploy the following models via RHOAI Dashboard UI:"
+        echo "  1. Qwen2.5-Coder-32B: path=RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic"
+        echo "     Args: --max-model-len=16384 --gpu-memory-utilization=0.95 --enable-auto-tool-choice --tool-call-parser=hermes"
+        echo "  2. Qwen3-32B: path=RedHatAI/Qwen3-32B-FP8-dynamic"
+        echo "     Args: --dtype=auto --max-model-len=16000 --gpu-memory-utilization=0.90 --enable-auto-tool-choice --tool-call-parser=hermes"
+        echo "  3. FLUX.2-klein-4B: path=black-forest-labs/FLUX.2-klein-4B (use vLLM-Omni runtime)"
+        echo "     Args: --omni --gpu-memory-utilization=0.90 --trust-remote-code"
+        echo ""
+        echo "Re-run deploy.sh after all 3 models show READY: True."
+        echo ""
+    else
+        echo "Skipping model deployment."
         echo ""
     fi
 fi
