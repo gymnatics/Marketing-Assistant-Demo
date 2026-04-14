@@ -701,7 +701,9 @@ window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
                     -d "grant_type=password" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
 
                 KC_REALM_API="${KC_API}/${KC_REALM}"
-                FRONTEND_HOST=$(oc get route frontend -n "${NAMESPACE}" -o jsonpath='{.spec.host}' 2>/dev/null || echo "frontend-${NAMESPACE}.${CLUSTER_DOMAIN}")
+                # Detect frontend route (may be named 'marketing-assistant', 'frontend', or other)
+                FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
+                FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
 
                 # --- Create simon-casino-ui client (public, for React Dashboard SSO) ---
                 echo "  Creating 'simon-casino-ui' client (public, for dashboard SSO)..."
