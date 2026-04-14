@@ -177,6 +177,7 @@ When a user creates a campaign, here's what happens under the hood:
 | ImageGen MCP | 8091 | AI image generation + serving (FastMCP 3.x hybrid) |
 | Campaign Landing | 8080/pod | Per-campaign Express.js personalized landing pages |
 | MongoDB | 27017 | Customer/prospect database |
+| MLflow Server | 5000 | GenAI tracing and experiment tracking (PostgreSQL + MinIO) |
 
 ## Key Features
 
@@ -190,6 +191,7 @@ When a user creates a campaign, here's what happens under the hood:
 - **Real-Time Agent Status** — SSE streaming shows agent activity during generation
 - **Preview Before Commit** — Review landing page, emails, and recipients before going live
 - **KAgenti Integration** — All agents discoverable via Kubernetes labels, with Bearer JWT security schemes, dual-mode input (structured + chat), and role-based MCP access
+- **MLflow GenAI Tracing** — End-to-end distributed traces across Campaign Director and Creative Producer with LangChain autolog, viewable in the MLflow UI
 
 ## Getting Started
 
@@ -349,6 +351,7 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 - **Database**: MongoDB 7
 - **Landing Pages**: Express.js on UBI9 Node 18 (personalized via MCP)
 - **Agent Management**: KAgenti (Kubernetes-native agent discovery + catalog)
+- **Tracing**: MLflow 3.10 (`mlflow[genai]`) with GenAI tracing, distributed trace context, LangChain autolog
 - **Platform**: Red Hat OpenShift AI 3.3, 3x NVIDIA L40S GPUs
 
 ## Models
@@ -376,20 +379,35 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 │   ├── mongodb-mcp/             # Customer DB MCP Server
 │   ├── imagegen-mcp/            # AI Image Gen MCP Server
 │   └── campaign-landing/        # Personalized Landing Pages (Express.js)
-├── shared/models.py             # Shared Pydantic models + themes
+├── shared/
+│   ├── models.py                # Shared Pydantic models + themes
+│   └── mlflow_bootstrap.py      # MLflow tracing initialization + helpers
 ├── k8s/                         # Kubernetes manifests (Kustomize)
 │   ├── base/                    # Namespace-agnostic manifests
 │   ├── overlays/dev/            # Cluster-specific config
 │   ├── guardrails/              # TrustyAI detector deployment
 │   ├── imagegen/                # vLLM-Omni ServingRuntime
+│   ├── mlflow/                  # MLflow stack (PostgreSQL + MinIO + server)
 │   └── rbac.yaml                # Cross-namespace permissions
 ├── build-and-push.sh            # Build & push all container images
 ├── deploy.sh                    # Interactive OpenShift deployment
 └── docker-compose.yaml          # Local development (all services)
 ```
 
+## MLflow Tracing
+
+MLflow 3.x GenAI tracing provides end-to-end observability across agent workflows. Tracing is **optional** — disabled when `MLFLOW_TRACKING_URI` is empty.
+
+- **Campaign Director** — `@mlflow.trace` on all 3 LangGraph workflows + skill handlers; propagates W3C `traceparent` to downstream agents
+- **Creative Producer** — Receives trace context from Director; wraps landing page generation in an `AGENT` span
+- **Server stack** — MLflow 3.10 + PostgreSQL (backend store) + MinIO (S3 artifact store), deployed via `k8s/mlflow/` manifests
+- **Deployment** — `deploy.sh` Step 1c optionally deploys the MLflow stack and wires `MLFLOW_TRACKING_URI` into the ConfigMap
+- **LangChain Autolog** — Automatically traces LangGraph/LangChain calls when the library is present
+
+The MLflow UI is accessible via the `mlflow-route` OpenShift Route.
+
 ## Documentation
 
 For deeper technical details — sequence diagrams, A2A/MCP protocol flows, LangGraph workflows, KAgenti integration, K8s deployment internals, personalization architecture, and observability — see:
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow, including KAgenti discovery, security schemes, and dual-mode input
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow, including KAgenti discovery, security schemes, dual-mode input, and MLflow tracing

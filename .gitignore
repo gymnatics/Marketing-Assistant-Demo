@@ -58,8 +58,11 @@ package-lock.json
 stitch.zip
 stitch-template/
 
-# Slides / presentations
+# Slides / presentations (PPTX is local-only; Google Slides is the master)
 slides/
+*.pptx
+generate_slides.py
 tests/mlflow-tracing/*.db
 tests/mlflow-tracing/mlruns/
 tests/
+Digital_Marketing_Demo.mp4
