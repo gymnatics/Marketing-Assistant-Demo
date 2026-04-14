@@ -450,7 +450,7 @@ else
 
             # Install kagenti-deps (SPIRE, Keycloak, Istio; cert-manager only if not already present)
             echo "  Installing kagenti-deps..."
-            helm install --create-namespace -n kagenti-system kagenti-deps \
+            helm upgrade --install --create-namespace -n kagenti-system kagenti-deps \
                 oci://ghcr.io/kagenti/kagenti/kagenti-deps \
                 --version "${KAGENTI_TAG}" \
                 --set spire.trustDomain="${DOMAIN}" \
@@ -461,7 +461,7 @@ else
             # Install MCP Gateway
             echo "  Installing MCP Gateway..."
             GATEWAY_TAG=$(skopeo list-tags docker://ghcr.io/kagenti/charts/mcp-gateway 2>/dev/null | python3 -c "import sys,json; tags=json.load(sys.stdin)['Tags']; print(tags[-1])" 2>/dev/null || echo "0.4.0")
-            helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
+            helm upgrade --install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
                 --create-namespace --namespace mcp-system \
                 --version "${GATEWAY_TAG}" \
                 --wait --timeout 5m 2>&1 | tail -3
