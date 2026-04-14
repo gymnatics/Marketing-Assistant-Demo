@@ -310,6 +310,31 @@ def get_campaign(campaign_id: str):
         return jsonify({"error": str(e)}), 500
 
 
+def _check_role_audience_restriction(target_audience: str, auth_header: str) -> dict | None:
+    """Layer 0: Block platinum audience if user lacks the platinum-access role."""
+    import re as _re, base64 as _b64
+    if not _re.search(r"platinum", target_audience, _re.IGNORECASE):
+        return None
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    try:
+        token = auth_header.split(" ", 1)[1]
+        payload_b64 = token.split(".")[1]
+        payload_b64 += "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload = json.loads(_b64.urlsafe_b64decode(payload_b64))
+        roles = payload.get("realm_access", {}).get("roles", [])
+        if "platinum-access" in roles:
+            return None
+        return guardrail_failure(
+            "role_restriction", "Access Restriction",
+            "Insufficient permissions for Platinum tier",
+            "Your role does not permit targeting Platinum-tier members.",
+            "Select a different target audience (e.g., Gold members, all VIP customers) or contact your administrator for elevated access.",
+        )
+    except Exception:
+        return None
+
+
 @app.route("/api/campaigns/validate", methods=["POST"])
 def validate_campaign():
     """Validate campaign through guardrails without creating it."""
@@ -317,6 +342,13 @@ def validate_campaign():
         data = request.get_json()
         name = data.get("campaign_name", "")
         desc = data.get("campaign_description", "")
+        audience = data.get("target_audience", "")
+
+        # Layer 0: Role-based audience restriction
+        role_check = _check_role_audience_restriction(audience, request.headers.get("Authorization", ""))
+        if role_check:
+            return jsonify({"valid": False, "reason": role_check["reason"], "guardrail": role_check}), 200
+
         result = check_guardrails(name, desc)
         if not result["passed"]:
             return jsonify({

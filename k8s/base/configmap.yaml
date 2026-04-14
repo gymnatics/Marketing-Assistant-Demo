@@ -32,4 +32,4 @@ data:
   # Set by deploy.sh Step 6 when KAgenti is deployed
   KEYCLOAK_URL: ""
   KEYCLOAK_REALM: "kagenti"
-  KEYCLOAK_CLIENT_ID: "simon-casino-ui"
+  KEYCLOAK_CLIENT_ID: "demo-ui"
