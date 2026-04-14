@@ -604,11 +604,13 @@ else
                 oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-spiffe-csi-driver 2>/dev/null || true
             fi
 
-            # Create keycloak-admin-secret in app namespace
+            # Copy keycloak-admin-secret into app namespace (read from Helm-created secret)
             echo "  Creating keycloak-admin-secret in ${NAMESPACE}..."
+            KC_ADMIN_U=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
+            KC_ADMIN_P=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
             oc create secret generic keycloak-admin-secret -n "${NAMESPACE}" \
-                --from-literal=KEYCLOAK_ADMIN_USERNAME=admin \
-                --from-literal=KEYCLOAK_ADMIN_PASSWORD=admin \
+                --from-literal=KEYCLOAK_ADMIN_USERNAME="${KC_ADMIN_U}" \
+                --from-literal=KEYCLOAK_ADMIN_PASSWORD="${KC_ADMIN_P}" \
                 --dry-run=client -o yaml | oc apply -f - 2>/dev/null
 
             # Apply KAgenti-specific manifests
@@ -635,9 +637,12 @@ else
             echo "--- Step 6d: Keycloak realm configuration ---"
             echo ""
             KEYCLOAK_INTERNAL="http://keycloak.keycloak.svc.cluster.local:8080"
-            KEYCLOAK_ADMIN_USER="admin"
-            KEYCLOAK_ADMIN_PASS="admin"
             KC_REALM="kagenti"
+
+            # Read actual Keycloak admin credentials from the secret created by the Helm chart
+            KEYCLOAK_ADMIN_USER=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
+            KEYCLOAK_ADMIN_PASS=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
+            echo "  Keycloak admin user: ${KEYCLOAK_ADMIN_USER}"
 
             # Get admin token from Keycloak
             echo "  Obtaining Keycloak admin token..."
