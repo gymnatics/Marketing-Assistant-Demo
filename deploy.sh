@@ -60,6 +60,14 @@ fi
 echo "Cluster domain: $CLUSTER_DOMAIN"
 echo ""
 
+# --- Ensure namespaces exist before applying any resources ---
+echo "Ensuring namespaces exist..."
+oc create namespace "$NAMESPACE" --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+if [ "$MODEL_NS" != "$NAMESPACE" ]; then
+    oc create namespace "$MODEL_NS" --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+fi
+echo ""
+
 ################################################################################
 # Step 1: Models (optional)
 ################################################################################
