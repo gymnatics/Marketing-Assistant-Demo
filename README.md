@@ -269,9 +269,23 @@ The script will:
 
 Removes all generated campaign pods (keeps the pre-generated nginx one), restarts services to clear in-memory state and inbox.
 
+### Deploy KAgenti Platform (optional)
+
+`deploy.sh` Step 6 installs the [KAgenti](https://github.com/kagenti/kagenti) platform for agent discovery, interactive chat, and zero-trust auth:
+
+```bash
+./deploy.sh
+# Answer 'y' at Step 6: KAgenti Platform
+```
+
+This deploys Keycloak, SPIRE, Istio Ambient, and the KAgenti operator/UI via Helm. All 5 agents + 2 MCP tools are automatically discovered. See [docs/KAGENTI-SETUP.md](docs/KAGENTI-SETUP.md) for manual installation and troubleshooting.
+
 ### Deploy to a Different Cluster
 
-1. Copy `k8s/overlays/dev/` to `k8s/overlays/<your-name>/`
+For full replication instructions (models, app, MLflow, guardrails, KAgenti, monitoring), see [docs/CLUSTER-REPLICATION.md](docs/CLUSTER-REPLICATION.md).
+
+Quick version:
+1. Clone the repo on a machine with `oc` access to the new cluster
 2. Run `./deploy.sh` — it auto-detects your cluster and models
 3. See `k8s/models/README.md` for model storage options (S3 vs PVC)
 

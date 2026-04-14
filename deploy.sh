@@ -355,6 +355,135 @@ sleep 5
 oc exec deployment/mongodb-mcp -n $NAMESPACE -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py 2>/dev/null || echo "  Seed failed (try manually later)"
 
 ################################################################################
+# Step 6: KAgenti Platform (optional)
+################################################################################
+echo ""
+echo "--- Step 6: KAgenti Platform ---"
+echo ""
+KAGENTI_ROUTE=""
+KAGENTI_INSTALLED=$(helm list -n kagenti-system --short 2>/dev/null | grep -c "kagenti" || true)
+KAGENTI_INSTALLED=$(echo "$KAGENTI_INSTALLED" | tr -dc '0-9')
+KAGENTI_INSTALLED=${KAGENTI_INSTALLED:-0}
+
+if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
+    echo "KAgenti already installed — skipping."
+    KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+else
+    read -p "Deploy KAgenti platform (agent discovery + zero-trust auth)? (y/N): " DEPLOY_KAGENTI
+    if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
+
+        echo ""
+        echo "--- Step 6a: Pre-flight checks ---"
+
+        # Check for existing cert-manager (KAgenti installs its own)
+        CERTMGR_COUNT=$(oc get deployment -n cert-manager --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
+        CERTMGR_COUNT=${CERTMGR_COUNT:-0}
+        if [ "$CERTMGR_COUNT" -ge 1 ]; then
+            echo "WARNING: cert-manager detected in cert-manager namespace."
+            echo "KAgenti installs its own cert-manager. You may need to remove the existing one."
+            read -p "Continue anyway? (y/N): " CONTINUE_CERTMGR
+            if [ "$CONTINUE_CERTMGR" != "y" ] && [ "$CONTINUE_CERTMGR" != "Y" ]; then
+                echo "Skipping KAgenti deployment. Remove cert-manager first, then re-run."
+                DEPLOY_KAGENTI="n"
+            fi
+        fi
+
+        if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
+
+            # Enable OVN local gateway mode for Istio Ambient
+            NETWORK_TYPE=$(oc get network.config/cluster -o jsonpath='{.spec.networkType}' 2>/dev/null || echo "")
+            if [ "$NETWORK_TYPE" = "OVNKubernetes" ]; then
+                echo "Enabling OVN local gateway mode for Istio Ambient..."
+                oc patch network.operator.openshift.io cluster --type=merge \
+                    -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"routingViaHost":true}}}}}' 2>/dev/null || echo "  OVN patch failed (may already be set)"
+            fi
+
+            # Trust domain from cluster DNS
+            DOMAIN="${CLUSTER_DOMAIN}"
+            echo "Trust domain: ${DOMAIN}"
+
+            echo ""
+            echo "--- Step 6b: Installing KAgenti Helm charts ---"
+
+            # Get latest KAgenti release tag
+            KAGENTI_TAG=$(git ls-remote --tags --sort="v:refname" https://github.com/kagenti/kagenti.git 2>/dev/null | tail -n1 | sed 's|.*refs/tags/v||; s/\^{}//' || echo "0.5.0")
+            KAGENTI_TAG=${KAGENTI_TAG:-0.5.0}
+            echo "KAgenti version: v${KAGENTI_TAG}"
+
+            # Install kagenti-deps (SPIRE, Keycloak, Istio, cert-manager)
+            echo "  Installing kagenti-deps..."
+            helm install --create-namespace -n kagenti-system kagenti-deps \
+                oci://ghcr.io/kagenti/kagenti/kagenti-deps \
+                --version "${KAGENTI_TAG}" \
+                --set spire.trustDomain="${DOMAIN}" \
+                --wait --timeout 10m 2>&1 | tail -3
+
+            # Install MCP Gateway
+            echo "  Installing MCP Gateway..."
+            GATEWAY_TAG=$(skopeo list-tags docker://ghcr.io/kagenti/charts/mcp-gateway 2>/dev/null | python3 -c "import sys,json; tags=json.load(sys.stdin)['Tags']; print(tags[-1])" 2>/dev/null || echo "0.4.0")
+            helm install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
+                --create-namespace --namespace mcp-system \
+                --version "${GATEWAY_TAG}" \
+                --wait --timeout 5m 2>&1 | tail -3
+
+            # Install KAgenti (UI, operator)
+            echo "  Installing kagenti..."
+            helm upgrade --install --create-namespace -n kagenti-system \
+                kagenti oci://ghcr.io/kagenti/kagenti/kagenti \
+                --version "${KAGENTI_TAG}" \
+                --set agentOAuthSecret.spiffePrefix="spiffe://${DOMAIN}/sa" \
+                --set uiOAuthSecret.useServiceAccountCA=false \
+                --set agentOAuthSecret.useServiceAccountCA=false \
+                --wait --timeout 10m 2>&1 | tail -3
+
+            echo ""
+            echo "--- Step 6c: Post-install configuration ---"
+
+            # Fix SPIRE daemonset SCC if needed
+            SPIRE_READY=$(oc get daemonset spire-agent -n zero-trust-workload-identity-manager -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+            if [ "$SPIRE_READY" = "0" ]; then
+                echo "  Fixing SPIRE daemonset SCC..."
+                oc adm policy add-scc-to-user privileged -z spire-agent -n zero-trust-workload-identity-manager 2>/dev/null || true
+                oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-agent 2>/dev/null || true
+                oc adm policy add-scc-to-user privileged -z spire-spiffe-csi-driver -n zero-trust-workload-identity-manager 2>/dev/null || true
+                oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-spiffe-csi-driver 2>/dev/null || true
+            fi
+
+            # Create keycloak-admin-secret in app namespace
+            echo "  Creating keycloak-admin-secret in ${NAMESPACE}..."
+            oc create secret generic keycloak-admin-secret -n "${NAMESPACE}" \
+                --from-literal=KEYCLOAK_ADMIN_USERNAME=admin \
+                --from-literal=KEYCLOAK_ADMIN_PASSWORD=admin \
+                --dry-run=client -o yaml | oc apply -f - 2>/dev/null
+
+            # Apply KAgenti-specific manifests
+            echo "  Applying KAgenti manifests..."
+            sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f - 2>/dev/null || true
+            oc apply -k k8s/kagenti/ -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -10
+
+            # Patch authbridge-config with actual Keycloak URLs
+            KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+            if [ -n "$KEYCLOAK_ROUTE" ]; then
+                echo "  Patching AuthBridge config with Keycloak URLs..."
+                oc patch configmap authbridge-config -n "${NAMESPACE}" --type=merge \
+                    -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080\",\"TOKEN_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null
+            fi
+
+            KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
+            echo ""
+            echo "KAgenti deployed successfully!"
+            [ -n "$KAGENTI_ROUTE" ] && echo "  KAgenti UI: https://${KAGENTI_ROUTE}"
+            [ -n "$KEYCLOAK_ROUTE" ] && echo "  Keycloak:   https://${KEYCLOAK_ROUTE}"
+            echo "  Default credentials: admin / admin"
+        fi
+    fi
+fi
+
+echo ""
+
+################################################################################
 # Summary
 ################################################################################
 echo ""
@@ -377,6 +506,12 @@ echo ""
 if [ -n "$MLFLOW_ROUTE" ]; then
     echo "MLflow:"
     echo "  https://${MLFLOW_ROUTE}"
+    echo ""
+fi
+if [ -n "$KAGENTI_ROUTE" ]; then
+    echo "KAgenti:"
+    echo "  UI:       https://${KAGENTI_ROUTE}"
+    echo "  Keycloak: https://${KEYCLOAK_ROUTE}"
     echo ""
 fi
 echo "Useful commands:"

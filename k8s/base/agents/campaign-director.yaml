@@ -22,7 +22,7 @@ spec:
     matchLabels:
       app: campaign-director
   template:
-    metadata:      
+    metadata:
       labels:
         app: campaign-director
         app.kubernetes.io/component: backend

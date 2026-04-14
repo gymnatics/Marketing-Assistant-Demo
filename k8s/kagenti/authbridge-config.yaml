@@ -1,10 +1,20 @@
 apiVersion: v1
 data:
+  # Patched dynamically by deploy.sh Step 6c with actual Keycloak URLs.
+  # ISSUER: External Keycloak URL for JWKS validation (e.g., https://keycloak-keycloak.apps.cluster.example.com/realms/kagenti)
+  # KEYCLOAK_URL: Internal Keycloak URL for token exchange (e.g., http://keycloak.keycloak.svc.cluster.local:8080)
+  # TOKEN_URL: Internal token endpoint (e.g., http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token)
   ISSUER: PLACE_HOLDER
   KEYCLOAK_REALM: kagenti
   KEYCLOAK_URL: PLACE_HOLDER
   SPIRE_ENABLED: 'False'
   TOKEN_URL: PLACE_HOLDER
+  # Skip inbound JWT validation for cluster-internal traffic.
+  # When AuthBridge sidecars are injected, internal service-to-service calls
+  # (e.g., Campaign API -> Campaign Director) don't carry JWTs. This setting
+  # allows internal requests to bypass validation while external requests
+  # (e.g., KAgenti UI) are still validated.
+  SKIP_INBOUND_VALIDATION_FOR_INTERNAL: 'True'
 kind: ConfigMap
 metadata:
-  name: authbridge-config  
+  name: authbridge-config

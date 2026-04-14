@@ -22,7 +22,7 @@ spec:
     matchLabels:
       app: delivery-manager
   template:
-    metadata:      
+    metadata:
       labels:
         app: delivery-manager
         app.kubernetes.io/component: backend
