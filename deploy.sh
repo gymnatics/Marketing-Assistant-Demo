@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="${NAMESPACE:-0-marketing-assistant-demo}"
-MODEL_NS="${MODEL_NS:-0-marketing-assistant-demo}"
+DEFAULT_NS="0-marketing-assistant-demo"
+NAMESPACE="${NAMESPACE:-}"
+MODEL_NS="${MODEL_NS:-}"
 DEV_NS="${DEV_NS:-}"
 PROD_NS="${PROD_NS:-}"
 OVERLAY="${OVERLAY:-k8s/overlays/dev}"
@@ -19,7 +20,20 @@ if ! oc whoami &> /dev/null; then
 fi
 
 echo "Logged in as: $(oc whoami)"
+echo ""
+
+# Determine app namespace
+if [ -z "$NAMESPACE" ]; then
+    read -p "App namespace [$DEFAULT_NS]: " NS_INPUT
+    NAMESPACE="${NS_INPUT:-$DEFAULT_NS}"
+fi
 echo "App namespace: $NAMESPACE"
+
+# Model namespace defaults to same as app namespace
+if [ -z "$MODEL_NS" ]; then
+    read -p "Model namespace [$NAMESPACE]: " MODEL_NS_INPUT
+    MODEL_NS="${MODEL_NS_INPUT:-$NAMESPACE}"
+fi
 echo "Model namespace: $MODEL_NS"
 
 # Determine dev/prod namespaces
@@ -64,8 +78,19 @@ else
     read -p "Deploy model manifests from k8s/models/? (y/N): " DEPLOY_MODELS
     if [ "$DEPLOY_MODELS" = "y" ] || [ "$DEPLOY_MODELS" = "Y" ]; then
         echo "Applying model manifests to $MODEL_NS..."
-        oc apply -k k8s/models/ -n "$MODEL_NS" 2>&1 | grep -E "created|configured|unchanged"
-        echo ""
+        if oc apply -k k8s/models/ -n "$MODEL_NS" 2>&1 | tee /tmp/model-apply.log | grep -E "created|configured|unchanged"; then
+            echo ""
+        else
+            echo ""
+            echo "WARNING: Model manifest apply had errors:"
+            cat /tmp/model-apply.log
+            echo ""
+            echo "This usually means RHOAI is not installed (missing InferenceService/ServingRuntime CRDs)"
+            echo "or the namespace '$MODEL_NS' does not exist."
+            echo "You can deploy models manually later. Continuing..."
+            echo ""
+        fi
+        rm -f /tmp/model-apply.log
         echo "NOTE: Models need S3/PVC data connections configured in RHOAI."
         echo "      See k8s/models/README.md for storage setup instructions."
         echo ""
@@ -91,10 +116,10 @@ else
     if [ "$DEPLOY_GUARDRAILS" = "y" ] || [ "$DEPLOY_GUARDRAILS" = "Y" ]; then
         if [ -f k8s/guardrails/minio-secret-example.yaml ]; then
             echo "Applying MinIO secret for guardrails..."
-            oc apply -f k8s/guardrails/minio-secret-example.yaml -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+            oc apply -f k8s/guardrails/minio-secret-example.yaml -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged" || true
         fi
         echo "Applying guardrails manifests..."
-        oc apply -k k8s/guardrails/ -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+        oc apply -k k8s/guardrails/ -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged" || echo "  WARNING: Guardrails apply failed (TrustyAI may not be installed). Continuing..."
         echo ""
     fi
 fi
@@ -282,7 +307,13 @@ echo "--- Step 4: Deploying App ---"
 
 
 echo "Applying Kustomize overlay..."
-oc apply -k "$OVERLAY" 2>&1 | grep -E "created|configured|unchanged" | head -20
+if ! oc apply -k "$OVERLAY" 2>&1 | tee /tmp/kustomize-apply.log | grep -E "created|configured|unchanged" | head -20; then
+    echo ""
+    echo "WARNING: Kustomize apply had issues:"
+    grep -i "error\|failed\|invalid\|not found" /tmp/kustomize-apply.log 2>/dev/null || cat /tmp/kustomize-apply.log
+    echo ""
+fi
+rm -f /tmp/kustomize-apply.log
 
 #echo "Applying Kagenti CRB for namespace: ${NAMESPACE}"
 #sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f -
