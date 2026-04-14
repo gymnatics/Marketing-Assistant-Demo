@@ -181,7 +181,64 @@ oc patch configmap authbridge-config -n "${NAMESPACE}" --type=merge \
     }}"
 ```
 
-### Step 7: Verify
+### Step 7: Configure Keycloak Realm
+
+The Helm charts install Keycloak with a default `master` realm, but the app needs specific clients, users, and scopes in a `kagenti` realm. `deploy.sh` Step 6d handles this automatically via the Keycloak Admin REST API. If doing it manually:
+
+```bash
+KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}')
+FRONTEND_HOST=$(oc get route frontend -n "${NAMESPACE}" -o jsonpath='{.spec.host}')
+
+# Get admin token
+KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+    -d "client_id=admin-cli&username=admin&password=admin&grant_type=password" | \
+    python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+KC_API="https://${KEYCLOAK_ROUTE}/admin/realms"
+
+# Create kagenti realm
+curl -sk -X POST "${KC_API}" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"realm":"kagenti","enabled":true}'
+
+# Create simon-casino-ui client (public, for React Dashboard SSO)
+curl -sk -X POST "${KC_API}/kagenti/clients" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{
+        \"clientId\": \"simon-casino-ui\",
+        \"publicClient\": true,
+        \"standardFlowEnabled\": true,
+        \"rootUrl\": \"https://${FRONTEND_HOST}\",
+        \"redirectUris\": [\"https://${FRONTEND_HOST}/*\"],
+        \"webOrigins\": [\"https://${FRONTEND_HOST}\"],
+        \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+    }"
+
+# Create mongodb-tool client (confidential, for AuthBridge token exchange)
+curl -sk -X POST "${KC_API}/kagenti/clients" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"clientId":"mongodb-tool","publicClient":false,"serviceAccountsEnabled":true,"standardFlowEnabled":false}'
+
+# Create demo users
+curl -sk -X POST "${KC_API}/kagenti/users" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","enabled":true,"firstName":"Admin","lastName":"User",
+         "email":"admin@simon-casino.example.com","emailVerified":true,
+         "credentials":[{"type":"password","value":"admin","temporary":false}]}'
+
+curl -sk -X POST "${KC_API}/kagenti/users" \
+    -H "Authorization: Bearer ${KC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"demo-user","enabled":true,"firstName":"Demo","lastName":"User",
+         "email":"demo-user@simon-casino.example.com","emailVerified":true,
+         "credentials":[{"type":"password","value":"password","temporary":false}]}'
+```
+
+### Step 8: Verify
 
 ```bash
 # KAgenti UI

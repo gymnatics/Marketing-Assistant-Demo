@@ -470,12 +470,195 @@ else
                     -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080\",\"TOKEN_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null
             fi
 
+            # Wire Keycloak URL into the app ConfigMap for frontend SSO
+            if [ -n "$KEYCLOAK_ROUTE" ]; then
+                echo "  Patching app ConfigMap with Keycloak URL for SSO..."
+                oc patch configmap marketing-assistant-config -n "${NAMESPACE}" --type=merge \
+                    -p "{\"data\":{\"KEYCLOAK_URL\":\"https://${KEYCLOAK_ROUTE}\"}}" 2>/dev/null
+            fi
+
+            echo ""
+            echo "--- Step 6d: Keycloak realm configuration ---"
+            echo ""
+            KEYCLOAK_INTERNAL="http://keycloak.keycloak.svc.cluster.local:8080"
+            KEYCLOAK_ADMIN_USER="admin"
+            KEYCLOAK_ADMIN_PASS="admin"
+            KC_REALM="kagenti"
+
+            # Get admin token from Keycloak
+            echo "  Obtaining Keycloak admin token..."
+
+            # Try internal URL first (from a pod), fall back to external route
+            KC_TOKEN=""
+            if [ -n "$KEYCLOAK_ROUTE" ]; then
+                KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+                    -d "client_id=admin-cli" \
+                    -d "username=${KEYCLOAK_ADMIN_USER}" \
+                    -d "password=${KEYCLOAK_ADMIN_PASS}" \
+                    -d "grant_type=password" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+            fi
+
+            if [ -z "$KC_TOKEN" ]; then
+                echo "  WARNING: Could not obtain Keycloak admin token."
+                echo "  Keycloak realm configuration skipped. Configure manually via Keycloak admin console."
+            else
+                KC_API="https://${KEYCLOAK_ROUTE}/admin/realms"
+
+                # --- Create 'kagenti' realm if it doesn't exist ---
+                REALM_EXISTS=$(curl -sk -o /dev/null -w "%{http_code}" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    "${KC_API}/${KC_REALM}" 2>/dev/null)
+                if [ "$REALM_EXISTS" != "200" ]; then
+                    echo "  Creating '${KC_REALM}' realm..."
+                    curl -sk -X POST "${KC_API}" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"realm\":\"${KC_REALM}\",\"enabled\":true,\"registrationAllowed\":false}" 2>/dev/null
+                else
+                    echo "  Realm '${KC_REALM}' already exists."
+                fi
+
+                # Refresh token (realm creation may take a moment)
+                KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+                    -d "client_id=admin-cli" \
+                    -d "username=${KEYCLOAK_ADMIN_USER}" \
+                    -d "password=${KEYCLOAK_ADMIN_PASS}" \
+                    -d "grant_type=password" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+                KC_REALM_API="${KC_API}/${KC_REALM}"
+                FRONTEND_HOST=$(oc get route frontend -n "${NAMESPACE}" -o jsonpath='{.spec.host}' 2>/dev/null || echo "frontend-${NAMESPACE}.${CLUSTER_DOMAIN}")
+
+                # --- Create simon-casino-ui client (public, for React Dashboard SSO) ---
+                echo "  Creating 'simon-casino-ui' client (public, for dashboard SSO)..."
+                curl -sk -X POST "${KC_REALM_API}/clients" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                        \"clientId\": \"simon-casino-ui\",
+                        \"name\": \"Simon Casino Resort Dashboard\",
+                        \"enabled\": true,
+                        \"publicClient\": true,
+                        \"standardFlowEnabled\": true,
+                        \"directAccessGrantsEnabled\": false,
+                        \"rootUrl\": \"https://${FRONTEND_HOST}\",
+                        \"redirectUris\": [\"https://${FRONTEND_HOST}/*\"],
+                        \"webOrigins\": [\"https://${FRONTEND_HOST}\"],
+                        \"attributes\": {
+                            \"pkce.code.challenge.method\": \"S256\"
+                        }
+                    }" 2>/dev/null | head -c 0
+                echo "    done"
+
+                # --- Create mongodb-tool client (confidential, token exchange target) ---
+                echo "  Creating 'mongodb-tool' client (confidential, for token exchange)..."
+                curl -sk -X POST "${KC_REALM_API}/clients" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                        \"clientId\": \"mongodb-tool\",
+                        \"name\": \"MongoDB MCP Tool\",
+                        \"enabled\": true,
+                        \"publicClient\": false,
+                        \"serviceAccountsEnabled\": true,
+                        \"standardFlowEnabled\": false,
+                        \"directAccessGrantsEnabled\": false,
+                        \"attributes\": {
+                            \"oauth2.device.authorization.grant.enabled\": \"false\"
+                        }
+                    }" 2>/dev/null | head -c 0
+                echo "    done"
+
+                # --- Create demo users ---
+                echo "  Creating demo users..."
+                for KC_USER_DATA in "admin:admin:Admin:User" "demo-user:password:Demo:User"; do
+                    KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1)
+                    KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
+                    KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3)
+                    KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
+
+                    # Create user
+                    curl -sk -X POST "${KC_REALM_API}/users" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "{
+                            \"username\": \"${KC_UNAME}\",
+                            \"enabled\": true,
+                            \"firstName\": \"${KC_FIRST}\",
+                            \"lastName\": \"${KC_LAST}\",
+                            \"email\": \"${KC_UNAME}@simon-casino.example.com\",
+                            \"emailVerified\": true,
+                            \"credentials\": [{
+                                \"type\": \"password\",
+                                \"value\": \"${KC_UPASS}\",
+                                \"temporary\": false
+                            }]
+                        }" 2>/dev/null | head -c 0
+                    echo "    ${KC_UNAME} / ${KC_UPASS}"
+                done
+
+                # --- Create audience scope for mongodb-tool ---
+                echo "  Creating audience scopes..."
+                curl -sk -X POST "${KC_REALM_API}/client-scopes" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                        \"name\": \"mongodb-tool-aud\",
+                        \"description\": \"Adds mongodb-tool to token audience\",
+                        \"protocol\": \"openid-connect\",
+                        \"attributes\": {
+                            \"include.in.token.scope\": \"true\",
+                            \"display.on.consent.screen\": \"false\"
+                        },
+                        \"protocolMappers\": [{
+                            \"name\": \"mongodb-tool-audience\",
+                            \"protocol\": \"openid-connect\",
+                            \"protocolMapper\": \"oidc-audience-mapper\",
+                            \"consentRequired\": false,
+                            \"config\": {
+                                \"included.client.audience\": \"mongodb-tool\",
+                                \"id.token.claim\": \"false\",
+                                \"access.token.claim\": \"true\"
+                            }
+                        }]
+                    }" 2>/dev/null | head -c 0
+                echo "    mongodb-tool-aud scope created"
+
+                # --- Enable token exchange on mongodb-tool client ---
+                # Get mongodb-tool internal client ID
+                MONGO_CLIENT_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                    "${KC_REALM_API}/clients?clientId=mongodb-tool" 2>/dev/null | \
+                    python3 -c "import sys,json; clients=json.load(sys.stdin); print(clients[0]['id'] if clients else '')" 2>/dev/null || echo "")
+                if [ -n "$MONGO_CLIENT_ID" ]; then
+                    echo "  Enabling token exchange permission on mongodb-tool..."
+                    # Add the audience scope as optional to simon-casino-ui
+                    SCOPE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                        "${KC_REALM_API}/client-scopes" 2>/dev/null | \
+                        python3 -c "import sys,json; scopes=json.load(sys.stdin); print(next((s['id'] for s in scopes if s['name']=='mongodb-tool-aud'), ''))" 2>/dev/null || echo "")
+
+                    SIMON_CLIENT_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                        "${KC_REALM_API}/clients?clientId=simon-casino-ui" 2>/dev/null | \
+                        python3 -c "import sys,json; clients=json.load(sys.stdin); print(clients[0]['id'] if clients else '')" 2>/dev/null || echo "")
+
+                    if [ -n "$SCOPE_ID" ] && [ -n "$SIMON_CLIENT_ID" ]; then
+                        curl -sk -X PUT "${KC_REALM_API}/clients/${SIMON_CLIENT_ID}/optional-client-scopes/${SCOPE_ID}" \
+                            -H "Authorization: Bearer ${KC_TOKEN}" 2>/dev/null
+                        echo "    mongodb-tool-aud added as optional scope to simon-casino-ui"
+                    fi
+                fi
+
+                echo ""
+                echo "  Keycloak realm '${KC_REALM}' configured:"
+                echo "    Clients: simon-casino-ui (public), mongodb-tool (confidential)"
+                echo "    Users: admin/admin, demo-user/password"
+                echo "    Scopes: mongodb-tool-aud (audience mapper)"
+            fi
+
             KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 
             echo ""
             echo "KAgenti deployed successfully!"
             [ -n "$KAGENTI_ROUTE" ] && echo "  KAgenti UI: https://${KAGENTI_ROUTE}"
-            [ -n "$KEYCLOAK_ROUTE" ] && echo "  Keycloak:   https://${KEYCLOAK_ROUTE}"
+            [ -n "$KEYCLOAK_ROUTE" ] && echo "  Keycloak:   https://${KEYCLOAK_ROUTE}/admin/${KC_REALM}/console/"
             echo "  Default credentials: admin / admin"
         fi
     fi
