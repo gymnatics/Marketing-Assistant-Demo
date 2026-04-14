@@ -613,6 +613,10 @@ else
                 --from-literal=KEYCLOAK_ADMIN_PASSWORD="${KC_ADMIN_P}" \
                 --dry-run=client -o yaml | oc apply -f - 2>/dev/null
 
+            # Label app namespace for KAgenti discovery
+            echo "  Labeling namespace for KAgenti discovery..."
+            oc label namespace "${NAMESPACE}" kagenti-enabled=true shared-gateway-access=true --overwrite 2>/dev/null || true
+
             # Apply KAgenti-specific manifests
             echo "  Applying KAgenti manifests..."
             sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f - 2>/dev/null || true
