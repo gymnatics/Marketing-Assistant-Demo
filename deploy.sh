@@ -705,7 +705,7 @@ else
                         \"attributes\": {
                             \"pkce.code.challenge.method\": \"S256\"
                         }
-                    }" 2>/dev/null | head -c 0
+                    }" 2>/dev/null > /dev/null
                 echo "    done"
 
                 # --- Create mongodb-tool client (confidential, token exchange target) ---
@@ -724,7 +724,7 @@ else
                         \"attributes\": {
                             \"oauth2.device.authorization.grant.enabled\": \"false\"
                         }
-                    }" 2>/dev/null | head -c 0
+                    }" 2>/dev/null > /dev/null
                 echo "    done"
 
                 # --- Create demo users ---
@@ -754,7 +754,7 @@ else
                                 \"value\": \"${KC_UPASS}\",
                                 \"temporary\": false
                             }]
-                        }" 2>/dev/null | head -c 0
+                        }" 2>/dev/null > /dev/null
                     echo "    ${KC_UNAME} / ${KC_UPASS}"
                 done
 
@@ -784,7 +784,7 @@ else
                                 \"access.token.claim\": \"true\"
                             }
                         }]
-                    }" 2>/dev/null | head -c 0
+                    }" 2>/dev/null > /dev/null
                 echo "    mongodb-tool-aud"
 
                 # mongodb-full-access: permission scope requested during token exchange
@@ -799,7 +799,7 @@ else
                             \"include.in.token.scope\": \"true\",
                             \"display.on.consent.screen\": \"false\"
                         }
-                    }" 2>/dev/null | head -c 0
+                    }" 2>/dev/null > /dev/null
                 echo "    mongodb-full-access"
 
                 # --- Enable token exchange on mongodb-tool client ---
@@ -833,7 +833,7 @@ else
                     -d "{
                         \"name\": \"platinum-access\",
                         \"description\": \"Access to platinum-tier customer data\"
-                    }" 2>/dev/null | head -c 0
+                    }" 2>/dev/null > /dev/null
 
                 # Assign platinum-access role to alice
                 ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
@@ -845,7 +845,7 @@ else
                     curl -sk -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
                         -H "Authorization: Bearer ${KC_TOKEN}" \
                         -H "Content-Type: application/json" \
-                        -d "[${ROLE_JSON}]" 2>/dev/null | head -c 0
+                        -d "[${ROLE_JSON}]" 2>/dev/null > /dev/null
                     echo "    platinum-access role assigned to alice"
                 else
                     echo "    WARNING: Could not find alice user to assign role"
