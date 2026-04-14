@@ -836,38 +836,55 @@ else
                     fi
                 fi
 
-                # --- Create realm role and assign to alice ---
-                echo "  Creating 'platinum-access' realm role..."
-                curl -sk -X POST "${KC_REALM_API}/roles" \
-                    -H "Authorization: Bearer ${KC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{
-                        \"name\": \"platinum-access\",
-                        \"description\": \"Access to platinum-tier customer data\"
-                    }" 2>/dev/null > /dev/null
+                # --- Create realm roles ---
+                echo "  Creating realm roles..."
+                for ROLE_DEF in "kagenti-viewer:View agents and tools in KAgenti UI" "platinum-access:Access to platinum-tier customer data"; do
+                    ROLE_NAME=${ROLE_DEF%%:*}; ROLE_DESC=${ROLE_DEF#*:}
+                    curl -sk -X POST "${KC_REALM_API}/roles" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"name\":\"${ROLE_NAME}\",\"description\":\"${ROLE_DESC}\"}" 2>/dev/null > /dev/null
+                    echo "    ${ROLE_NAME}"
+                done
 
-                # Assign platinum-access role to alice
+                # --- Assign roles to users ---
+                echo "  Assigning roles..."
+                ADMIN_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/admin" 2>/dev/null)
+                VIEWER_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/kagenti-viewer" 2>/dev/null)
+                PLAT_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
+
+                # All users get admin + kagenti-viewer (required to use KAgenti UI)
+                for KC_ROLE_USER in alice bob admin demo-user; do
+                    KC_ROLE_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                        "${KC_REALM_API}/users?username=${KC_ROLE_USER}&exact=true" 2>/dev/null | \
+                        python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+                    if [ -n "$KC_ROLE_UID" ]; then
+                        curl -sk -X POST "${KC_REALM_API}/users/${KC_ROLE_UID}/role-mappings/realm" \
+                            -H "Authorization: Bearer ${KC_TOKEN}" \
+                            -H "Content-Type: application/json" \
+                            -d "[${ADMIN_ROLE},${VIEWER_ROLE}]" 2>/dev/null > /dev/null
+                        echo "    ${KC_ROLE_USER}: admin, kagenti-viewer"
+                    fi
+                done
+
+                # Only alice gets platinum-access
                 ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
                     "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
-                    python3 -c "import sys,json; users=json.load(sys.stdin); print(users[0]['id'] if users else '')" 2>/dev/null || echo "")
+                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
                 if [ -n "$ALICE_ID" ]; then
-                    ROLE_JSON=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
-                        "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
                     curl -sk -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
                         -H "Authorization: Bearer ${KC_TOKEN}" \
                         -H "Content-Type: application/json" \
-                        -d "[${ROLE_JSON}]" 2>/dev/null > /dev/null
-                    echo "    platinum-access role assigned to alice"
-                else
-                    echo "    WARNING: Could not find alice user to assign role"
+                        -d "[${PLAT_ROLE}]" 2>/dev/null > /dev/null
+                    echo "    alice: + platinum-access"
                 fi
-                echo "    (bob does NOT have this role — platinum data will be filtered)"
+                echo "    (bob does NOT have platinum-access — data will be filtered)"
 
                 echo ""
                 echo "  Keycloak realm '${KC_REALM}' configured:"
                 echo "    Clients: simon-casino-ui (public), mongodb-tool (confidential)"
-                echo "    Users: alice/alice (platinum-access), bob/bob (no platinum), admin/admin, demo-user/password"
-                echo "    Roles: platinum-access (assigned to alice only)"
+                echo "    Users: alice/alice (platinum), bob/bob (no platinum), admin/admin, demo-user/password"
+                echo "    Roles: admin, kagenti-viewer (all users), platinum-access (alice only)"
                 echo "    Scopes: mongodb-tool-aud, mongodb-full-access"
             fi
 
