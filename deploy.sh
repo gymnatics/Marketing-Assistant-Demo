@@ -417,17 +417,13 @@ else
         echo ""
         echo "--- Step 6a: Pre-flight checks ---"
 
-        # Check for existing cert-manager (KAgenti installs its own)
+        # Check for existing cert-manager -- if present, tell KAgenti to skip its own
+        SKIP_CERTMGR=""
         CERTMGR_COUNT=$(oc get deployment -n cert-manager --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
         CERTMGR_COUNT=${CERTMGR_COUNT:-0}
         if [ "$CERTMGR_COUNT" -ge 1 ]; then
-            echo "WARNING: cert-manager detected in cert-manager namespace."
-            echo "KAgenti installs its own cert-manager. You may need to remove the existing one."
-            read -p "Continue anyway? (y/N): " CONTINUE_CERTMGR
-            if [ "$CONTINUE_CERTMGR" != "y" ] && [ "$CONTINUE_CERTMGR" != "Y" ]; then
-                echo "Skipping KAgenti deployment. Remove cert-manager first, then re-run."
-                DEPLOY_KAGENTI="n"
-            fi
+            echo "  Existing cert-manager detected — KAgenti will reuse it (skipping its own)."
+            SKIP_CERTMGR="--set components.certManager.enabled=false"
         fi
 
         if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
@@ -452,12 +448,14 @@ else
             KAGENTI_TAG=${KAGENTI_TAG:-0.5.0}
             echo "KAgenti version: v${KAGENTI_TAG}"
 
-            # Install kagenti-deps (SPIRE, Keycloak, Istio, cert-manager)
+            # Install kagenti-deps (SPIRE, Keycloak, Istio; cert-manager only if not already present)
             echo "  Installing kagenti-deps..."
             helm install --create-namespace -n kagenti-system kagenti-deps \
                 oci://ghcr.io/kagenti/kagenti/kagenti-deps \
                 --version "${KAGENTI_TAG}" \
                 --set spire.trustDomain="${DOMAIN}" \
+                --set openshift=true \
+                $SKIP_CERTMGR \
                 --wait --timeout 10m 2>&1 | tail -3
 
             # Install MCP Gateway
