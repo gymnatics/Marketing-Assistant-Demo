@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/KeycloakProvider';
+import { useVerticalConfig } from '../../config/VerticalConfigProvider';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,14 +12,15 @@ interface LayoutProps {
 const TopNavBar: React.FC = () => {
   const location = useLocation();
   const { authenticated, user, login, logout, enabled } = useAuth();
+  const { brand } = useVerticalConfig();
   const isOnCampaigns = location.pathname === '/' || location.pathname.startsWith('/campaign');
   
   return (
     <header className="bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl font-headline antialiased fixed top-0 z-50 w-full px-12 h-20 border-b border-slate-200/50 dark:border-slate-800/50 flex justify-between items-center">
       <div className="flex items-center gap-8">
         <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50">
-          <img src="/logo.png" alt="Simon Casino Resort" className="h-9 w-9 rounded-lg shadow-sm object-contain" />
-          Simon Casino Resort
+          <img src="/logo.png" alt={brand.logo_alt} className="h-9 w-9 rounded-lg shadow-sm object-contain" />
+          {brand.company_name}
         </Link>
         <nav className="hidden md:flex gap-6">
           <Link 

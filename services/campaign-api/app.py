@@ -263,6 +263,24 @@ def get_themes():
     return jsonify(CAMPAIGN_THEMES)
 
 
+@app.route("/api/config", methods=["GET"])
+def get_vertical_config():
+    """Return frontend-relevant vertical config (branding, presets, tiers, etc.)."""
+    from shared.vertical_config import get_config
+    cfg = get_config()
+    return jsonify({
+        "brand": cfg.get("brand", {}),
+        "properties": cfg.get("properties", []),
+        "property_label": cfg.get("property_label", "Property"),
+        "tiers": cfg.get("tiers", {}),
+        "audience_suggestions": cfg.get("audience_suggestions", []),
+        "themes": cfg.get("themes", {}),
+        "quick_start_presets": cfg.get("quick_start_presets", []),
+        "guardrail_presets": cfg.get("guardrail_presets", []),
+        "competitors": cfg.get("competitors", []),
+    })
+
+
 @app.route("/api/campaigns", methods=["GET"])
 def list_campaigns():
     try:
