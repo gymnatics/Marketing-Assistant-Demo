@@ -13,6 +13,7 @@ import httpx
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from shared.vertical_config import prompt as vcfg_prompt
 
 LANG_MODEL_ENDPOINT = os.environ.get(
     "LANG_MODEL_ENDPOINT",
@@ -21,7 +22,12 @@ LANG_MODEL_ENDPOINT = os.environ.get(
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 
-POLICY_PROMPT = """You are a luxury casino resort marketing policy validator.
+_PG_INTRO = vcfg_prompt("policy_guardian_intro", "You are a luxury casino resort marketing policy validator.")
+_PG_REJECTED = vcfg_prompt("policy_guardian_rejected_examples", '- "99% Off All Hotel Rooms" → REJECTED: Unrealistic discount\n- "Free Everything For Everyone" → REJECTED: Unrealistic offer\n- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading promise\n- "Cheapest Rooms in Macau" → REJECTED: Not appropriate for luxury brand')
+_PG_APPROVED = vcfg_prompt("policy_guardian_approved_examples", '- "Exclusive 30% off suites for platinum members" → APPROVED\n- "Complimentary spa treatment with 2-night stay" → APPROVED\n- "Private dining experience for diamond tier guests" → APPROVED\n- "VIP gala evening with world-class entertainment" → APPROVED')
+_PG_COST = vcfg_prompt("policy_guardian_cost_note", "a luxury hotel night costs $300+")
+
+POLICY_PROMPT = f"""{_PG_INTRO}
 
 RULES:
 1. No discounts greater than 50%
@@ -31,18 +37,12 @@ RULES:
 5. Must maintain exclusivity — no cheap or mass-market language
 
 EXAMPLES OF REJECTED CAMPAIGNS:
-- "99% Off All Hotel Rooms" → REJECTED: Unrealistic discount
-- "Free Everything For Everyone" → REJECTED: Unrealistic offer
+{_PG_REJECTED}
 - "Buy 2 Nights Get 80% Off" → REJECTED: Unrealistic discount
-- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading promise
-- "Cheapest Rooms in Macau" → REJECTED: Not appropriate for luxury brand
 - "Unlimited Free Drinks and Casino Credits" → REJECTED: Unrealistic offer
 
 EXAMPLES OF APPROVED CAMPAIGNS:
-- "Exclusive 30% off suites for platinum members" → APPROVED
-- "Complimentary spa treatment with 2-night stay" → APPROVED
-- "Private dining experience for diamond tier guests" → APPROVED
-- "VIP gala evening with world-class entertainment" → APPROVED
+{_PG_APPROVED}
 - "50% off luxury suite upgrade for loyalty members" → APPROVED
 - "Free 2 night stay with $1000 spent" → APPROVED (conditional offer, not unrealistic)
 - "Complimentary airport transfer for VIP members" → APPROVED
@@ -52,7 +52,7 @@ NOTE: "Free" or "complimentary" offers are only APPROVED if the condition is pro
 - "Free 2 nights with $1000 spent" → APPROVED (proportional)
 - "Free 2 nights with $50 spent" → REJECTED (spend too low for the reward)
 - "Free spa with 2-night booking" → APPROVED (proportional)
-Use common sense: a luxury hotel night costs $300+. The spend must be reasonable relative to what is offered for free.
+Use common sense: {_PG_COST}. The spend must be reasonable relative to what is offered for free.
 
 NOW EVALUATE:
 Campaign Name: {campaign_name}

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from shared.vertical_config import prompt as vcfg_prompt
 from shared.models import (
     CustomerProfile,
     GetTargetCustomersInput,
@@ -87,7 +88,7 @@ TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """You are a customer data analyst for a luxury casino resort. Given a target audience description, decide which database tool to call to retrieve the right customer segment. You have access to the following tools:
+SYSTEM_PROMPT = f"""{vcfg_prompt("customer_analyst_system", "You are a customer data analyst for a luxury casino resort. Given a target audience description, decide which database tool to call to retrieve the right customer segment.")} You have access to the following tools:
 
 - get_customers_by_tier: For specific tier queries (platinum, gold, diamond members)
 - get_prospects: For new/potential customers who aren't members yet

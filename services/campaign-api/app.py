@@ -17,6 +17,7 @@ from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTEN
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CampaignRequest, CampaignTheme
+from shared.vertical_config import competitors as vcfg_competitors, brand
 
 app = Flask(__name__)
 CORS(app)
@@ -35,7 +36,14 @@ PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-inj
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
 
-COMPETITOR_PATTERN = r"(?i)(jennifer casino|jennifer resort|lucky star casino|jade emperor palace|phoenix bay resort|emerald fortune club|royal lotus gaming)"
+def _build_competitor_pattern() -> str:
+    names = vcfg_competitors()
+    if names:
+        escaped = [name.replace("(", r"\(").replace(")", r"\)") for name in names]
+        return r"(?i)(" + "|".join(escaped) + ")"
+    return r"(?i)(jennifer casino|jennifer resort|lucky star casino|jade emperor palace|phoenix bay resort|emerald fortune club|royal lotus gaming)"
+
+COMPETITOR_PATTERN = _build_competitor_pattern()
 
 
 def guardrail_failure(layer_id: str, layer_name: str, title: str, reason: str, guidance: str, details: dict | None = None) -> dict:

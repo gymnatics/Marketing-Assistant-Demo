@@ -16,6 +16,7 @@ import traceback
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
 from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context
+from shared.vertical_config import get_config, prompt as vcfg_prompt, brand, themes as vcfg_themes
 
 from mlflow.tracing import get_tracing_context_headers_for_http_request
 from mlflow.entities import SpanType
@@ -30,14 +31,25 @@ IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091"
 
 BASE_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "base_template.html")
 
-THEME_PRESET_NAMES = {
-    "luxury_gold": "The Heritage Collection",
-    "festive_red": "The Celebration Suite",
-    "modern_black": "The Urban Retreat",
-    "classic_casino": "The Grand Stakes",
-}
+def _load_theme_preset_names() -> dict:
+    cfg_themes = vcfg_themes()
+    if cfg_themes:
+        return {k: v.get("preset_name", k) for k, v in cfg_themes.items()}
+    return {
+        "luxury_gold": "The Heritage Collection",
+        "festive_red": "The Celebration Suite",
+        "modern_black": "The Urban Retreat",
+        "classic_casino": "The Grand Stakes",
+    }
 
-SYSTEM_PROMPT = """You are a premier Digital Brand Architect specializing in high-conversion marketing for luxury hotels and ultra-exclusive resorts. Your expertise is "Visual Hospitality" — translating a physical five-star experience into a digital interface that feels as refined and welcoming as a grand lobby.
+THEME_PRESET_NAMES = _load_theme_preset_names()
+
+_CREATIVE_INTRO = vcfg_prompt(
+    "creative_producer_system",
+    'You are a premier Digital Brand Architect specializing in high-conversion marketing for luxury hotels and ultra-exclusive resorts. Your expertise is "Visual Hospitality" — translating a physical five-star experience into a digital interface that feels as refined and welcoming as a grand lobby.'
+)
+
+SYSTEM_PROMPT = f"""{_CREATIVE_INTRO}
 
 ## Core Design Principles:
 1. "The Check-In Impression": Your designs feel like a premium arrival experience. Expansive whitespace within sections, high-fidelity imagery, calm architectural order.

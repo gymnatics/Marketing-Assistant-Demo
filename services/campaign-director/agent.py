@@ -20,6 +20,7 @@ from mlflow.tracing import get_tracing_context_headers_for_http_request
 from langgraph.graph import StateGraph, START, END
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from shared.vertical_config import brand
 from shared.mlflow_bootstrap import update_trace_session
 from shared.models import (
     CampaignRequest,
@@ -520,7 +521,7 @@ class CampaignDirectorAgent:
     def _handle_chat(self, params: dict) -> dict:
         text = params.get("text", "")
         campaigns = list(campaigns_store.values())
-        summary = f"I'm the Campaign Director for Simon Casino Resort. I orchestrate marketing campaign creation using AI agents.\n\n"
+        summary = f"{brand('director_intro', 'I am the Campaign Director.')} I orchestrate marketing campaign creation using AI agents.\n\n"
         if campaigns:
             summary += f"Currently managing {len(campaigns)} campaign(s):\n"
             for c in campaigns[-5:]:
