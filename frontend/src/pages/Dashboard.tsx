@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 import { authFetch } from '../auth/authFetch';
+import { useVerticalConfig } from '../config/VerticalConfigProvider';
 
 interface Campaign {
   id: string;
@@ -37,6 +38,7 @@ const themeImages: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const vcfg = useVerticalConfig();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export default function Dashboard() {
             Campaign Overview.
           </h1>
           <p className="text-on-surface-variant text-lg leading-relaxed max-w-lg">
-            Manage and orchestrate high-value marketing campaigns for your luxury properties and VIP customer tiers.
+            {vcfg.brand.dashboard_tagline || 'Manage and orchestrate high-value marketing campaigns.'}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -227,7 +229,7 @@ export default function Dashboard() {
                     </h3>
                     <div className="flex items-center gap-2 text-on-surface-variant text-sm font-medium">
                       <span className="material-symbols-outlined text-[16px]">location_on</span>
-                      {campaign.hotel_name || 'Simon Casino Resort'}
+                      {campaign.hotel_name || vcfg.properties[0] || ''}
                     </div>
                   </div>
                   <div className="text-right">
@@ -289,7 +291,7 @@ export default function Dashboard() {
 
       {/* Footer */}
       <footer className="mt-32 pt-16 border-t border-surface-container flex flex-col md:flex-row items-center justify-between gap-8 opacity-60">
-        <div className="text-sm font-medium">© 2026 Simon Casino Resort. Powered by OpenShift AI.</div>
+        <div className="text-sm font-medium">{vcfg.brand.footer}</div>
         <div className="flex items-center gap-8 text-sm font-bold uppercase tracking-[0.2em]">
           <span className="hover:text-primary transition-colors cursor-pointer">Integrations</span>
           <span className="hover:text-primary transition-colors cursor-pointer">Network</span>
