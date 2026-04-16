@@ -70,6 +70,28 @@ for NS_TO_CREATE in $UNIQUE_NS; do
 done
 echo ""
 
+# --- Vertical selection ---
+echo "Available verticals:"
+VERTICAL_DIR="config/verticals"
+IDX=1
+declare -a VERTICAL_FILES=()
+for VFILE in "$VERTICAL_DIR"/*.json; do
+    VNAME=$(python3 -c "import json; print(json.load(open('$VFILE')).get('brand',{}).get('company_name', '$(basename $VFILE .json)'))" 2>/dev/null || basename "$VFILE" .json)
+    VID=$(basename "$VFILE" .json)
+    VERTICAL_FILES+=("$VFILE")
+    echo "  [$IDX] $VNAME ($VID)"
+    IDX=$((IDX + 1))
+done
+VERTICAL_CONFIG="${VERTICAL_CONFIG:-}"
+if [ -z "$VERTICAL_CONFIG" ]; then
+    read -p "Select vertical [1]: " VERT_CHOICE
+    VERT_CHOICE=${VERT_CHOICE:-1}
+    VERT_IDX=$((VERT_CHOICE - 1))
+    VERTICAL_CONFIG="${VERTICAL_FILES[$VERT_IDX]}"
+fi
+echo "Vertical: $VERTICAL_CONFIG"
+echo ""
+
 ################################################################################
 # Step 1: Models (optional)
 ################################################################################
@@ -381,6 +403,12 @@ if [ -n "$MLFLOW_ROUTE" ]; then
     echo '  MLFLOW_TRACKING_URI: "https://'"${MLFLOW_ROUTE}"'"' >> k8s/overlays/dev/configmap-patch.yaml
     echo "  MLflow tracking URI added to configmap"
 fi
+
+# Add vertical config identifier
+VERTICAL_ID=$(basename "$VERTICAL_CONFIG" .json)
+echo "  VERTICAL_CONFIG: \"${VERTICAL_ID}\"" >> k8s/overlays/dev/configmap-patch.yaml
+echo "  Vertical: ${VERTICAL_ID}"
+
 echo "  ConfigMap patch generated"
 
 # Update Kustomize namespace to match
