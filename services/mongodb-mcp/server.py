@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+import sys
 from typing import Any, List, Mapping, Optional
 
 from fastmcp import FastMCP
@@ -105,7 +106,14 @@ def get_bearer_auth_context() -> dict[str, Any]:
     headers = get_http_headers(include={"authorization"})
     return parse_authorization_bearer_jwt(headers)
 
-PLATINUM_ROLE = os.getenv("PLATINUM_ACCESS_ROLE", "platinum-access")
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+try:
+    from shared.vertical_config import top_tier_role, top_tier_id
+    PLATINUM_ROLE = top_tier_role()
+    PLATINUM_TIER_ID = top_tier_id()
+except ImportError:
+    PLATINUM_ROLE = os.getenv("PLATINUM_ACCESS_ROLE", "platinum-access")
+    PLATINUM_TIER_ID = "platinum"
 
 def filter_customers_by_user_perm(customers: list) -> list:
     headers = get_http_headers(include={"authorization"})
@@ -131,8 +139,8 @@ def filter_customers_by_user_perm(customers: list) -> list:
         logger.info(f"{username} matches ALLOWED_PLATINUM_TIER env var — full access (legacy)")
         return customers
 
-    logger.info(f"{username} lacks '{PLATINUM_ROLE}' role — filtering out platinum members")
-    return [c for c in customers if c.get("tier") != "platinum"]
+    logger.info(f"{username} lacks '{PLATINUM_ROLE}' role — filtering out {PLATINUM_TIER_ID} members")
+    return [c for c in customers if c.get("tier") != PLATINUM_TIER_ID]
     
 
 # Initialize FastMCP server

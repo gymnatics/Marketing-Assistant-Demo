@@ -14,6 +14,7 @@ from kubernetes.client.rest import ApiException
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from shared.vertical_config import prompt as vcfg_prompt, brand
 from shared.models import (
     CustomerProfile,
     GenerateEmailInput,
@@ -41,7 +42,7 @@ PROD_NAMESPACE = os.environ.get("PROD_NAMESPACE", "0-marketing-assistant-demo-pr
 APP_NAMESPACE = os.environ.get("APP_NAMESPACE", "0-marketing-assistant-demo")
 
 
-MARKETING_SYSTEM_PROMPT = """You are a luxury casino marketing expert creating personalized email campaigns.
+MARKETING_SYSTEM_PROMPT = f"""{vcfg_prompt("delivery_manager_system", "You are a luxury casino marketing expert creating personalized email campaigns.")}
 
 Generate email content in the following EXACT format:
 
@@ -556,8 +557,8 @@ class DeliveryManagerAgent:
                 subject = validated.email_subject_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name).replace("{{campaign_link}}", personalized_link).replace("{{CAMPAIGN_LINK}}", personalized_link)
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.post(f"{CAMPAIGN_API_URL}/api/inbox", json={
-                        "from_name": "Simon Casino Resort",
-                        "from_email": "campaigns@simoncasino.com",
+                        "from_name": brand("email_from_name", "Simon Casino Resort"),
+                        "from_email": f"campaigns@{brand('email_domain', 'simoncasino.com')}",
                         "to_name": name,
                         "to_email": customer.email,
                         "subject": subject,
