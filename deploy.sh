@@ -948,6 +948,27 @@ fi
 echo ""
 
 ################################################################################
+# Restart pods (if config changed, e.g., vertical switch)
+################################################################################
+echo ""
+read -p "Restart all app pods to pick up latest config? (y/N): " RESTART_PODS
+if [ "$RESTART_PODS" = "y" ] || [ "$RESTART_PODS" = "Y" ]; then
+    echo "Restarting app deployments..."
+    for DEPLOY in campaign-api campaign-director creative-producer customer-analyst delivery-manager policy-guardian mongodb-mcp imagegen-mcp event-hub frontend; do
+        oc rollout restart deployment/$DEPLOY -n $NAMESPACE 2>/dev/null && echo "  $DEPLOY"
+    done
+    echo ""
+    echo "Waiting for rollouts..."
+    for DEPLOY in campaign-api campaign-director creative-producer customer-analyst delivery-manager policy-guardian mongodb-mcp event-hub frontend; do
+        oc rollout status deployment/$DEPLOY -n $NAMESPACE --timeout=60s 2>/dev/null || true
+    done
+    echo ""
+    echo "Re-seeding MongoDB with new vertical data..."
+    sleep 3
+    oc exec deployment/mongodb-mcp -n $NAMESPACE -- env MONGODB_URI=mongodb://mongodb:27017 python3 seed_data.py 2>/dev/null || echo "  Seed failed (try manually later)"
+fi
+
+################################################################################
 # Summary
 ################################################################################
 echo ""
