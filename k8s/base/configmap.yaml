@@ -5,6 +5,7 @@ metadata:
 data:
   CODE_MODEL_NAME: "qwen25-coder-32b-fp8"
   LANG_MODEL_NAME: "qwen3-32b-fp8-dynamic"
+  LANG_MODEL_API_KEY: ""
   IMAGEGEN_MODEL_NAME: "flux2-klein-4b"
   MONGODB_URI: "mongodb://mongodb:27017"
   MONGODB_DATABASE: "casino_crm"

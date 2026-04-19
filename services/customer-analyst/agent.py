@@ -27,6 +27,7 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+LANG_MODEL_API_KEY = os.environ.get("LANG_MODEL_API_KEY", "")
 
 TOOLS = [
     {
@@ -97,6 +98,11 @@ Call exactly ONE tool based on the target audience description. Do not call mult
 
 
 async def publish_event(campaign_id: str, event_type: str, agent: str, task: str, data: dict = None):
+
+    if not EVENT_HUB_URL:        
+        logger.info("Empty EVENT_HUB_URL. Ignoring.")
+        return 
+    
     try:
         async with httpx.AsyncClient() as client:
             await client.post(
@@ -108,7 +114,56 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
         logger.warning("Failed to publish event to event-hub: %s", e)
 
 
-async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
+_seed_catalog: tuple[list, list] | None = None
+
+
+def _get_seed_catalog() -> tuple[list, list]:
+    """Load CUSTOMERS / PROSPECTS from services/mongodb-mcp/seed_data.py (same rows as seeded MongoDB)."""
+    global _seed_catalog
+    if _seed_catalog is not None:
+        return _seed_catalog
+
+    from seed_data import CUSTOMERS, PROSPECTS
+    return (CUSTOMERS, PROSPECTS)
+
+async def fake_call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
+    """
+    In-process MCP stub: same tool names and row shapes as mongodb-mcp when DB is absent,
+    backed by seed_data.CUSTOMERS / PROSPECTS (aligned with server.py MOCK_* / seeded Mongo).
+
+    Jupyter / tests without a running MCP server:
+        import agent
+        agent.call_mcp_tool = agent.fake_call_mcp_tool
+
+    Restore:
+        agent.call_mcp_tool = agent._real_call_mcp_tool
+    """
+    customers, prospects = _get_seed_catalog()
+    limit = int(arguments.get("limit", 50))
+
+    if tool_name == "get_customers_by_tier":
+        tier = (arguments.get("tier") or "").lower()
+        rows = [c for c in customers if str(c.get("tier", "")).lower() == tier][:limit]
+        return rows
+    if tool_name == "get_prospects":
+        return prospects[:limit]
+    if tool_name == "get_high_spend_customers":
+        min_spend = int(arguments.get("min_spend", 500000))
+        rows = [c for c in customers if int(c.get("total_spend", 0) or 0) >= min_spend][:limit]
+        return rows
+    if tool_name == "get_all_vip_customers":
+        allowed = (arguments.get("allowed_tiers") or "").strip()
+        rows = list(customers)
+        if allowed:
+            # Minimal parity with server filter_by_allowed_tiers for non-empty scope strings
+            rows = [c for c in rows if c.get("tier") in allowed.split(",")]
+        return rows[:limit]
+
+    logger.warning("fake_call_mcp_tool: unknown tool_name=%r", tool_name)
+    return []
+
+
+async def _real_call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
     """Call a tool on the MongoDB MCP server via proper MCP protocol."""
     from fastmcp import Client
 
@@ -125,7 +180,7 @@ async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = No
             return json.loads(result.content[0].text)
         return []
 
-async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
+async def _llm_select_and_call_tool(user_prompt: str, target_audience: str = "", limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
     """Use Qwen3 LLM to decide which MCP tool to call, then execute it."""
     url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
     headers = {"Content-Type": "application/json"}
@@ -136,7 +191,7 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_h
         "model": LANG_MODEL_NAME,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Retrieve customers for this target audience: {target_audience} (limit: {limit})"}
+            {"role": "user", "content": user_prompt}
         ],
         "tools": TOOLS,
         "tool_choice": "auto",
@@ -148,7 +203,10 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_h
     tool_call_name = None
     tool_call_args = ""
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    if LANG_MODEL_API_KEY:
+        headers.update({"Authorization": LANG_MODEL_API_KEY})
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             if response.status_code != 200:
                 error_text = await response.aread()
@@ -161,7 +219,7 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_h
                 if data == "[DONE]":
                     break
                 try:
-                    chunk = json.loads(data)
+                    chunk = json.loads(data)                    
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
                     if "tool_calls" in delta:
                         tc = delta["tool_calls"][0]
@@ -212,11 +270,20 @@ async def llm_select_and_call_tool(target_audience: str, limit: int = 50, auth_h
         json.dumps(arguments, default=str),
     )
 
-    result = await call_mcp_tool(tool_call_name, arguments, headers)
+    result = await call_mcp_tool(tool_call_name, arguments, auth_headers)
 
     recipient_type = "prospects" if tool_call_name == "get_prospects" else "customers"
     return result, recipient_type
+    
+async def llm_select_and_call_tool_with_user_prompt(user_prompt: str, limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
+    return await _llm_select_and_call_tool(user_prompt, limit = limit, auth_headers = auth_headers)
 
+async def llm_select_and_call_tool_with_audience(target_audience: str, limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
+    
+    user_prompt = f"Retrieve customers for this target audience: {target_audience} (limit: {limit})"
+
+    return await _llm_select_and_call_tool(user_prompt, target_audience, limit, auth_headers)
+    
 
 class CustomerAnalystAgent:
     """Retrieves VIP customer profiles using LLM reasoning + MCP tools."""
@@ -224,16 +291,31 @@ class CustomerAnalystAgent:
     headers = {}
 
     async def get_customers(self, params: dict) -> dict:
+
+        user_prompt = params.get("user_prompt", None)
         campaign_id = params.get("campaign_id", "unknown")
-        target_audience = params.get("target_audience", "all VIP")
         limit = params.get("limit", 50)
 
-        logger.info(
-            "get_customers start campaign_id=%s target_audience=%r limit=%s",
-            campaign_id,
-            target_audience,
-            limit,
-        )
+        if not user_prompt:
+            target_audience = params.get("target_audience", "all VIP")
+
+            logger.info(
+                "get_customers start campaign_id=%s target_audience=%r limit=%s",
+                campaign_id,
+                target_audience,
+                limit,
+            )
+        else:
+            logger.info(
+                "get_customers start campaign_id=%s user_prompt=%s limit=%s",
+                campaign_id,
+                user_prompt,
+                limit,
+            )
+
+            # Temp workload for publish_events when we are not calling 
+            # this agent from the director
+            target_audience = "" 
 
         await publish_event(
             campaign_id=campaign_id,
@@ -250,11 +332,18 @@ class CustomerAnalystAgent:
                 task="Analyzing target audience..."
             )
 
-            customers_data, recipient_type = await llm_select_and_call_tool(
-                target_audience=target_audience,
-                limit=limit,
-                auth_headers=self.headers,
-            )
+            if not user_prompt:
+                customers_data, recipient_type = await llm_select_and_call_tool_with_audience(
+                    target_audience=target_audience,
+                    limit=limit,
+                    auth_headers=self.headers,
+                )
+            else:
+                customers_data, recipient_type = await llm_select_and_call_tool_with_user_prompt(
+                    user_prompt=user_prompt,
+                    limit=limit,
+                    auth_headers=self.headers,
+                )
 
             customers = [
                 CustomerProfile(

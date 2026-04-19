@@ -66,3 +66,9 @@ tests/mlflow-tracing/*.db
 tests/mlflow-tracing/mlruns/
 tests/
 Digital_Marketing_Demo.mp4
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints
+
+# mlflow sqlite
+mlflow.db

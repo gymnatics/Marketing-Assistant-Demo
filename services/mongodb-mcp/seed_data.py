@@ -6,8 +6,6 @@ Run once to populate the casino_crm database:
 """
 import os
 import time
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
 
 MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://mongodb:27017")
 MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "casino_crm")
@@ -31,8 +29,10 @@ PROSPECTS = [
     {"customer_id": "PROSPECT-005", "name": "周婷", "name_en": "Ting Zhou", "email": "ting.zhou@example.com", "tier": "prospect", "preferred_language": "zh-CN", "interests": ["luxury brands", "fine dining"], "source": "social_media"},
 ]
 
-
 def seed():
+    from pymongo import MongoClient
+    from pymongo.errors import ConnectionFailure
+
     print(f"[Seed] Connecting to {MONGODB_URI}...")
     for attempt in range(10):
         try:
