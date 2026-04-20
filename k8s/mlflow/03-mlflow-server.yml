@@ -23,7 +23,7 @@ spec:
           emptyDir: {}
       initContainers:
       - name: encode-password
-        image: 'quay.io/redhat-et/mlflow:3.10.1'
+        image: 'ghcr.io/mlflow/mlflow:v3.11.1-full'
         imagePullPolicy: Always
         command:
           - /bin/bash
@@ -60,7 +60,7 @@ spec:
             memory: "64Mi"
       containers:
       - name: mlflow
-        image: 'quay.io/redhat-et/mlflow:3.10.1'
+        image: 'ghcr.io/mlflow/mlflow:v3.11.1-full'
         imagePullPolicy: Always
         command:
           - /bin/bash
