@@ -8,6 +8,8 @@ import json
 import logging
 import os
 import httpx
+import mlflow
+from mlflow.entities import SpanType
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +273,8 @@ async def _llm_select_and_call_tool(user_prompt: str, target_audience: str = "",
         json.dumps(arguments, default=str),
     )
 
-    result = await call_mcp_tool(tool_call_name, arguments, auth_headers)
+    with mlflow.start_span(tool_call_name, span_type = SpanType.TOOL) as span:
+        result = await call_mcp_tool(tool_call_name, arguments, auth_headers)
 
     recipient_type = "prospects" if tool_call_name == "get_prospects" else "customers"
     return result, recipient_type
@@ -293,115 +296,116 @@ class CustomerAnalystAgent:
 
     async def get_customers(self, params: dict) -> dict:
 
-        user_prompt = params.get("user_prompt", None)
-        campaign_id = params.get("campaign_id", "unknown")
-        limit = params.get("limit", 50)
-
-        if not user_prompt:
-            target_audience = params.get("target_audience", "all VIP")
-
-            logger.info(
-                "get_customers start campaign_id=%s target_audience=%r limit=%s",
-                campaign_id,
-                target_audience,
-                limit,
-            )
-        else:
-            logger.info(
-                "get_customers start campaign_id=%s user_prompt=%s limit=%s",
-                campaign_id,
-                user_prompt,
-                limit,
-            )
-
-            # Temp workload for publish_events when we are not calling 
-            # this agent from the director
-            target_audience = "" 
-
-        await publish_event(
-            campaign_id=campaign_id,
-            event_type="agent_started",
-            agent="Customer Analyst",
-            task=f"Identifying {target_audience}..."
-        )
-
-        try:
-            await publish_event(
-                campaign_id=campaign_id,
-                event_type="workflow_status",
-                agent="Customer Analyst",
-                task="Analyzing target audience..."
-            )
+        with mlflow.start_span("CustomerAnalystAgent", span_type = SpanType.AGENT) as span:
+            user_prompt = params.get("user_prompt", None)
+            campaign_id = params.get("campaign_id", "unknown")
+            limit = params.get("limit", 50)
 
             if not user_prompt:
-                customers_data, recipient_type = await llm_select_and_call_tool_with_audience(
-                    target_audience=target_audience,
-                    limit=limit,
-                    auth_headers=self.headers,
+                target_audience = params.get("target_audience", "all VIP")
+
+                logger.info(
+                    "get_customers start campaign_id=%s target_audience=%r limit=%s",
+                    campaign_id,
+                    target_audience,
+                    limit,
                 )
             else:
-                customers_data, recipient_type = await llm_select_and_call_tool_with_user_prompt(
-                    user_prompt=user_prompt,
-                    limit=limit,
-                    auth_headers=self.headers,
+                logger.info(
+                    "get_customers start campaign_id=%s user_prompt=%s limit=%s",
+                    campaign_id,
+                    user_prompt,
+                    limit,
                 )
 
-            customers = [
-                CustomerProfile(
-                    customer_id=c.get("customer_id", ""),
-                    name=c.get("name", ""),
-                    name_en=c.get("name_en"),
-                    email=c.get("email", ""),
-                    tier=c.get("tier", ""),
-                    preferred_language=c.get("preferred_language", "en"),
-                    interests=c.get("interests", []),
-                    total_spend=c.get("total_spend"),
-                    last_visit=c.get("last_visit"),
-                    source=c.get("source")
-                )
-                for c in customers_data
-            ]
+                # Temp workload for publish_events when we are not calling 
+                # this agent from the director
+                target_audience = "" 
 
             await publish_event(
                 campaign_id=campaign_id,
-                event_type="agent_completed",
+                event_type="agent_started",
                 agent="Customer Analyst",
-                task=f"Found {len(customers)} {recipient_type}",
-                data={"count": len(customers), "recipient_type": recipient_type}
+                task=f"Identifying {target_audience}..."
             )
 
-            logger.info(
-                "get_customers success campaign_id=%s count=%s recipient_type=%s",
-                campaign_id,
-                len(customers),
-                recipient_type,
-            )
+            try:
+                await publish_event(
+                    campaign_id=campaign_id,
+                    event_type="workflow_status",
+                    agent="Customer Analyst",
+                    task="Analyzing target audience..."
+                )
 
-            return GetTargetCustomersOutput(
-                customers=customers,
-                count=len(customers),
-                recipient_type=recipient_type,
-                status="success"
-            ).model_dump()
+                if not user_prompt:
+                    customers_data, recipient_type = await llm_select_and_call_tool_with_audience(
+                        target_audience=target_audience,
+                        limit=limit,
+                        auth_headers=self.headers,
+                    )
+                else:
+                    customers_data, recipient_type = await llm_select_and_call_tool_with_user_prompt(
+                        user_prompt=user_prompt,
+                        limit=limit,
+                        auth_headers=self.headers,
+                    )
 
-        except Exception as e:
-            logger.exception(
-                "get_customers failed campaign_id=%s target_audience=%r",
-                campaign_id,
-                target_audience,
-            )
-            await publish_event(
-                campaign_id=campaign_id,
-                event_type="agent_error",
-                agent="Customer Analyst",
-                task="Could not retrieve customers",
-                data={"error": str(e)}
-            )
+                customers = [
+                    CustomerProfile(
+                        customer_id=c.get("customer_id", ""),
+                        name=c.get("name", ""),
+                        name_en=c.get("name_en"),
+                        email=c.get("email", ""),
+                        tier=c.get("tier", ""),
+                        preferred_language=c.get("preferred_language", "en"),
+                        interests=c.get("interests", []),
+                        total_spend=c.get("total_spend"),
+                        last_visit=c.get("last_visit"),
+                        source=c.get("source")
+                    )
+                    for c in customers_data
+                ]
 
-            return GetTargetCustomersOutput(
-                customers=[],
-                count=0,
-                recipient_type="unknown",
-                status="error",
-                error=str(e)
-            ).model_dump()
+                await publish_event(
+                    campaign_id=campaign_id,
+                    event_type="agent_completed",
+                    agent="Customer Analyst",
+                    task=f"Found {len(customers)} {recipient_type}",
+                    data={"count": len(customers), "recipient_type": recipient_type}
+                )
+
+                logger.info(
+                    "get_customers success campaign_id=%s count=%s recipient_type=%s",
+                    campaign_id,
+                    len(customers),
+                    recipient_type,
+                )
+
+                return GetTargetCustomersOutput(
+                    customers=customers,
+                    count=len(customers),
+                    recipient_type=recipient_type,
+                    status="success"
+                ).model_dump()
+
+            except Exception as e:
+                logger.exception(
+                    "get_customers failed campaign_id=%s target_audience=%r",
+                    campaign_id,
+                    target_audience,
+                )
+                await publish_event(
+                    campaign_id=campaign_id,
+                    event_type="agent_error",
+                    agent="Customer Analyst",
+                    task="Could not retrieve customers",
+                    data={"error": str(e)}
+                )
+
+                return GetTargetCustomersOutput(
+                    customers=[],
+                    count=0,
+                    recipient_type="unknown",
+                    status="error",
+                    error=str(e)
+                ).model_dump()
