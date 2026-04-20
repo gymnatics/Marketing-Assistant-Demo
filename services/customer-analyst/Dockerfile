@@ -10,6 +10,7 @@ COPY shared/ /opt/app-root/src/shared/
 COPY services/customer-analyst/agent.py .
 COPY services/customer-analyst/agent_executor.py .
 COPY services/customer-analyst/__main__.py .
+COPY services/mongodb-mcp/seed_data.py .
 
 EXPOSE 8082
 

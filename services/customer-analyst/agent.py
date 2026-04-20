@@ -163,7 +163,7 @@ async def fake_call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict
     return []
 
 
-async def _real_call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
+async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = None) -> list:
     """Call a tool on the MongoDB MCP server via proper MCP protocol."""
     from fastmcp import Client
 
