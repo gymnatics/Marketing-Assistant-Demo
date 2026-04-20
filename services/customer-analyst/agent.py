@@ -204,7 +204,7 @@ async def _llm_select_and_call_tool(user_prompt: str, target_audience: str = "",
     tool_call_args = ""
 
     if LANG_MODEL_API_KEY:
-        headers.update({"Authorization": LANG_MODEL_API_KEY})
+        headers.update({"Authorization": f"Bearer {LANG_MODEL_API_KEY}"})
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
