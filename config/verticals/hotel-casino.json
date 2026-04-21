@@ -39,7 +39,7 @@
     "luxury_gold": { "name": "Luxury Gold", "tag": "Premium Tier", "desc": "Deep midnight with classic gold accents", "preset_name": "The Heritage Collection" },
     "festive_red": { "name": "Festive Red", "tag": "Celebration", "desc": "Rich crimson with golden highlights", "preset_name": "The Celebration Suite" },
     "modern_minimal": { "name": "Modern Minimal", "tag": "Contemporary", "desc": "Clean white with sleek slate accents", "preset_name": "The Urban Retreat" },
-    "classic_casino": { "name": "Classic Casino", "tag": "Traditional", "desc": "Emerald green with amber gold", "preset_name": "The Grand Stakes" }
+    "classic_emerald": { "name": "Classic Emerald", "tag": "Traditional", "desc": "Emerald green with amber gold", "preset_name": "The Grand Stakes" }
   },
   "quick_start_presets": [
     { "name": "Lunar New Year VIP Gala", "desc": "Ring in the Year of the Dragon with an exclusive black-tie celebration. Platinum and Diamond members enjoy a private gaming salon, Michelin-starred banquet, and fireworks viewing from the Presidential Terrace.", "audience": "Platinum members", "property": "Simon Casino Resort" },

@@ -39,7 +39,7 @@
     "luxury_gold": { "name": "Premium Gold", "tag": "Luxury Brands", "desc": "Deep midnight with classic gold accents", "preset_name": "The Signature Collection" },
     "festive_red": { "name": "Sale Season", "tag": "Grand Sale", "desc": "Bold crimson with golden highlights", "preset_name": "The Grand Sale" },
     "modern_minimal": { "name": "Modern Chic", "tag": "Contemporary", "desc": "Clean white with sleek accents", "preset_name": "The Style Edit" },
-    "classic_casino": { "name": "Heritage Green", "tag": "Classic", "desc": "Emerald green with amber accents", "preset_name": "The Heritage Market" }
+    "classic_emerald": { "name": "Heritage Green", "tag": "Classic", "desc": "Emerald green with amber accents", "preset_name": "The Heritage Market" }
   },
   "quick_start_presets": [
     { "name": "Year-End Mega Sale", "desc": "Up to 70% off across 500+ stores. Platinum members get early access 2 days before public opening. Free parking and personal shopper service for Diamond elite.", "audience": "All loyalty members", "property": "Grandeur Central Mall" },

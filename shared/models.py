@@ -14,7 +14,7 @@ class CampaignTheme(str, Enum):
     LUXURY_GOLD = "luxury_gold"
     FESTIVE_RED = "festive_red"
     MODERN_BLACK = "modern_black"
-    CLASSIC_CASINO = "classic_casino"
+    CLASSIC_EMERALD = "classic_emerald"
 
 
 CAMPAIGN_THEMES = {
@@ -51,9 +51,9 @@ CAMPAIGN_THEMES = {
         "button_color": "#0F172A",
         "button_text": "#FFFFFF"
     },
-    "classic_casino": {
-        "name": "Classic Casino",
-        "description": "Deep emerald felt with amber gold, old-money high-stakes elegance",
+    "classic_emerald": {
+        "name": "Classic Emerald",
+        "description": "Deep emerald with amber gold, timeless prestige",
         "primary_color": "#F59E0B",
         "secondary_color": "#064E3B",
         "accent_color": "#D1D5DB",

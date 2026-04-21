@@ -72,3 +72,4 @@ Digital_Marketing_Demo.mp4
 
 # mlflow sqlite
 mlflow.db
+*.mp4

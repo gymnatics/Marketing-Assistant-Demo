@@ -16,7 +16,7 @@ const THEMES = {
   luxury_gold: { name: 'Luxury Gold', color: '#D4AF37', description: 'Elegant gold and champagne tones' },
   festive_red: { name: 'Festive Red', color: '#C41E3A', description: 'Vibrant red for celebrations' },
   modern_black: { name: 'Modern Black', color: '#1a1a1a', description: 'Sleek and sophisticated' },
-  classic_casino: { name: 'Classic Casino', color: '#228B22', description: 'Traditional green felt' }
+  classic_emerald: { name: 'Classic Emerald', color: '#228B22', description: 'Deep emerald with amber gold' }
 };
 
 const AUDIENCES = [

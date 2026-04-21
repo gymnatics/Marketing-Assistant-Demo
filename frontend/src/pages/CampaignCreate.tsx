@@ -57,9 +57,9 @@ const THEMES: Record<string, { name: string; tag: string; color: string; desc: s
     desc: 'Architectural and crisp. Sharp midnight typography on pure white surfaces.',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBDBP4BrTyi2GcMPBop8amdkt4v-nIeZrjS6-XLaEAF-UfcGSr-QzBO4OJHx4CvAOTNYY3JrM9cA_FILjRpTxRmxpGzk0N0SVZrVQEVUlQdqrzRT_xZsUMJ92pOCle6OFvWVGVHEiG47llaaujFUvkuBDOcUAqbSYi1hHFKQEpMVL83ofmlspEPk8sUM-Of37AxWYBC6atL35ESMaaNbHoZf0WgpgZjg-L2yKE21l2ApPZsRKcyrozZpbzwKlsp8S0bbXeFtCDo80Y'
   },
-  classic_casino: {
-    name: 'Classic Casino', tag: 'Traditional', color: 'bg-emerald-500',
-    desc: 'Deep forest green felt and vibrant red accents. Timeless aesthetics.',
+  classic_emerald: {
+    name: 'Classic Emerald', tag: 'Traditional', color: 'bg-emerald-500',
+    desc: 'Deep emerald green with amber gold accents. Timeless prestige.',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU4kOdI4foPxzBZPaJWeU4e6hgpb1ob2ELtVg_0vSv-_f1j9pA2_7_M-KiZHBQZQbUWmXjvVyoBbMxzdNcIOy-GFE6vxya-o-yNe6gH0LOF52hHIkxVjPcuYCg7m46wtFSLdK6YnVVC2N29HsTwPrSuxK9HoNvrzzO5TnpSVpJLK6EEAIaQ-vHFxZmzDXlZxS8Jm6YOYOWbQoA6MfbBnQHLVTec7iDytDDtxxYBVZU0LIjInSiM0UQgFxMewJLa06nErZ-0FMZyfs'
   }
 };

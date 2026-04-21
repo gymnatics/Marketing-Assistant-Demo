@@ -39,7 +39,7 @@
     "luxury_gold": { "name": "Prestige Gold", "tag": "Private Banking", "desc": "Deep navy with classic gold accents", "preset_name": "The Prestige Collection" },
     "festive_red": { "name": "Prosperity Red", "tag": "Wealth Growth", "desc": "Rich burgundy with golden highlights", "preset_name": "The Prosperity Suite" },
     "modern_minimal": { "name": "Modern Trust", "tag": "Digital First", "desc": "Clean white with professional slate", "preset_name": "The Modern Suite" },
-    "classic_casino": { "name": "Heritage Green", "tag": "Established", "desc": "Deep green with amber accents", "preset_name": "The Heritage Portfolio" }
+    "classic_emerald": { "name": "Heritage Green", "tag": "Established", "desc": "Deep green with amber accents", "preset_name": "The Heritage Portfolio" }
   },
   "quick_start_presets": [
     { "name": "Year-End Wealth Review", "desc": "Exclusive private consultation for Private Circle clients. Personalized portfolio review, 2026 market outlook briefing, and complimentary estate planning session with our senior advisors.", "audience": "Private Circle clients", "property": "Meridian Wealth Management Centre" },

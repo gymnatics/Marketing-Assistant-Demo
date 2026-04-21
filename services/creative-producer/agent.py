@@ -39,7 +39,7 @@ def _load_theme_preset_names() -> dict:
         "luxury_gold": "The Heritage Collection",
         "festive_red": "The Celebration Suite",
         "modern_black": "The Urban Retreat",
-        "classic_casino": "The Grand Stakes",
+        "classic_emerald": "The Grand Stakes",
     }
 
 THEME_PRESET_NAMES = _load_theme_preset_names()

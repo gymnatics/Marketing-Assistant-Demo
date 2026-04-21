@@ -11,7 +11,7 @@ const THEMES: Record<string, { name: string; color: string }> = {
   luxury_gold: { name: 'Luxury Gold', color: '#D4AF37' },
   festive_red: { name: 'Festive Red', color: '#C41E3A' },
   modern_black: { name: 'Modern Black', color: '#1a1a1a' },
-  classic_casino: { name: 'Classic Casino', color: '#228B22' }
+  classic_emerald: { name: 'Classic Emerald', color: '#228B22' }
 };
 
 export default function PreviewPanel({ step, data, state }: PreviewPanelProps) {

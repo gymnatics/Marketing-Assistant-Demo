@@ -34,7 +34,7 @@ THEME_PROMPTS = {
     "luxury_gold": "golden champagne tones, warm amber lighting, elegant marble and crystal, luxurious atmosphere",
     "festive_red": "vibrant crimson and gold, festive lanterns, celebration atmosphere, rich silk textures",
     "modern_black": "sleek monochrome, silver accents, futuristic minimalism, dramatic shadows, architectural lines",
-    "classic_casino": "deep emerald green felt, gold and brass accents, classic elegance, vintage glamour",
+    "classic_emerald": "deep emerald green felt, gold and brass accents, classic elegance, vintage glamour",
 }
 
 ensure_mlflow_initialized()
@@ -99,7 +99,7 @@ async def generate_campaign_image(
     Args:
         campaign_name: Name of the marketing campaign
         hotel_name: Hotel/casino name for branding
-        theme: Visual theme (luxury_gold, festive_red, modern_black, classic_casino)
+        theme: Visual theme (luxury_gold, festive_red, modern_black, classic_emerald)
         description: Optional campaign description for prompt context
         width: Image width in pixels (default 1024)
         height: Image height in pixels (default 576 for banner ratio)
@@ -162,7 +162,7 @@ async def generate_campaign_image_b64(
     Args:
         campaign_name: Name of the marketing campaign
         hotel_name: Hotel/casino name for branding
-        theme: Visual theme (luxury_gold, festive_red, modern_black, classic_casino)
+        theme: Visual theme (luxury_gold, festive_red, modern_black, classic_emerald)
         description: Optional campaign description for prompt context
         width: Image width in pixels
         height: Image height in pixels

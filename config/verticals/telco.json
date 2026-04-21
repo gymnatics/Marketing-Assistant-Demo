@@ -39,7 +39,7 @@
     "luxury_gold": { "name": "Premium Gold", "tag": "Elite Plan", "desc": "Deep navy with gold accents", "preset_name": "The Premium Suite" },
     "festive_red": { "name": "Promo Red", "tag": "Hot Deal", "desc": "Bold red with energetic highlights", "preset_name": "The Flash Sale" },
     "modern_minimal": { "name": "Tech Clean", "tag": "5G Future", "desc": "Clean white with electric blue accents", "preset_name": "The Next Gen" },
-    "classic_casino": { "name": "Network Green", "tag": "Reliability", "desc": "Deep green with signal amber", "preset_name": "The Coverage Promise" }
+    "classic_emerald": { "name": "Network Green", "tag": "Reliability", "desc": "Deep green with signal amber", "preset_name": "The Coverage Promise" }
   },
   "quick_start_presets": [
     { "name": "5G Unlimited Launch", "desc": "Introducing Nova 5G Unlimited — blazing speeds, zero throttling, priority network access. Platinum subscribers get free upgrade for 6 months. Includes 100GB hotspot data.", "audience": "Platinum subscribers", "property": "Nova Telecom — Consumer" },
