@@ -9,12 +9,6 @@ data:
   KEYCLOAK_URL: PLACE_HOLDER
   SPIRE_ENABLED: 'False'
   TOKEN_URL: PLACE_HOLDER
-  # Skip inbound JWT validation for cluster-internal traffic.
-  # When AuthBridge sidecars are injected, internal service-to-service calls
-  # (e.g., Campaign API -> Campaign Director) don't carry JWTs. This setting
-  # allows internal requests to bypass validation while external requests
-  # (e.g., KAgenti UI) are still validated.
-  SKIP_INBOUND_VALIDATION_FOR_INTERNAL: 'True'
 kind: ConfigMap
 metadata:
   name: authbridge-config
