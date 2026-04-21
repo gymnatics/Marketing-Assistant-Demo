@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: 0-marketing-assistant-demo
+
+patches:
+  - path: configmap-patch.yaml
+
+images:
+  - name: quay.io/rh-ee-dayeo/marketing-assistant
+    newName: marketing-assistant

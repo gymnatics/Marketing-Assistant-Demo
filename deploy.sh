@@ -411,8 +411,11 @@ echo "  Vertical: ${VERTICAL_ID}"
 
 echo "  ConfigMap patch generated"
 
+# Copy config patch to internal-build overlay too (used when building in-cluster)
+cp k8s/overlays/dev/configmap-patch.yaml k8s/overlays/internal-build/configmap-patch.yaml 2>/dev/null || true
+
 # Update Kustomize namespace to match
-sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/base/kustomization.yaml k8s/overlays/dev/kustomization.yaml 2>/dev/null
+sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/base/kustomization.yaml k8s/overlays/dev/kustomization.yaml k8s/overlays/internal-build/kustomization.yaml 2>/dev/null
 rm -f k8s/base/kustomization.yaml.bak k8s/overlays/dev/kustomization.yaml.bak 2>/dev/null
 # Update namespace.yaml (only the metadata.name, not labels)
 sed -i.bak "4s/name: .*/name: ${NAMESPACE}/" k8s/base/namespace.yaml 2>/dev/null
@@ -437,10 +440,69 @@ echo "  Secret generated"
 echo ""
 
 ################################################################################
+# Step 3b: Build images (optional)
+################################################################################
+echo "--- Step 3b: Image Build ---"
+echo ""
+echo "Where should container images come from?"
+echo "  (1) Use pre-built images from quay.io (default, fastest)"
+echo "  (2) Build from GitHub in OpenShift (uses internal registry, keeps quay untouched)"
+read -p "Choose [1/2]: " BUILD_CHOICE
+BUILD_CHOICE=${BUILD_CHOICE:-1}
+
+if [ "$BUILD_CHOICE" = "2" ]; then
+    OVERLAY="k8s/overlays/internal-build"
+    echo "  Using internal-build overlay (images from OpenShift registry)"
+
+    # Apply ImageStream + BuildConfigs
+    echo "  Applying ImageStream and BuildConfigs..."
+    oc apply -f k8s/openshift/imagestream.yaml -n "$NAMESPACE" 2>/dev/null
+    oc apply -f k8s/openshift/buildconfigs-internal.yaml -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+
+    echo ""
+    echo "  Starting builds (this takes 5-15 minutes)..."
+    BUILDS=(mongodb-mcp imagegen-mcp event-hub creative-producer customer-analyst delivery-manager campaign-director policy-guardian campaign-api campaign-landing frontend)
+    for BC in "${BUILDS[@]}"; do
+        oc start-build "$BC" -n "$NAMESPACE" 2>/dev/null && echo "    Started $BC"
+    done
+
+    echo ""
+    echo "  Waiting for builds to complete..."
+    ALL_DONE=false
+    TIMEOUT=900
+    ELAPSED=0
+    while [ "$ALL_DONE" = "false" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+        sleep 15
+        ELAPSED=$((ELAPSED + 15))
+        RUNNING=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Running\|Pending\|New" || true)
+        FAILED=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Failed\|Error" || true)
+        COMPLETE=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Complete" || true)
+        echo "    [${ELAPSED}s] Running: $RUNNING  Complete: $COMPLETE  Failed: $FAILED"
+        if [ "$RUNNING" = "0" ]; then
+            ALL_DONE=true
+        fi
+    done
+
+    if [ "$FAILED" != "0" ] && [ "$FAILED" != "" ]; then
+        echo ""
+        echo "  WARNING: Some builds failed:"
+        oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -E "Failed|Error"
+        echo ""
+    fi
+    echo "  Builds complete."
+
+    # Update internal-build overlay with correct namespace and config
+    sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/overlays/internal-build/kustomization.yaml 2>/dev/null
+    rm -f k8s/overlays/internal-build/kustomization.yaml.bak 2>/dev/null
+else
+    echo "  Using pre-built quay.io images"
+fi
+echo ""
+
+################################################################################
 # Step 4: Deploy app
 ################################################################################
 echo "--- Step 4: Deploying App ---"
-
 
 echo "Applying Kustomize overlay..."
 if ! oc apply -k "$OVERLAY" 2>&1 | tee /tmp/kustomize-apply.log | grep -E "created|configured|unchanged" | head -20; then
