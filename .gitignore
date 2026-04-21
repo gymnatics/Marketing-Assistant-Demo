@@ -73,3 +73,7 @@ Digital_Marketing_Demo.mp4
 # mlflow sqlite
 mlflow.db
 *.mp4
+
+# Local-only docs (not for git)
+docs/AgentOps*.md
+docs/JWT*.md
