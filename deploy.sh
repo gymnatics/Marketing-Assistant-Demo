@@ -446,15 +446,14 @@ echo "--- Step 3b: Image Build ---"
 echo ""
 echo "Where should container images come from?"
 echo "  (1) Use pre-built images from quay.io (default, fastest)"
-echo "  (2) Build from GitHub in OpenShift (uses internal registry, keeps quay untouched)"
-read -p "Choose [1/2]: " BUILD_CHOICE
+echo "  (2) Build from GitHub in OpenShift → internal registry (keeps quay untouched)"
+echo "  (3) Build from GitHub in OpenShift → push to quay.io (updates quay images)"
+read -p "Choose [1/2/3]: " BUILD_CHOICE
 BUILD_CHOICE=${BUILD_CHOICE:-1}
 
-if [ "$BUILD_CHOICE" = "2" ]; then
-    OVERLAY="k8s/overlays/internal-build"
-    echo "  Using internal-build overlay (images from OpenShift registry)"
+if [ "$BUILD_CHOICE" = "2" ] || [ "$BUILD_CHOICE" = "3" ]; then
 
-    # Branch selection
+    # Branch selection (shared by options 2 and 3)
     GIT_REPO="https://github.com/gymnatics/Marketing-Assistant-Demo.git"
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
     echo ""
@@ -471,46 +470,79 @@ if [ "$BUILD_CHOICE" = "2" ]; then
     BUILD_BRANCH="${BUILD_BRANCH:-$CURRENT_BRANCH}"
     echo "  Building from branch: $BUILD_BRANCH"
 
-    # Apply ImageStream + BuildConfigs (patched with selected branch)
-    echo "  Applying ImageStream and BuildConfigs..."
-    oc apply -f k8s/openshift/imagestream.yaml -n "$NAMESPACE" 2>/dev/null
-    sed "s|ref: main|ref: ${BUILD_BRANCH}|g" k8s/openshift/buildconfigs-internal.yaml | oc apply -n "$NAMESPACE" -f - 2>&1 | grep -E "created|configured|unchanged"
+    if [ "$BUILD_CHOICE" = "2" ]; then
+        # Option 2: Build → internal registry
+        OVERLAY="k8s/overlays/internal-build"
+        echo "  Target: internal OpenShift registry (ImageStream)"
 
-    echo ""
-    echo "  Starting builds (this takes 5-15 minutes)..."
-    BUILDS=(mongodb-mcp imagegen-mcp event-hub creative-producer customer-analyst delivery-manager campaign-director policy-guardian campaign-api campaign-landing frontend)
-    for BC in "${BUILDS[@]}"; do
-        oc start-build "$BC" -n "$NAMESPACE" 2>/dev/null && echo "    Started $BC"
-    done
+        echo "  Applying ImageStream and BuildConfigs..."
+        oc apply -f k8s/openshift/imagestream.yaml -n "$NAMESPACE" 2>/dev/null
+        sed "s|ref: main|ref: ${BUILD_BRANCH}|g" k8s/openshift/buildconfigs-internal.yaml | \
+            oc apply -n "$NAMESPACE" -f - 2>&1 | grep -E "created|configured|unchanged"
+    else
+        # Option 3: Build → quay.io
+        echo "  Target: quay.io (requires quay-push-secret in namespace)"
 
-    echo ""
-    echo "  Waiting for builds to complete..."
-    ALL_DONE=false
-    TIMEOUT=900
-    ELAPSED=0
-    while [ "$ALL_DONE" = "false" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-        sleep 15
-        ELAPSED=$((ELAPSED + 15))
-        RUNNING=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Running\|Pending\|New" || true)
-        FAILED=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Failed\|Error" || true)
-        COMPLETE=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Complete" || true)
-        echo "    [${ELAPSED}s] Running: $RUNNING  Complete: $COMPLETE  Failed: $FAILED"
-        if [ "$RUNNING" = "0" ]; then
-            ALL_DONE=true
+        # Check for push secret
+        if ! oc get secret quay-push-secret -n "$NAMESPACE" &>/dev/null; then
+            echo ""
+            echo "  WARNING: quay-push-secret not found in $NAMESPACE."
+            echo "  Create it with: oc create secret docker-registry quay-push-secret \\"
+            echo "    --docker-server=quay.io --docker-username=<user> --docker-password=<token> -n $NAMESPACE"
+            echo ""
+            read -p "  Continue anyway? (y/N): " CONTINUE_QUAY
+            if [ "$CONTINUE_QUAY" != "y" ] && [ "$CONTINUE_QUAY" != "Y" ]; then
+                echo "  Skipping build."
+                BUILD_CHOICE="1"
+            fi
         fi
-    done
 
-    if [ "$FAILED" != "0" ] && [ "$FAILED" != "" ]; then
-        echo ""
-        echo "  WARNING: Some builds failed:"
-        oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -E "Failed|Error"
-        echo ""
+        if [ "$BUILD_CHOICE" = "3" ]; then
+            echo "  Applying BuildConfigs (quay.io output)..."
+            sed "s|ref: main|ref: ${BUILD_BRANCH}|g" k8s/openshift/buildconfigs.yaml | \
+                oc apply -n "$NAMESPACE" -f - 2>&1 | grep -E "created|configured|unchanged"
+        fi
     fi
-    echo "  Builds complete."
 
-    # Update internal-build overlay with correct namespace and config
-    sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/overlays/internal-build/kustomization.yaml 2>/dev/null
-    rm -f k8s/overlays/internal-build/kustomization.yaml.bak 2>/dev/null
+    if [ "$BUILD_CHOICE" = "2" ] || [ "$BUILD_CHOICE" = "3" ]; then
+        echo ""
+        echo "  Starting builds (this takes 5-15 minutes)..."
+        BUILDS=(mongodb-mcp imagegen-mcp event-hub creative-producer customer-analyst delivery-manager campaign-director policy-guardian campaign-api campaign-landing frontend)
+        for BC in "${BUILDS[@]}"; do
+            oc start-build "$BC" -n "$NAMESPACE" 2>/dev/null && echo "    Started $BC"
+        done
+
+        echo ""
+        echo "  Waiting for builds to complete..."
+        ALL_DONE=false
+        TIMEOUT=900
+        ELAPSED=0
+        while [ "$ALL_DONE" = "false" ] && [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            sleep 15
+            ELAPSED=$((ELAPSED + 15))
+            RUNNING=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Running\|Pending\|New" || true)
+            FAILED=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Failed\|Error" || true)
+            COMPLETE=$(oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -c "Complete" || true)
+            echo "    [${ELAPSED}s] Running: $RUNNING  Complete: $COMPLETE  Failed: $FAILED"
+            if [ "$RUNNING" = "0" ]; then
+                ALL_DONE=true
+            fi
+        done
+
+        if [ "$FAILED" != "0" ] && [ "$FAILED" != "" ]; then
+            echo ""
+            echo "  WARNING: Some builds failed:"
+            oc get builds -n "$NAMESPACE" --no-headers 2>/dev/null | grep -E "Failed|Error"
+            echo ""
+        fi
+        echo "  Builds complete."
+
+        if [ "$BUILD_CHOICE" = "2" ]; then
+            # Update internal-build overlay with correct namespace
+            sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/overlays/internal-build/kustomization.yaml 2>/dev/null
+            rm -f k8s/overlays/internal-build/kustomization.yaml.bak 2>/dev/null
+        fi
+    fi
 else
     echo "  Using pre-built quay.io images"
 fi
