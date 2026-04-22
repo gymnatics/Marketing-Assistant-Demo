@@ -649,8 +649,8 @@ else
             echo "--- Step 6b: Installing KAgenti Helm charts ---"
 
             # Get latest KAgenti release tag
-            KAGENTI_TAG=$(git ls-remote --tags --sort="v:refname" https://github.com/kagenti/kagenti.git 2>/dev/null | tail -n1 | sed 's|.*refs/tags/v||; s/\^{}//' || echo "0.5.0")
-            KAGENTI_TAG=${KAGENTI_TAG:-0.5.0}
+            # Pin to tested version (auto-detect picks up unstable alpha tags)
+            KAGENTI_TAG="${KAGENTI_TAG:-0.6.0-alpha.4}"
             echo "KAgenti version: v${KAGENTI_TAG}"
 
             # Install kagenti-deps (SPIRE, Keycloak, Istio; cert-manager only if not already present)
@@ -732,7 +732,7 @@ else
                 oc create configmap frontend-keycloak-config -n "${NAMESPACE}" \
                     --from-literal="keycloak-config.js=window.__KEYCLOAK_URL__ = \"https://${KEYCLOAK_ROUTE}\";
 window.__KEYCLOAK_REALM__ = \"kagenti\";
-window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
+window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
                     --dry-run=client -o yaml | oc apply -f - 2>/dev/null
 
                 echo "  Restarting frontend to pick up Keycloak config..."
@@ -795,13 +795,13 @@ window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
                 FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
                 FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
 
-                # --- Create simon-casino-ui client (public, for React Dashboard SSO) ---
-                echo "  Creating 'simon-casino-ui' client (public, for dashboard SSO)..."
+                # --- Create demo-ui client (public, for React Dashboard SSO) ---
+                echo "  Creating 'demo-ui' client (public, for dashboard SSO)..."
                 curl -sk -X POST "${KC_REALM_API}/clients" \
                     -H "Authorization: Bearer ${KC_TOKEN}" \
                     -H "Content-Type: application/json" \
                     -d "{
-                        \"clientId\": \"simon-casino-ui\",
+                        \"clientId\": \"demo-ui\",
                         \"name\": \"Simon Casino Resort Dashboard\",
                         \"enabled\": true,
                         \"publicClient\": true,
@@ -928,19 +928,19 @@ window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
                     python3 -c "import sys,json; clients=json.load(sys.stdin); print(clients[0]['id'] if clients else '')" 2>/dev/null || echo "")
                 if [ -n "$MONGO_CLIENT_ID" ]; then
                     echo "  Enabling token exchange permission on mongodb-tool..."
-                    # Add the audience scope as optional to simon-casino-ui
+                    # Add the audience scope as optional to demo-ui
                     SCOPE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
                         "${KC_REALM_API}/client-scopes" 2>/dev/null | \
                         python3 -c "import sys,json; scopes=json.load(sys.stdin); print(next((s['id'] for s in scopes if s['name']=='mongodb-tool-aud'), ''))" 2>/dev/null || echo "")
 
                     SIMON_CLIENT_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
-                        "${KC_REALM_API}/clients?clientId=simon-casino-ui" 2>/dev/null | \
+                        "${KC_REALM_API}/clients?clientId=demo-ui" 2>/dev/null | \
                         python3 -c "import sys,json; clients=json.load(sys.stdin); print(clients[0]['id'] if clients else '')" 2>/dev/null || echo "")
 
                     if [ -n "$SCOPE_ID" ] && [ -n "$SIMON_CLIENT_ID" ]; then
                         curl -sk -X PUT "${KC_REALM_API}/clients/${SIMON_CLIENT_ID}/optional-client-scopes/${SCOPE_ID}" \
                             -H "Authorization: Bearer ${KC_TOKEN}" 2>/dev/null
-                        echo "    mongodb-tool-aud added as optional scope to simon-casino-ui"
+                        echo "    mongodb-tool-aud added as optional scope to demo-ui"
                     fi
                 fi
 
@@ -990,7 +990,7 @@ window.__KEYCLOAK_CLIENT_ID__ = \"simon-casino-ui\";" \
 
                 echo ""
                 echo "  Keycloak realm '${KC_REALM}' configured:"
-                echo "    Clients: simon-casino-ui (public), mongodb-tool (confidential)"
+                echo "    Clients: demo-ui (public), mongodb-tool (confidential)"
                 echo "    Users: alice/alice (platinum), bob/bob (no platinum), admin/admin, demo-user/password"
                 echo "    Roles: admin, kagenti-viewer (all users), platinum-access (alice only)"
                 echo "    Scopes: mongodb-tool-aud, mongodb-full-access"

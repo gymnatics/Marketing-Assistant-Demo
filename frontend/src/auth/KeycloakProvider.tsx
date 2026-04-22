@@ -42,7 +42,7 @@ const KEYCLOAK_REALM = (window as any).__KEYCLOAK_REALM__
   || 'kagenti';
 const KEYCLOAK_CLIENT_ID = (window as any).__KEYCLOAK_CLIENT_ID__
   || process.env.REACT_APP_KEYCLOAK_CLIENT_ID
-  || 'simon-casino-ui';
+  || 'demo-ui';
 
 function parseUser(kc: Keycloak): AuthUser {
   const parsed = kc.tokenParsed as any;

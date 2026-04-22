@@ -8,4 +8,4 @@ data:
   keycloak-config.js: |
     window.__KEYCLOAK_URL__ = "";
     window.__KEYCLOAK_REALM__ = "kagenti";
-    window.__KEYCLOAK_CLIENT_ID__ = "simon-casino-ui";
+    window.__KEYCLOAK_CLIENT_ID__ = "demo-ui";
