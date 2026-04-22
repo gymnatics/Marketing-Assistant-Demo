@@ -118,13 +118,25 @@ else
     [ "$HAS_FLUX" -ge 1 ] && echo "  ✓ Image model (FLUX.2) found" || echo "  ✗ Image model (FLUX.2) missing"
     echo ""
     echo "Deploy models via:"
-    echo "  (1) RHOAI Dashboard UI (recommended — creates data connections automatically)"
-    echo "  (2) RHOAI-Toolkit scripts (automated S3 setup + serving)"
-    echo "  (3) Kustomize manifests (requires pre-configured S3 data connections)"
+    echo "  (1) RHOAI Dashboard UI (manual — creates data connections automatically)"
+    echo "  (2) setup-models.sh (one command — sets up MinIO, downloads, and serves all 3 models)"
+    echo "  (3) RHOAI-Toolkit scripts (manual — step by step)"
+    echo "  (4) Kustomize manifests (requires pre-configured S3 data connections)"
     echo "  (s) Skip for now"
-    read -p "Choose [1/2/3/s]: " MODEL_CHOICE
+    read -p "Choose [1/2/3/4/s]: " MODEL_CHOICE
 
-    if [ "$MODEL_CHOICE" = "3" ]; then
+    if [ "$MODEL_CHOICE" = "2" ]; then
+        echo ""
+        echo "Running setup-models.sh (MinIO + download + serve)..."
+        if [ -f "./setup-models.sh" ]; then
+            MODEL_NS="$MODEL_NS" ./setup-models.sh
+        else
+            echo "  setup-models.sh not found in current directory."
+            echo "  Run it manually: MODEL_NS=$MODEL_NS ./setup-models.sh"
+        fi
+        echo ""
+
+    elif [ "$MODEL_CHOICE" = "4" ]; then
         echo "Applying model manifests to $MODEL_NS..."
         if oc apply -k k8s/models/ -n "$MODEL_NS" 2>&1 | tee /tmp/model-apply.log | grep -E "created|configured|unchanged"; then
             echo ""
@@ -230,11 +242,12 @@ with open('/tmp/storage-config-update.json', 'w') as f:
         fi
         echo ""
 
-    elif [ "$MODEL_CHOICE" = "2" ]; then
+    elif [ "$MODEL_CHOICE" = "3" ]; then
         echo ""
-        echo "Run RHOAI-Toolkit to set up model storage and serving:"
-        echo "  git clone https://github.com/gymnatics/RHOAI-Toolkit.git && cd RHOAI-Toolkit"
-        echo "  export NAMESPACE=$MODEL_NS"
+        echo "Run RHOAI-Toolkit manually:"
+        echo "  cd /path/to/Openshift-installation"
+        echo "  export NAMESPACE=model-storage"
+        echo "  export MINIO_NAMESPACE=model-storage"
         echo "  ./scripts/setup-model-storage.sh -n \$NAMESPACE"
         echo "  ./scripts/download-model.sh s3 RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic"
         echo "  ./scripts/download-model.sh s3 RedHatAI/Qwen3-32B-FP8-dynamic"
