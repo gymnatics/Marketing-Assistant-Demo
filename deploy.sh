@@ -454,10 +454,27 @@ if [ "$BUILD_CHOICE" = "2" ]; then
     OVERLAY="k8s/overlays/internal-build"
     echo "  Using internal-build overlay (images from OpenShift registry)"
 
-    # Apply ImageStream + BuildConfigs
+    # Branch selection
+    GIT_REPO="https://github.com/gymnatics/Marketing-Assistant-Demo.git"
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    echo ""
+    echo "  Available branches:"
+    git ls-remote --heads "$GIT_REPO" 2>/dev/null | sed 's|.*refs/heads/||' | while read -r b; do
+        if [ "$b" = "$CURRENT_BRANCH" ]; then
+            echo "    * $b (current)"
+        else
+            echo "      $b"
+        fi
+    done
+    echo ""
+    read -p "  Build from branch [$CURRENT_BRANCH]: " BUILD_BRANCH
+    BUILD_BRANCH="${BUILD_BRANCH:-$CURRENT_BRANCH}"
+    echo "  Building from branch: $BUILD_BRANCH"
+
+    # Apply ImageStream + BuildConfigs (patched with selected branch)
     echo "  Applying ImageStream and BuildConfigs..."
     oc apply -f k8s/openshift/imagestream.yaml -n "$NAMESPACE" 2>/dev/null
-    oc apply -f k8s/openshift/buildconfigs-internal.yaml -n "$NAMESPACE" 2>&1 | grep -E "created|configured|unchanged"
+    sed "s|ref: main|ref: ${BUILD_BRANCH}|g" k8s/openshift/buildconfigs-internal.yaml | oc apply -n "$NAMESPACE" -f - 2>&1 | grep -E "created|configured|unchanged"
 
     echo ""
     echo "  Starting builds (this takes 5-15 minutes)..."
