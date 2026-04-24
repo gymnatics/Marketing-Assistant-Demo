@@ -6,6 +6,7 @@ COPY services/creative-producer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 
 COPY services/creative-producer/agent.py .
 COPY services/creative-producer/agent_executor.py .

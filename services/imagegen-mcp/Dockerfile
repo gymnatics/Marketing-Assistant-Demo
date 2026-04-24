@@ -6,6 +6,7 @@ COPY services/imagegen-mcp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 COPY services/imagegen-mcp/server.py .
 
 EXPOSE 8091

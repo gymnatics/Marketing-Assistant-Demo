@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared models
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 
 # Copy app code
 COPY services/campaign-api/app.py .

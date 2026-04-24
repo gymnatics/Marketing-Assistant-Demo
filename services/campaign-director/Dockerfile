@@ -6,6 +6,7 @@ COPY services/campaign-director/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 
 COPY services/campaign-director/agent.py .
 COPY services/campaign-director/agent_executor.py .

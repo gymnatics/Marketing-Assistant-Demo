@@ -6,6 +6,7 @@ COPY services/delivery-manager/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 
 COPY services/delivery-manager/agent.py .
 COPY services/delivery-manager/agent_executor.py .

@@ -6,6 +6,7 @@ COPY services/customer-analyst/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 
 COPY services/customer-analyst/agent.py .
 COPY services/customer-analyst/agent_executor.py .

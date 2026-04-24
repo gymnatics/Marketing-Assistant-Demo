@@ -5,6 +5,8 @@ WORKDIR /opt/app-root/src
 COPY services/mongodb-mcp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY shared/ /opt/app-root/src/shared/
+COPY config/ /opt/app-root/src/config/
 COPY services/mongodb-mcp/server.py .
 COPY services/mongodb-mcp/seed_data.py .
 
