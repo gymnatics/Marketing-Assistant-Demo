@@ -731,7 +731,7 @@ else
                 --set spire.trustDomain="${DOMAIN}" \
                 --set openshift=true \
                 $KAGENTI_EXTRA_SETS \
-                --wait --timeout 10m 2>&1 | tail -5
+                --wait --timeout 15m 2>&1 | tail -5
 
             # Install MCP Gateway
             echo "  Installing MCP Gateway..."
@@ -749,7 +749,7 @@ else
                 --set agentOAuthSecret.spiffePrefix="spiffe://${DOMAIN}/sa" \
                 --set uiOAuthSecret.useServiceAccountCA=false \
                 --set agentOAuthSecret.useServiceAccountCA=false \
-                --wait --timeout 10m 2>&1 | tail -3
+                --wait --timeout 15m 2>&1 | tail -3
 
             echo ""
             echo "--- Step 6c: Post-install configuration ---"
