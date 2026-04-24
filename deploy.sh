@@ -458,11 +458,19 @@ echo ""
 echo "--- Step 3b: Image Build ---"
 echo ""
 echo "Where should container images come from?"
-echo "  (1) Use pre-built images from quay.io (default, fastest)"
+echo "  (1) Use pre-built images from quay.io (default)"
 echo "  (2) Build from GitHub in OpenShift → internal registry (keeps quay untouched)"
 echo "  (3) Build from GitHub in OpenShift → push to quay.io (updates quay images)"
-read -p "Choose [1/2/3]: " BUILD_CHOICE
+echo "  (4) Use existing internal registry images (already built on this cluster, skip build)"
+read -p "Choose [1/2/3/4]: " BUILD_CHOICE
 BUILD_CHOICE=${BUILD_CHOICE:-1}
+
+if [ "$BUILD_CHOICE" = "4" ]; then
+    OVERLAY="k8s/overlays/internal-build"
+    sed -i.bak "s/^namespace: .*/namespace: ${NAMESPACE}/" k8s/overlays/internal-build/kustomization.yaml 2>/dev/null
+    rm -f k8s/overlays/internal-build/kustomization.yaml.bak 2>/dev/null
+    echo "  Using existing internal registry images (no build)"
+fi
 
 if [ "$BUILD_CHOICE" = "2" ] || [ "$BUILD_CHOICE" = "3" ]; then
 
