@@ -665,9 +665,60 @@ KAGENTI_INSTALLED=$(echo "$KAGENTI_INSTALLED" | tr -dc '0-9')
 KAGENTI_INSTALLED=${KAGENTI_INSTALLED:-0}
 
 if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
-    echo "KAgenti already installed — skipping."
+    echo "KAgenti Helm releases found — skipping Helm install (Steps 6a/6b)."
+    echo "  Running post-install config (Steps 6c/6d)..."
     KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
     KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
+    # Run 6c: Keycloak URL patching + namespace labeling
+    echo "  Labeling namespace for KAgenti discovery..."
+    oc label namespace "${NAMESPACE}" kagenti-enabled=true shared-gateway-access=true --overwrite 2>/dev/null || true
+
+    if [ -n "$KEYCLOAK_ROUTE" ]; then
+        echo "  Patching AuthBridge config with Keycloak URLs..."
+        oc patch configmap authbridge-config -n "${NAMESPACE}" --type=merge \
+            -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080\",\"TOKEN_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null || true
+
+        echo "  Patching app ConfigMap with Keycloak URL for SSO..."
+        oc patch configmap marketing-assistant-config -n "${NAMESPACE}" --type=merge \
+            -p "{\"data\":{\"KEYCLOAK_URL\":\"https://${KEYCLOAK_ROUTE}\"}}" 2>/dev/null || true
+
+        echo "  Creating frontend-keycloak-config ConfigMap..."
+        oc create configmap frontend-keycloak-config -n "${NAMESPACE}" \
+            --from-literal="keycloak-config.js=window.__KEYCLOAK_URL__ = \"https://${KEYCLOAK_ROUTE}\";
+window.__KEYCLOAK_REALM__ = \"kagenti\";
+window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
+            --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+    fi
+
+    # Run 6d: Keycloak realm configuration
+    if [ -n "$KEYCLOAK_ROUTE" ]; then
+        KC_REALM="kagenti"
+        KEYCLOAK_ADMIN_USER=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
+        KEYCLOAK_ADMIN_PASS=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
+        echo "  Keycloak admin user: ${KEYCLOAK_ADMIN_USER}"
+
+        KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+            -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
+            python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+        if [ -n "$KC_TOKEN" ]; then
+            echo "  Keycloak token obtained — configuring realm..."
+            # Create realm if needed
+            curl -sk -X POST "https://${KEYCLOAK_ROUTE}/admin/realms" \
+                -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d "{\"realm\":\"${KC_REALM}\",\"enabled\":true}" 2>/dev/null > /dev/null
+
+            echo "  (Realm config will complete in deploy.sh Step 6d on next full run)"
+        else
+            echo "  WARNING: Could not obtain Keycloak admin token (Keycloak may not be ready yet)."
+            echo "  Re-run deploy.sh after Keycloak is fully started."
+        fi
+    else
+        echo "  WARNING: No Keycloak route found. KAgenti may still be starting."
+        echo "  Re-run deploy.sh after KAgenti components are ready."
+    fi
+    KAGENTI_SKIP_HELM=true
 else
     read -p "Deploy KAgenti platform (agent discovery + zero-trust auth)? (y/N): " DEPLOY_KAGENTI
     if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
