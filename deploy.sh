@@ -704,12 +704,75 @@ window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
 
         if [ -n "$KC_TOKEN" ]; then
             echo "  Keycloak token obtained — configuring realm..."
-            # Create realm if needed
+            KC_REALM_API="https://${KEYCLOAK_ROUTE}/admin/realms/${KC_REALM}"
+            FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
+            FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
+
+            # Create realm
             curl -sk -X POST "https://${KEYCLOAK_ROUTE}/admin/realms" \
                 -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
                 -d "{\"realm\":\"${KC_REALM}\",\"enabled\":true}" 2>/dev/null > /dev/null
 
-            echo "  (Realm config will complete in deploy.sh Step 6d on next full run)"
+            # Refresh token
+            KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+                -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
+                python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+            # Clients
+            echo "  Creating clients..."
+            curl -sk -o /dev/null -X POST "${KC_REALM_API}/clients" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d "{\"clientId\":\"demo-ui\",\"publicClient\":true,\"standardFlowEnabled\":true,\"rootUrl\":\"https://${FRONTEND_HOST}\",\"redirectUris\":[\"https://${FRONTEND_HOST}/*\"],\"webOrigins\":[\"https://${FRONTEND_HOST}\"],\"attributes\":{\"pkce.code.challenge.method\":\"S256\"}}" 2>/dev/null
+            curl -sk -o /dev/null -X POST "${KC_REALM_API}/clients" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d '{"clientId":"mongodb-tool","publicClient":false,"serviceAccountsEnabled":true,"standardFlowEnabled":false}' 2>/dev/null
+            echo "    demo-ui, mongodb-tool"
+
+            # Users + password reset
+            echo "  Creating users..."
+            for KC_USER_DATA in "alice:alice:Alice:Chen" "bob:bob:Bob:Santos" "admin:admin:Admin:User" "demo-user:password:Demo:User"; do
+                KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1); KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
+                KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3); KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
+                curl -sk -o /dev/null -X POST "${KC_REALM_API}/users" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                    -d "{\"username\":\"${KC_UNAME}\",\"enabled\":true,\"firstName\":\"${KC_FIRST}\",\"lastName\":\"${KC_LAST}\",\"email\":\"${KC_UNAME}@demo.example.com\",\"emailVerified\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}]}" 2>/dev/null
+                KC_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=${KC_UNAME}&exact=true" 2>/dev/null | \
+                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+                if [ -n "$KC_UID" ]; then
+                    curl -sk -o /dev/null -X PUT "${KC_REALM_API}/users/${KC_UID}/reset-password" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                        -d "{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}" 2>/dev/null
+                fi
+                echo "    ${KC_UNAME}/${KC_UPASS}"
+            done
+
+            # Roles
+            echo "  Creating roles..."
+            curl -sk -o /dev/null -X POST "${KC_REALM_API}/roles" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d '{"name":"kagenti-viewer","description":"View agents and tools in KAgenti UI"}' 2>/dev/null
+            curl -sk -o /dev/null -X POST "${KC_REALM_API}/roles" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d '{"name":"platinum-access","description":"Access to top-tier customer data"}' 2>/dev/null
+            ADMIN_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/admin" 2>/dev/null)
+            VIEWER_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/kagenti-viewer" 2>/dev/null)
+            PLAT_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
+
+            # Assign roles
+            for KC_ROLE_USER in alice bob admin demo-user; do
+                KC_ROLE_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=${KC_ROLE_USER}&exact=true" 2>/dev/null | \
+                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+                if [ -n "$KC_ROLE_UID" ]; then
+                    curl -sk -o /dev/null -X POST "${KC_REALM_API}/users/${KC_ROLE_UID}/role-mappings/realm" \
+                        -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                        -d "[${ADMIN_ROLE},${VIEWER_ROLE}]" 2>/dev/null
+                fi
+            done
+            # Only alice gets platinum-access
+            ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
+                python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+            if [ -n "$ALICE_ID" ]; then
+                curl -sk -o /dev/null -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                    -d "[${PLAT_ROLE}]" 2>/dev/null
+            fi
+            echo "    Roles assigned (alice has platinum-access)"
+            echo "  Keycloak realm configured."
         else
             echo "  WARNING: Could not obtain Keycloak admin token (Keycloak may not be ready yet)."
             echo "  Re-run deploy.sh after Keycloak is fully started."
