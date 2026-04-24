@@ -55,8 +55,8 @@ NOTE: "Free" or "complimentary" offers are only APPROVED if the condition is pro
 Use common sense: {_PG_COST}. The spend must be reasonable relative to what is offered for free.
 
 NOW EVALUATE:
-Campaign Name: {campaign_name}
-Campaign Description: {description}
+Campaign Name: {{campaign_name}}
+Campaign Description: {{description}}
 
 Respond with ONLY: APPROVED or REJECTED: <brief reason>
 No thinking, no XML tags, one line only."""
