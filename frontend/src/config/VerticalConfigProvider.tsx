@@ -75,7 +75,12 @@ export const VerticalConfigProvider: React.FC<{ children: React.ReactNode }> = (
   useEffect(() => {
     authFetch('/api/config')
       .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data) setConfig({ ...DEFAULT_CONFIG, ...data }); })
+      .then(data => {
+        if (data) {
+          setConfig({ ...DEFAULT_CONFIG, ...data });
+          if (data.brand?.page_title) document.title = data.brand.page_title;
+        }
+      })
       .catch(() => {});
   }, []);
 
