@@ -554,8 +554,8 @@ class DeliveryManagerAgent:
                 name = customer.name_en or customer.name
                 campaign_url = params.get("campaign_url", "")
                 personalized_link = f"{campaign_url}?c={customer.customer_id}" if campaign_url and customer.customer_id else campaign_url
-                body = validated.email_body_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name).replace("{{campaign_link}}", personalized_link).replace("{{CAMPAIGN_LINK}}", personalized_link)
-                subject = validated.email_subject_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name).replace("{{campaign_link}}", personalized_link).replace("{{CAMPAIGN_LINK}}", personalized_link)
+                body = validated.email_body_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name).replace("{customer_name}", name).replace("{CUSTOMER_NAME}", name).replace("{{campaign_link}}", personalized_link).replace("{{CAMPAIGN_LINK}}", personalized_link).replace("{campaign_link}", personalized_link).replace("{CAMPAIGN_LINK}", personalized_link)
+                subject = validated.email_subject_en.replace("{{customer_name}}", name).replace("{{CUSTOMER_NAME}}", name).replace("{customer_name}", name).replace("{CUSTOMER_NAME}", name).replace("{{campaign_link}}", personalized_link).replace("{{CAMPAIGN_LINK}}", personalized_link).replace("{campaign_link}", personalized_link).replace("{CAMPAIGN_LINK}", personalized_link)
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.post(f"{CAMPAIGN_API_URL}/api/inbox", json={
                         "from_name": brand("email_from_name", "Simon Casino Resort"),
