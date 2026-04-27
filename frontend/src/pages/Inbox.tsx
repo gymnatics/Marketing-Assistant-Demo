@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { authFetch } from '../auth/authFetch';
+import { useVerticalConfig } from '../config/VerticalConfigProvider';
 
 
 interface Email {
@@ -16,15 +17,24 @@ interface Email {
 }
 
 export default function Inbox() {
+  const vcfg = useVerticalConfig();
   const [emails, setEmails] = useState<Email[]>([]);
   const [selected, setSelected] = useState<Email | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterEmail, setFilterEmail] = useState('wei.zhang@example.com');
+  const [filterEmail, setFilterEmail] = useState('');
 
   useEffect(() => {
-    fetchInbox();
-    const interval = setInterval(fetchInbox, 10000);
-    return () => clearInterval(interval);
+    if (!filterEmail && (vcfg as any).default_inbox_email) {
+      setFilterEmail((vcfg as any).default_inbox_email);
+    }
+  }, [vcfg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (filterEmail) {
+      fetchInbox();
+      const interval = setInterval(fetchInbox, 10000);
+      return () => clearInterval(interval);
+    }
   }, [filterEmail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchInbox = async () => {

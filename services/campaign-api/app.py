@@ -281,6 +281,7 @@ def get_vertical_config():
         "quick_start_presets": cfg.get("quick_start_presets", []),
         "guardrail_presets": cfg.get("guardrail_presets", []),
         "competitors": cfg.get("competitors", []),
+        "default_inbox_email": cfg.get("seed_data", {}).get("default_inbox_email", ""),
     })
 
 
@@ -465,13 +466,15 @@ def get_inbox_for(email_filter=None):
     """Get inbox emails, personalizing templates for the requested recipient."""
     all_emails = []
 
-    # Add pre-populated template emails for each known customer
+    # Build known customers from vertical config seed data
+    from shared.vertical_config import seed_data as vcfg_seed
+    _seed = vcfg_seed()
+    _customers = _seed.get("customers", [])
     known_customers = [
+        {"name": c.get("name_en", c.get("name", "")), "email": c.get("email", ""), "tier": c.get("tier", "").title()}
+        for c in _customers[:5]
+    ] if _customers else [
         {"name": "Wei Zhang", "email": "wei.zhang@example.com", "tier": "Platinum"},
-        {"name": "Ming Li", "email": "ming.li@example.com", "tier": "Platinum"},
-        {"name": "John Smith", "email": "john.smith@example.com", "tier": "Platinum"},
-        {"name": "Yang Liu", "email": "yang.liu@example.com", "tier": "Diamond"},
-        {"name": "Fang Wang", "email": "fang.wang@example.com", "tier": "Gold"},
     ]
 
     for cust in known_customers:
