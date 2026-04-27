@@ -13,6 +13,7 @@ import httpx
 from typing import Optional
 from fastmcp import FastMCP
 from shared.mlflow_bootstrap import ensure_mlflow_initialized, set_safe_tracing_context
+from shared.vertical_config import prompt as vcfg_prompt
 
 import mlflow
 from mlflow.tracing import set_tracing_context_from_http_request_headers
@@ -41,9 +42,13 @@ ensure_mlflow_initialized()
 
 def _build_prompt(campaign_name: str, hotel_name: str, theme: str, description: str = "") -> str:
     theme_style = THEME_PROMPTS.get(theme, THEME_PROMPTS["luxury_gold"])
+    image_context = vcfg_prompt(
+        "creative_producer_image",
+        "luxury casino hotel atmosphere, golden hour, Macau skyline, VIP atmosphere, architectural photography, cinematic lighting"
+    )
     return (
-        f"Professional luxury casino hotel interior and exterior photography, {theme_style}. "
-        f"Night cityscape of Macau skyline backdrop, premium VIP atmosphere, "
+        f"Professional photography, {theme_style}. "
+        f"{image_context}, "
         f"cinematic lighting, photorealistic, ultra high quality, 4K resolution, "
         f"wide banner composition. "
         f"ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO LOGOS, NO WATERMARKS, NO TYPOGRAPHY in the image. "
