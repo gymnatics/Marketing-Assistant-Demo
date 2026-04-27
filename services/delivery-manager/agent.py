@@ -191,6 +191,7 @@ Generate the email content now:"""
         "temperature": 0.7,
         "max_tokens": 4000,
         "stream": True,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
 
     content = ""

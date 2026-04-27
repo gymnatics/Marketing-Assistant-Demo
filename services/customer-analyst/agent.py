@@ -201,6 +201,7 @@ async def _llm_select_and_call_tool(user_prompt: str, target_audience: str = "",
         "temperature": 0.1,
         "max_tokens": 256,
         "stream": True,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
 
     tool_call_name = None

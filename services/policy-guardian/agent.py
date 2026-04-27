@@ -86,6 +86,7 @@ async def validate_policy(campaign_name: str, description: str) -> dict:
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
                 "max_tokens": 300,
+                "chat_template_kwargs": {"enable_thinking": False},
             },
         )
 
