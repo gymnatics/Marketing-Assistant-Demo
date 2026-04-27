@@ -345,15 +345,15 @@ echo ""
 echo "--- Step 2: Model Endpoints ---"
 echo ""
 
-# Auto-detect model routes by name pattern (skip guardrails models)
-_find_model_route() {
+# Auto-detect model routes and names by pattern (skip guardrails models)
+_find_model_info() {
     local pattern="$1"
     for isvc in $(oc get inferenceservice -n "$MODEL_NS" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
         if echo "$isvc" | grep -qi "$pattern" && ! echo "$isvc" | grep -qi "guardrail\|detector"; then
             local route=$(oc get route "$isvc" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || \
                           oc get route "${isvc}-predictor" -n "$MODEL_NS" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
             if [ -n "$route" ]; then
-                echo "$route"
+                echo "$isvc $route"
                 return
             fi
         fi
@@ -361,9 +361,16 @@ _find_model_route() {
     echo ""
 }
 
-CODE_ROUTE=$(_find_model_route "coder\|code")
-LANG_ROUTE=$(_find_model_route "qwen3\|lang")
-IMG_ROUTE=$(_find_model_route "flux\|omni")
+CODE_INFO=$(_find_model_info "coder\|code")
+LANG_INFO=$(_find_model_info "qwen3\|lang")
+IMG_INFO=$(_find_model_info "flux\|omni")
+
+CODE_NAME=$(echo "$CODE_INFO" | awk '{print $1}')
+CODE_ROUTE=$(echo "$CODE_INFO" | awk '{print $2}')
+LANG_NAME=$(echo "$LANG_INFO" | awk '{print $1}')
+LANG_ROUTE=$(echo "$LANG_INFO" | awk '{print $2}')
+IMG_NAME=$(echo "$IMG_INFO" | awk '{print $1}')
+IMG_ROUTE=$(echo "$IMG_INFO" | awk '{print $2}')
 
 # Show what was detected
 echo "Detected model endpoints:"
@@ -416,6 +423,11 @@ if [ -n "$MLFLOW_ROUTE" ]; then
     echo '  MLFLOW_TRACKING_URI: "https://'"${MLFLOW_ROUTE}"'"' >> k8s/overlays/dev/configmap-patch.yaml
     echo "  MLflow tracking URI added to configmap"
 fi
+
+# Add model names (match served model names, not hardcoded defaults)
+[ -n "$CODE_NAME" ] && echo "  CODE_MODEL_NAME: \"${CODE_NAME}\"" >> k8s/overlays/dev/configmap-patch.yaml
+[ -n "$LANG_NAME" ] && echo "  LANG_MODEL_NAME: \"${LANG_NAME}\"" >> k8s/overlays/dev/configmap-patch.yaml
+[ -n "$IMG_NAME" ] && echo "  IMAGEGEN_MODEL_NAME: \"${IMG_NAME}\"" >> k8s/overlays/dev/configmap-patch.yaml
 
 # Add vertical config identifier
 VERTICAL_ID=$(basename "$VERTICAL_CONFIG" .json)
