@@ -20,6 +20,7 @@ data:
   CAMPAIGN_API_URL: "http://campaign-api:5000"
   POLICY_GUARDIAN_URL: "http://policy-guardian:8084"
   EVENT_HUB_URL: "http://event-hub:5001"
+  ORCHESTRATOR_URL: "http://guardrails-orchestrator:8033"
 
   # MLflow GenAI tracing (Campaign Director); set MLFLOW_TRACKING_URI in overlay to enable
   MLFLOW_EXPERIMENT_NAME: "marketing-assistant"
