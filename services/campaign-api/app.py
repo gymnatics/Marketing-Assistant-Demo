@@ -31,9 +31,9 @@ AGENT_CALLS = Counter("agent_calls_total", "A2A calls to Campaign Director", ["s
 STEP_DURATION = Histogram("campaign_step_duration_seconds", "Duration of campaign workflow steps", ["step"])
 ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 # Guardrails configuration
-HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor:8000")
+HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor")
 POLICY_GUARDIAN_URL = os.environ.get("POLICY_GUARDIAN_URL", "http://policy-guardian:8084")
-PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor:8000")
+PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor")
 ORCHESTRATOR_URL = os.environ.get("ORCHESTRATOR_URL", "http://guardrails-orchestrator:8033")
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
