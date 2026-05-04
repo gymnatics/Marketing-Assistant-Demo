@@ -25,6 +25,7 @@ SERVICES=(
     "campaign-director"
     "campaign-api"
     "campaign-landing"
+    "policy-guardian"
 )
 
 for SERVICE in "${SERVICES[@]}"; do

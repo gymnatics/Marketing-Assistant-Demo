@@ -320,7 +320,7 @@ All user input is validated through 4 layers before campaign creation proceeds:
 flowchart TD
     Input["User Input\n(campaign name + description)"] --> L1
     
-    L1["Layer 1: Regex Filter\n(competitor names, instant)"]
+    L1["Layer 1: TrustyAI Regex\n(competitor names, orchestrator)"]
     L1 -->|pass| L2
     L1 -->|"fail"| Reject
 

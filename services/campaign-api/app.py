@@ -6,6 +6,7 @@ Campaign Director's REST endpoints (/campaigns, /campaigns/{id}) are called dire
 Campaign Director's A2A skills (create, generate, email, golive) are called via A2AClient.
 """
 import os
+import re
 import uuid
 import json
 import time
@@ -33,17 +34,81 @@ ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor")
 POLICY_GUARDIAN_URL = os.environ.get("POLICY_GUARDIAN_URL", "http://policy-guardian:8084")
 PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor")
+ORCHESTRATOR_URL = os.environ.get("ORCHESTRATOR_URL", "https://guardrails-orchestrator-service:8032")
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
 
 def _build_competitor_pattern() -> str:
+    """Fallback regex for local dev when TrustyAI orchestrator is unavailable."""
     names = vcfg_competitors()
     if names:
-        escaped = [name.replace("(", r"\(").replace(")", r"\)") for name in names]
+        escaped = [re.escape(name) for name in names]
         return r"(?i)(" + "|".join(escaped) + ")"
     return r"(?i)(jennifer casino|jennifer resort|lucky star casino|jade emperor palace|phoenix bay resort|emerald fortune club|royal lotus gaming)"
 
 COMPETITOR_PATTERN = _build_competitor_pattern()
+
+
+def _build_orchestrator_regex_patterns() -> list[str]:
+    """Build case-insensitive regex patterns from vertical config competitor names."""
+    names = vcfg_competitors()
+    return [f"(?i){re.escape(name)}" for name in names] if names else []
+
+
+def _check_competitor_via_orchestrator(text: str) -> dict | None:
+    """Call TrustyAI orchestrator's built-in regex detector for competitor names.
+    Falls back to local Python regex if orchestrator is unreachable."""
+    patterns = _build_orchestrator_regex_patterns()
+    if not patterns:
+        return None
+
+    try:
+        with httpx.Client(timeout=5.0, verify=False) as client:
+            resp = client.post(
+                f"{ORCHESTRATOR_URL}/api/v2/text/detection/content",
+                json={
+                    "content": text,
+                    "detectors": {
+                        "regex_competitor": {
+                            "regex": patterns
+                        }
+                    }
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                detections = data.get("detections", [])
+                for det in detections:
+                    if det.get("score", 0) >= 0.5:
+                        matched = det.get("text", "competitor name")
+                        GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
+                        return guardrail_failure(
+                            "regex_competitor",
+                            "Brand Compliance",
+                            "Competitor reference detected",
+                            f'The campaign mentions "{matched}", which is blocked by the competitor-name guardrail.',
+                            "Remove competitor brand names and rewrite the campaign using your own property names only.",
+                            {"matched_text": matched},
+                        )
+                return None
+            print(f"[Guardrails] Orchestrator returned {resp.status_code}, falling back to local regex")
+    except Exception as e:
+        print(f"[Guardrails] Orchestrator unreachable ({e}), falling back to local regex")
+
+    match = re.search(COMPETITOR_PATTERN, text)
+    if match:
+        blocked_term = match.group(0)
+        GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
+        return guardrail_failure(
+            "regex_competitor",
+            "Brand Compliance",
+            "Competitor reference detected",
+            f'The campaign mentions "{blocked_term}", which is blocked by the competitor-name guardrail.',
+            "Remove competitor brand names and rewrite the campaign using your own property names only.",
+            {"matched_text": blocked_term},
+        )
+    return None
 
 
 def guardrail_failure(layer_id: str, layer_name: str, title: str, reason: str, guidance: str, details: dict | None = None) -> dict:
@@ -62,22 +127,12 @@ def guardrail_failure(layer_id: str, layer_name: str, title: str, reason: str, g
 
 def check_guardrails(campaign_name: str, description: str) -> dict:
     """Run campaign through TrustyAI detectors + policy agent."""
-    import re
     text = f"{campaign_name} {description}"
 
-    # Layer 1: Regex — competitor names
-    match = re.search(COMPETITOR_PATTERN, text)
-    if match:
-        GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
-        blocked_term = match.group(0)
-        return guardrail_failure(
-            "regex_competitor",
-            "Brand Compliance",
-            "Competitor reference detected",
-            f'The campaign mentions "{blocked_term}", which is blocked by the competitor-name guardrail.',
-            "Remove competitor brand names and rewrite the campaign in Simon property terms only.",
-            {"matched_text": blocked_term},
-        )
+    # Layer 1: TrustyAI Regex — competitor names (via orchestrator, fallback to local)
+    competitor_hit = _check_competitor_via_orchestrator(text)
+    if competitor_hit:
+        return competitor_hit
 
     # Layer 2: TrustyAI HAP detector — hate/abuse/profanity
     try:

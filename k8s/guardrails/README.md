@@ -100,11 +100,29 @@ print(json.dumps(json.loads(urllib.request.urlopen(req).read()), indent=2))
 
 ## Integration with Campaign API
 
-The Campaign API calls detectors directly via HTTP (bypasses orchestrator TLS):
-- HAP: `http://guardrails-detector-ibm-hap-predictor:8000/api/v1/text/contents`
-- Prompt Injection: `http://prompt-injection-detector-predictor:8000/api/v1/text/contents`
-- Policy Guardian: A2A call to `http://policy-guardian:8084`
-- Regex: In-code pattern matching
+The Campaign API calls guardrails in 4 layers:
+- **Regex (competitor names):** Calls the TrustyAI GuardrailsOrchestrator at `http://guardrails-orchestrator:8033/api/v2/text/detection/content` with `regex_competitor` detector. Patterns are built dynamically from the vertical config `competitors` array. Falls back to local Python regex if orchestrator is unreachable.
+- **HAP:** `http://guardrails-detector-ibm-hap-predictor:8000/api/v1/text/contents`
+- **Prompt Injection:** `http://prompt-injection-detector-predictor:8000/api/v1/text/contents`
+- **Policy Guardian:** A2A call to `http://policy-guardian:8084`
+
+### Testing Regex via Orchestrator
+
+```bash
+ORCH_HOST=$(oc get route guardrails-orchestrator-http -o jsonpath='{.spec.host}' 2>/dev/null || echo "guardrails-orchestrator:8033")
+curl -X POST "http://$ORCH_HOST/api/v2/text/detection/content" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": ["Grand opening at Jennifer Casino Resort"],
+    "detectors": {
+      "regex_competitor": {
+        "detector_params": {
+          "regex": ["(?i)Jennifer Casino Resort", "(?i)Lucky Star Casino"]
+        }
+      }
+    }
+  }'
+```
 
 ## Uninstall
 

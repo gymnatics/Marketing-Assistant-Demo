@@ -953,8 +953,8 @@ All campaign content passes through 4 guardrail layers before creation:
 
 ```mermaid
 flowchart TD
-    User["User clicks Next"] --> Regex["Layer 1: Regex\n(fictional competitors)"]
-    Regex -->|instant| HAP["Layer 2: TrustyAI HAP\n(Granite Guardian, CPU)"]
+    User["User clicks Next"] --> Regex["Layer 1: TrustyAI Regex\n(fictional competitors, orchestrator)"]
+    Regex -->|"~50ms"| HAP["Layer 2: TrustyAI HAP\n(Granite Guardian, CPU)"]
     HAP -->|~100ms| PI["Layer 3: TrustyAI Prompt Injection\n(DeBERTa v3, CPU)"]
     PI -->|~100ms| Policy["Layer 4: Policy Guardian\n(Qwen3 A2A Agent)"]
     Policy -->|~5s| Decision{All pass?}
@@ -966,7 +966,7 @@ flowchart TD
 
 | Layer | Detector | Location | Resources |
 |-------|----------|----------|-----------|
-| 1. Regex | Fictional competitor-name patterns (e.g. Jennifer Casino Resort) | Campaign API (in-code) | None |
+| 1. Regex | Fictional competitor-name patterns (e.g. Jennifer Casino Resort) | TrustyAI Orchestrator built-in regex detector (fallback: Campaign API in-code) | None |
 | 2. HAP | Granite Guardian 125M | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
 | 3. Prompt Injection | DeBERTa v3 | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
 | 4. Policy Guardian | Qwen3-32B (A2A agent) | Reuses L40S #2 | No extra GPU |
