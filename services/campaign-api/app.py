@@ -34,7 +34,7 @@ ACTIVE_CAMPAIGNS = Gauge("active_campaigns", "Currently in-progress campaigns")
 HAP_DETECTOR_URL = os.environ.get("HAP_DETECTOR_URL", "http://guardrails-detector-ibm-hap-predictor")
 POLICY_GUARDIAN_URL = os.environ.get("POLICY_GUARDIAN_URL", "http://policy-guardian:8084")
 PROMPT_INJECTION_URL = os.environ.get("PROMPT_INJECTION_URL", "http://prompt-injection-detector-predictor")
-ORCHESTRATOR_URL = os.environ.get("ORCHESTRATOR_URL", "http://guardrails-orchestrator:8033")
+ORCHESTRATOR_URL = os.environ.get("ORCHESTRATOR_URL", "https://guardrails-orchestrator-service:8032")
 
 GUARDRAILS_BLOCKED = Counter("guardrails_blocked_total", "Requests blocked by guardrails", ["detector"])
 
@@ -63,16 +63,14 @@ def _check_competitor_via_orchestrator(text: str) -> dict | None:
         return None
 
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=5.0, verify=False) as client:
             resp = client.post(
                 f"{ORCHESTRATOR_URL}/api/v2/text/detection/content",
                 json={
-                    "content": [text],
+                    "content": text,
                     "detectors": {
                         "regex_competitor": {
-                            "detector_params": {
-                                "regex": patterns
-                            }
+                            "regex": patterns
                         }
                     }
                 },
@@ -80,22 +78,19 @@ def _check_competitor_via_orchestrator(text: str) -> dict | None:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                detections = data.get("detections", []) if isinstance(data, dict) else data
-                if isinstance(detections, list):
-                    for det_group in detections:
-                        results = det_group.get("results", []) if isinstance(det_group, dict) else (det_group if isinstance(det_group, list) else [])
-                        for det in results:
-                            if det.get("score", 0) >= 0.5:
-                                matched = det.get("text", "competitor name")
-                                GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
-                                return guardrail_failure(
-                                    "regex_competitor",
-                                    "Brand Compliance",
-                                    "Competitor reference detected",
-                                    f'The campaign mentions "{matched}", which is blocked by the competitor-name guardrail.',
-                                    "Remove competitor brand names and rewrite the campaign using your own property names only.",
-                                    {"matched_text": matched},
-                                )
+                detections = data.get("detections", [])
+                for det in detections:
+                    if det.get("score", 0) >= 0.5:
+                        matched = det.get("text", "competitor name")
+                        GUARDRAILS_BLOCKED.labels(detector="regex_competitor").inc()
+                        return guardrail_failure(
+                            "regex_competitor",
+                            "Brand Compliance",
+                            "Competitor reference detected",
+                            f'The campaign mentions "{matched}", which is blocked by the competitor-name guardrail.',
+                            "Remove competitor brand names and rewrite the campaign using your own property names only.",
+                            {"matched_text": matched},
+                        )
                 return None
             print(f"[Guardrails] Orchestrator returned {resp.status_code}, falling back to local regex")
     except Exception as e:
