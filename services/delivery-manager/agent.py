@@ -9,6 +9,7 @@ import json
 import uuid
 import httpx
 from typing import List, Optional
+from openai import AsyncOpenAI
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -33,6 +34,12 @@ LANG_MODEL_ENDPOINT = os.environ.get(
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 CAMPAIGN_API_URL = os.environ.get("CAMPAIGN_API_URL", "http://campaign-api:5000")
+
+_llm_client = AsyncOpenAI(
+    base_url=LANG_MODEL_ENDPOINT,
+    api_key=os.environ.get("LANG_MODEL_TOKEN", "unused"),
+    timeout=180.0,
+)
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 CLUSTER_DOMAIN = os.environ.get(
     "CLUSTER_DOMAIN", "apps.cluster-qf44v.qf44v.sandbox543.opentlc.com"
@@ -179,47 +186,23 @@ CRITICAL:
 
 Generate the email content now:"""
 
-    url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-
-    payload = {
-        "model": LANG_MODEL_NAME,
-        "messages": [
+    stream = await _llm_client.chat.completions.create(
+        model=LANG_MODEL_NAME,
+        messages=[
             {"role": "system", "content": MARKETING_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.7,
-        "max_tokens": 4000,
-        "stream": True,
-        "chat_template_kwargs": {"enable_thinking": False},
-    }
+        temperature=0.7,
+        max_tokens=4000,
+        stream=True,
+        stream_options={"include_usage": True},
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    )
 
     content = ""
-
-    async with httpx.AsyncClient(timeout=180.0) as http_client:
-        async with http_client.stream(
-            "POST", url, json=payload, headers=headers
-        ) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                raise Exception(
-                    f"Model API error: {response.status_code} - {error_text}"
-                )
-
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            text = delta.get("content", "")
-                            if text:
-                                content += text
-                    except json.JSONDecodeError:
-                        continue
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            content += chunk.choices[0].delta.content
 
     return parse_email_response(content)
 

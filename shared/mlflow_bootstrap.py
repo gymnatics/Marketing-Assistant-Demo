@@ -26,11 +26,13 @@ def ensure_mlflow_initialized() -> None:
         name = (os.environ.get("MLFLOW_EXPERIMENT_NAME") or "default").strip() or "default"
         mlflow.set_experiment(name)
 
+        mlflow.openai.autolog()
+
         try:
             import langchain
             mlflow.langchain.autolog(run_tracer_inline=True)
-        except ImportError: 
-            print("langchain module not detected. Unable to autolog in mlflow")
+        except ImportError:
+            pass
                 
     except Exception as e:
         print(f"[mlflow_bootstrap] MLflow init failed ({e}); tracing may be disabled.", file=sys.stderr)

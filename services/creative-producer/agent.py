@@ -12,6 +12,7 @@ import json
 import httpx
 import mlflow
 import traceback
+from openai import AsyncOpenAI
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
@@ -27,6 +28,12 @@ CODE_MODEL_ENDPOINT = os.environ.get(
 )
 CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
+
+_llm_client = AsyncOpenAI(
+    base_url=CODE_MODEL_ENDPOINT,
+    api_key=os.environ.get("CODE_MODEL_TOKEN", "unused"),
+    timeout=300.0,
+)
 IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
 BASE_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "base_template.html")
@@ -222,44 +229,22 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
 
 async def stream_llm(system_prompt: str, user_prompt: str) -> str:
     """Stream a completion from Qwen Coder and return the full response text."""
-    url = f"{CODE_MODEL_ENDPOINT}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    auth_token = os.environ.get("CODE_MODEL_TOKEN", "")
-    if auth_token:
-        headers["Authorization"] = f"Bearer {auth_token}"
-
-    payload = {
-        "model": CODE_MODEL_NAME,
-        "messages": [
+    stream = await _llm_client.chat.completions.create(
+        model=CODE_MODEL_NAME,
+        messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.9,
-        "max_tokens": 8000,
-        "stream": True
-    }
+        temperature=0.9,
+        max_tokens=8000,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
 
     result = ""
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                raise Exception(f"Model API error: {response.status_code} - {error_text}")
-
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                result += content
-                    except json.JSONDecodeError:
-                        continue
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            result += chunk.choices[0].delta.content
     return result
 
 

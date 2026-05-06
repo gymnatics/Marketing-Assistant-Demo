@@ -10,6 +10,7 @@ Uses Qwen3 LLM to check campaign descriptions for policy violations:
 import os
 import json
 import httpx
+from openai import AsyncOpenAI
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -21,6 +22,12 @@ LANG_MODEL_ENDPOINT = os.environ.get(
 )
 LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
+
+_llm_client = AsyncOpenAI(
+    base_url=LANG_MODEL_ENDPOINT,
+    api_key=os.environ.get("LANG_MODEL_TOKEN", "unused"),
+    timeout=30.0,
+)
 
 _PG_INTRO = vcfg_prompt("policy_guardian_intro", "You are a luxury casino resort marketing policy validator.")
 _PG_REJECTED = vcfg_prompt("policy_guardian_rejected_examples", '- "99% Off All Hotel Rooms" → REJECTED: Unrealistic discount\n- "Free Everything For Everyone" → REJECTED: Unrealistic offer\n- "Win Big Guaranteed at Our Tables" → REJECTED: Misleading promise\n- "Cheapest Rooms in Macau" → REJECTED: Not appropriate for luxury brand')
@@ -78,24 +85,16 @@ async def validate_policy(campaign_name: str, description: str) -> dict:
     """Call Qwen3 to validate campaign against business policies."""
     prompt = POLICY_PROMPT.format(campaign_name=campaign_name, description=description)
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{LANG_MODEL_ENDPOINT}/chat/completions",
-            json={
-                "model": LANG_MODEL_NAME,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 300,
-                "chat_template_kwargs": {"enable_thinking": False},
-            },
+    try:
+        response = await _llm_client.chat.completions.create(
+            model=LANG_MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=300,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
 
-        if response.status_code != 200:
-            print(f"[Policy Guardian] LLM error: {response.status_code}")
-            return {"approved": True, "reason": ""}
-
-        result = response.json()
-        answer = result["choices"][0]["message"]["content"].strip()
+        answer = response.choices[0].message.content.strip()
 
         if "</think>" in answer:
             answer = answer.split("</think>")[-1].strip()
@@ -104,6 +103,10 @@ async def validate_policy(campaign_name: str, description: str) -> dict:
             reason = answer.split(":", 1)[1].strip() if ":" in answer else "Campaign policy violation"
             return {"approved": False, "reason": reason}
 
+        return {"approved": True, "reason": ""}
+
+    except Exception as e:
+        print(f"[Policy Guardian] LLM error: {e}")
         return {"approved": True, "reason": ""}
 
 
