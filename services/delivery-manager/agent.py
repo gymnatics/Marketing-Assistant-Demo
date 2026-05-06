@@ -16,6 +16,7 @@ from kubernetes.client.rest import ApiException
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.vertical_config import prompt as vcfg_prompt, brand
+from shared.model_utils import resolve_model_name
 from shared.models import (
     CustomerProfile,
     GenerateEmailInput,
@@ -32,7 +33,7 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "LANG_MODEL_ENDPOINT",
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1",
 )
-LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+LANG_MODEL_NAME = resolve_model_name("LANG_MODEL_ENDPOINT", "LANG_MODEL_NAME")
 CAMPAIGN_API_URL = os.environ.get("CAMPAIGN_API_URL", "http://campaign-api:5000")
 
 _llm_client = AsyncOpenAI(

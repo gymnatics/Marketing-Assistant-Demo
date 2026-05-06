@@ -18,6 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
 from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context
 from shared.vertical_config import get_config, prompt as vcfg_prompt, brand, themes as vcfg_themes
+from shared.model_utils import resolve_model_name
 
 from mlflow.tracing import get_tracing_context_headers_for_http_request
 from mlflow.entities import SpanType
@@ -26,7 +27,7 @@ CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
     "https://qwen25-coder-32b-fp8-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
-CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
+CODE_MODEL_NAME = resolve_model_name("CODE_MODEL_ENDPOINT", "CODE_MODEL_NAME")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
 
 _llm_client = AsyncOpenAI(
