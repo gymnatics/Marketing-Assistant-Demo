@@ -415,7 +415,9 @@ class CreativeProducerAgent:
                     
                     result = {"html": html, "hero_image_url": hero_image_url, "status": "success"}
                     span.set_outputs(result)
-                    return result
+
+            mlflow.flush_trace_async_logging()
+            return result
                 
         except Exception as e:
             traceback.print_exc()
