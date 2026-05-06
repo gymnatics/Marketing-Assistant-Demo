@@ -26,12 +26,15 @@ def ensure_mlflow_initialized() -> None:
         name = (os.environ.get("MLFLOW_EXPERIMENT_NAME") or "default").strip() or "default"
         mlflow.set_experiment(name)
 
-        mlflow.openai.autolog()
+        try:
+            mlflow.openai.autolog()
+        except Exception:
+            pass
 
         try:
             import langchain
             mlflow.langchain.autolog(run_tracer_inline=True)
-        except ImportError:
+        except (ImportError, Exception):
             pass
                 
     except Exception as e:
