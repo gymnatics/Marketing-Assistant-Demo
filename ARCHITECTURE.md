@@ -27,9 +27,9 @@
 
 ## 1. System Overview
 
-The Marketing Campaign Assistant is a multi-agent AI system that generates luxury marketing campaigns for Macau casinos. It uses four protocols:
+The Marketing Campaign Assistant is a multi-agent, multi-vertical AI system that generates marketing campaigns for any industry. It supports multiple verticals (hotel/casino, retail/mall, banking, telco) via pluggable config files (`config/verticals/*.json`). It uses four protocols:
 
-**Product conventions (v5):** All customer-facing copy is **English-only** (no bilingual UI or email variants). The **hotel / casino** field is a **dropdown of five fictional Simon-branded venues** (not free text). **Competitor guardrails** match **fictional** competitor names only (for example **Jennifer Casino Resort** and similar demo patterns—not real licensed properties).
+**Product conventions (v5+):** All customer-facing copy is **English-only** (no bilingual UI or email variants). The **property** field is a **dropdown** populated from the active vertical config (not free text). **Competitor guardrails** match **fictional** competitor names only (defined per-vertical in the config JSON — never real brand names in demo prompts).
 
 | Protocol | Purpose | Implementation |
 |----------|---------|----------------|

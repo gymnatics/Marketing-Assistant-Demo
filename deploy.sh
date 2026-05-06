@@ -9,7 +9,7 @@ PROD_NS="${PROD_NS:-}"
 OVERLAY="${OVERLAY:-k8s/overlays/dev}"
 
 echo "=========================================="
-echo "Simon Casino Resort - Deploy to OpenShift"
+echo "AI Campaign Manager - Deploy to OpenShift"
 echo "=========================================="
 
 cd "$(dirname "$0")"
