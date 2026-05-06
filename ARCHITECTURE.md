@@ -966,14 +966,16 @@ flowchart TD
 
 | Layer | Detector | Location | Resources |
 |-------|----------|----------|-----------|
-| 1. Regex | Fictional competitor-name patterns (e.g. Jennifer Casino Resort) | TrustyAI Orchestrator built-in regex detector (fallback: Campaign API in-code) | None |
-| 2. HAP | Granite Guardian 125M | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
-| 3. Prompt Injection | DeBERTa v3 | KServe InferenceService | **CPU only** — no `nvidia.com/gpu` requests |
+| 1. Regex | Fictional competitor-name patterns (from vertical config) | TrustyAI Orchestrator built-in regex sidecar (`https://guardrails-orchestrator-service:8032`); fallback: Python regex in Campaign API | None |
+| 2. HAP | Granite Guardian 125M | KServe InferenceService (`http://guardrails-detector-ibm-hap-predictor`, port 80) | **CPU only** — no `nvidia.com/gpu` requests |
+| 3. Prompt Injection | DeBERTa v3 | KServe InferenceService (`http://prompt-injection-detector-predictor`, port 80) | **CPU only** — no `nvidia.com/gpu` requests |
 | 4. Policy Guardian | Qwen3-32B (A2A agent) | Reuses L40S #2 | No extra GPU |
+
+> **Port note:** KServe `RawDeployment` predictor Services expose port **80** (targetPort 8000). Campaign API calls detectors on port 80 (default HTTP), not `:8000`.
 
 ### TrustyAI Components
 
-Deployed via Helm chart (lemonade-stand-assistant) or static YAMLs in `k8s/guardrails/`. **HAP and Prompt Injection detector InferenceServices are CPU-only** (no `nvidia.com/gpu` resource requests).
+Deployed via `oc apply -k k8s/guardrails/` (Kustomize) or Helm chart (lemonade-stand-assistant). **HAP and Prompt Injection detector InferenceServices are CPU-only** (no `nvidia.com/gpu` resource requests). The regex detector runs as a sidecar inside the orchestrator pod (`enableBuiltInDetectors: true`).
 
 | Component | Purpose |
 |-----------|---------|

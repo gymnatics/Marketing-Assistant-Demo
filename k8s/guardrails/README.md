@@ -101,28 +101,44 @@ print(json.dumps(json.loads(urllib.request.urlopen(req).read()), indent=2))
 ## Integration with Campaign API
 
 The Campaign API calls guardrails in 4 layers:
-- **Regex (competitor names):** Calls the TrustyAI GuardrailsOrchestrator at `http://guardrails-orchestrator:8033/api/v2/text/detection/content` with `regex_competitor` detector. Patterns are built dynamically from the vertical config `competitors` array. Falls back to local Python regex if orchestrator is unreachable.
-- **HAP:** `http://guardrails-detector-ibm-hap-predictor:8000/api/v1/text/contents`
-- **Prompt Injection:** `http://prompt-injection-detector-predictor:8000/api/v1/text/contents`
-- **Policy Guardian:** A2A call to `http://policy-guardian:8084`
+
+| Layer | Detector | Endpoint | Notes |
+|-------|----------|----------|-------|
+| 1. Regex | TrustyAI Orchestrator built-in regex sidecar | `https://guardrails-orchestrator-service:8032/api/v2/text/detection/content` | Patterns from vertical config; falls back to Python regex if orchestrator unreachable |
+| 2. HAP | Granite Guardian 125M | `http://guardrails-detector-ibm-hap-predictor/api/v1/text/contents` | KServe Service port 80 (targetPort 8000) |
+| 3. Prompt Injection | DeBERTa v3 | `http://prompt-injection-detector-predictor/api/v1/text/contents` | KServe Service port 80 (targetPort 8000) |
+| 4. Policy Guardian | Qwen3 A2A agent | `http://policy-guardian:8084` | Business logic validation |
+
+> **Port note:** KServe `RawDeployment` predictor Services expose port **80** (mapped to container port 8000). Do not use `:8000` in client URLs.
 
 ### Testing Regex via Orchestrator
 
 ```bash
-ORCH_HOST=$(oc get route guardrails-orchestrator-http -o jsonpath='{.spec.host}' 2>/dev/null || echo "guardrails-orchestrator:8033")
-curl -X POST "http://$ORCH_HOST/api/v2/text/detection/content" \
+# From inside the cluster (e.g. oc exec into campaign-api pod)
+curl -k -X POST "https://guardrails-orchestrator-service:8032/api/v2/text/detection/content" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": ["Grand opening at Jennifer Casino Resort"],
+    "content": "Grand opening at Jennifer Casino Resort",
     "detectors": {
       "regex_competitor": {
-        "detector_params": {
-          "regex": ["(?i)Jennifer Casino Resort", "(?i)Lucky Star Casino"]
-        }
+        "regex": ["(?i)Jennifer Casino Resort", "(?i)Lucky Star Casino"]
       }
     }
   }'
 ```
+
+> **Request format:** `content` is a **string** (not array). Regex patterns go directly under the detector key (not nested under `detector_params`). The orchestrator uses HTTPS on port 8032.
+
+### Guardrail Test Presets (UI)
+
+Each vertical config includes 4 presets exercising distinct layers:
+
+| Preset | Layer | What it tests |
+|--------|-------|---------------|
+| Competitor Test | Regex (orchestrator) | Fictional competitor brand names |
+| HAP Test | HAP (Granite Guardian) | Profane/offensive language |
+| Injection Test | Prompt Injection (DeBERTa) | Instruction injection patterns |
+| Policy Test | Policy Guardian (Qwen3) | Misleading business promises |
 
 ## Uninstall
 

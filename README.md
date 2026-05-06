@@ -38,6 +38,7 @@ flowchart TD
     end
 
     subgraph guardrails [Guardrails - TrustyAI]
+        RegexOrch["Competitor Regex\n(Orchestrator)"]
         HAP["Hate/Profanity Detection"]
         PromptInj["Prompt Injection Detection"]
     end
@@ -85,7 +86,7 @@ flowchart TD
     end
 
     subgraph guardrails [Guardrails]
-        Regex["Regex Filter"]
+        Regex["TrustyAI Regex\n(Orchestrator)"]
         HAP["TrustyAI HAP\n(Granite Guardian)"]
         PI["TrustyAI Prompt Injection\n(DeBERTa v3)"]
         PG["Policy Guardian\n(Qwen3 A2A :8084)"]
@@ -186,7 +187,7 @@ When a user creates a campaign, here's what happens under the hood:
 - **Hero Image Dashboard Cards** — Campaign overview cards reuse each campaign's generated hero image as a thumbnail for richer demo storytelling
 - **Hyper-Personalization** — Landing pages personalize per VIP customer (`?c=VIP-001`) via real-time MCP lookup
 - **Professional Templates** — Skeleton-based "Bones & Beauty" architecture ensures polished layouts every time
-- **4-Layer Guardrails** — Regex → TrustyAI HAP → TrustyAI Prompt Injection → Policy Guardian (Qwen3)
+- **4-Layer Guardrails** — TrustyAI Regex (orchestrator) → TrustyAI HAP → TrustyAI Prompt Injection → Policy Guardian (Qwen3)
 - **Gmail-Style Inbox** — Fake inbox shows personalized emails per recipient with campaign QR codes
 - **Real-Time Agent Status** — SSE streaming shows agent activity during generation
 - **Preview Before Commit** — Review landing page, emails, and recipients before going live
@@ -304,7 +305,7 @@ flowchart LR
 ```
 
 1. **Define Campaign** — Name, description, hotel, audience, dates
-2. **Guardrails Validation** — 4-layer check (regex, HAP, prompt injection, policy) before proceeding
+2. **Guardrails Validation** — 4-layer check (TrustyAI regex via orchestrator, HAP, prompt injection, policy) before proceeding
 3. **Select Theme** — Visual style picker (Luxury Gold, Festive Red, Modern Black, Classic Casino)
 4. **Generate Landing Page** — AI generates hero image (FLUX.2) + HTML/CSS (Qwen Coder), deploys preview pod
 5. **Preview + Personalize** — Review landing page, select VIP from dropdown for personalized preview
@@ -337,9 +338,11 @@ flowchart TD
     L4 -->|"fail"| Reject["✗ Error banner\n(user edits & retries)"]
 ```
 
-- **No restart needed** — user edits the input and retries on the same screen
-- **Policy Guardian** validates business rules: no unrealistic discounts (>50%), professional tone, no misleading promises
-- **Descriptive rejection banners** — the UI shows which guardrail layer failed, why it failed, and how to revise the campaign brief
+- **Layer 1** uses the TrustyAI GuardrailsOrchestrator's built-in regex detector (`https://guardrails-orchestrator-service:8032`); competitor patterns come from the vertical config and are sent at request time. Falls back to local Python regex if orchestrator is unavailable.
+- **Layers 2–3** call KServe InferenceService predictor endpoints on port 80 (HAP, Prompt Injection).
+- **Layer 4** (Policy Guardian) validates business rules: no unrealistic discounts (>50%), professional tone, no misleading promises.
+- **No restart needed** — user edits the input and retries on the same screen.
+- **Descriptive rejection banners** — the UI shows which guardrail layer failed, why it failed, and how to revise the campaign brief.
 
 ## KAgenti Integration
 
@@ -361,7 +364,7 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 - **Orchestration**: LangGraph 0.2+, LangChain 0.2+
 - **LLM Inference**: vLLM on RHOAI (Qwen2.5-Coder-32B, Qwen3-32B)
 - **Image Generation**: vLLM-Omni 0.18.0 (FLUX.2-klein-4B)
-- **Guardrails**: TrustyAI (Granite Guardian, DeBERTa v3) + Policy Guardian (Qwen3)
+- **Guardrails**: TrustyAI (Regex Orchestrator, Granite Guardian, DeBERTa v3) + Policy Guardian (Qwen3)
 - **Database**: MongoDB 7
 - **Landing Pages**: Express.js on UBI9 Node 18 (personalized via MCP)
 - **Agent Management**: KAgenti (Kubernetes-native agent discovery + catalog)
@@ -377,6 +380,7 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 | FLUX.2-klein-4B | L40S #3 | AI hero image generation (vLLM-Omni) | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
 | Granite Guardian HAP 125M | CPU | Hate/abuse/profanity detection (TrustyAI) | [ibm-granite/granite-guardian-hap-125m](https://huggingface.co/ibm-granite/granite-guardian-hap-125m) |
 | DeBERTa v3 Prompt Injection v2 | CPU | Prompt injection detection (TrustyAI) | [protectai/deberta-v3-base-prompt-injection-v2](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) |
+| TrustyAI Regex Detector | CPU | Competitor name detection (orchestrator sidecar) | [trustyai-explainability/guardrails-regex-detector](https://github.com/trustyai-explainability/guardrails-regex-detector) |
 
 ## Project Structure
 
