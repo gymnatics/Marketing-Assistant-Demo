@@ -27,11 +27,6 @@ def ensure_mlflow_initialized() -> None:
         mlflow.set_experiment(name)
 
         try:
-            mlflow.openai.autolog()
-        except Exception:
-            pass
-
-        try:
             import langchain
             mlflow.langchain.autolog(run_tracer_inline=True)
         except (ImportError, Exception):
