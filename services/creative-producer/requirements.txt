@@ -4,4 +4,4 @@ openai>=1.0.0
 pydantic>=2.0.0
 uvicorn>=0.27.0
 fastmcp>=3.0.0,<4
-mlflow[genai]>=3
+mlflow[genai]>=3,<3.12
