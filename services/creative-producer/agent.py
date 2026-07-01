@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
-from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context
+from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context, tag_trace_with_spiffe
 from shared.vertical_config import get_config, prompt as vcfg_prompt, brand, themes as vcfg_themes
 from shared.model_utils import resolve_model_name
 
@@ -416,6 +416,7 @@ class CreativeProducerAgent:
                     result = {"html": html, "hero_image_url": hero_image_url, "status": "success"}
                     span.set_outputs(result)
 
+            tag_trace_with_spiffe()
             mlflow.flush_trace_async_logging()
             return result
                 

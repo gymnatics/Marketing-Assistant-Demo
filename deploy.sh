@@ -682,9 +682,14 @@ if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
     KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
     KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 
-    # Run 6c: Keycloak URL patching + namespace labeling
+    # Run 6c: Keycloak URL patching + namespace labeling + AgentRuntime CRDs
     echo "  Labeling namespace for KAgenti discovery..."
     oc label namespace "${NAMESPACE}" kagenti-enabled=true shared-gateway-access=true --overwrite 2>/dev/null || true
+
+    if oc api-resources --api-group=agent.kagenti.dev 2>/dev/null | grep -q agentruntime; then
+        echo "  Applying AgentRuntime CRDs..."
+        oc apply -f k8s/kagenti/agentruntime.yaml -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -5
+    fi
 
     if [ -n "$KEYCLOAK_ROUTE" ]; then
         echo "  Patching AuthBridge config with Keycloak URLs..."
@@ -844,9 +849,8 @@ else
             echo ""
             echo "--- Step 6b: Installing KAgenti Helm charts ---"
 
-            # Get latest KAgenti release tag
-            # Pin to tested version (auto-detect picks up unstable alpha tags)
-            KAGENTI_TAG="${KAGENTI_TAG:-0.6.0-alpha.4}"
+            # Pin to tested stable version
+            KAGENTI_TAG="${KAGENTI_TAG:-0.6.0}"
             echo "KAgenti version: v${KAGENTI_TAG}"
 
             # Install kagenti-deps (SPIRE, Keycloak, Istio; cert-manager only if not already present)
@@ -857,6 +861,7 @@ else
                 --set spire.trustDomain="${DOMAIN}" \
                 --set openshift=true \
                 $KAGENTI_EXTRA_SETS \
+                --no-hooks \
                 --wait --timeout 15m 2>&1 | tail -5
 
             # Install MCP Gateway
@@ -865,16 +870,32 @@ else
             helm upgrade --install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
                 --create-namespace --namespace mcp-system \
                 --version "${GATEWAY_TAG}" \
+                --no-hooks \
                 --wait --timeout 5m 2>&1 | tail -3
+
+            # Force-remove any stuck terminating namespaces from previous installs
+            for STUCK_NS in team1 team2; do
+                if oc get ns "$STUCK_NS" 2>/dev/null | grep -q Terminating; then
+                    echo "  Removing stuck namespace: $STUCK_NS"
+                    oc get ns "$STUCK_NS" -o json | python3 -c "import json,sys; ns=json.load(sys.stdin); ns['spec']['finalizers']=[]; json.dump(ns,sys.stdout)" | \
+                        oc replace --raw "/api/v1/namespaces/${STUCK_NS}/finalize" -f - 2>/dev/null || true
+                fi
+            done
+
+            OCP_APPS_DOMAIN="apps.${DOMAIN}"
 
             # Install KAgenti (UI, operator)
             echo "  Installing kagenti..."
             helm upgrade --install --create-namespace -n kagenti-system \
                 kagenti oci://ghcr.io/kagenti/kagenti/kagenti \
                 --version "${KAGENTI_TAG}" \
+                --set openshift=true \
+                --set domain="${DOMAIN}" \
                 --set agentOAuthSecret.spiffePrefix="spiffe://${DOMAIN}/sa" \
                 --set uiOAuthSecret.useServiceAccountCA=false \
                 --set agentOAuthSecret.useServiceAccountCA=false \
+                --set mcpGateway.openshiftDomain="${OCP_APPS_DOMAIN}" \
+                --no-hooks \
                 --wait --timeout 15m 2>&1 | tail -3
 
             echo ""
@@ -888,6 +909,27 @@ else
                 oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-agent 2>/dev/null || true
                 oc adm policy add-scc-to-user privileged -z spire-spiffe-csi-driver -n zero-trust-workload-identity-manager 2>/dev/null || true
                 oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-spiffe-csi-driver 2>/dev/null || true
+            fi
+
+            # Create kagenti-ui-config ConfigMap if not present (required by kagenti-backend)
+            if ! oc get configmap kagenti-ui-config -n kagenti-system &>/dev/null; then
+                echo "  Creating kagenti-ui-config ConfigMap..."
+                KEYCLOAK_HOST=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+                cat <<UICFG | oc apply -n kagenti-system -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kagenti-ui-config
+  namespace: kagenti-system
+data:
+  DOMAIN_NAME: "${DOMAIN}"
+  TRACES_DASHBOARD_URL: "https://jaeger-kagenti-system.${OCP_APPS_DOMAIN}"
+  NETWORK_TRAFFIC_DASHBOARD_URL: "https://kiali-kagenti-system.${OCP_APPS_DOMAIN}"
+  MLFLOW_DASHBOARD_URL: ""
+  MCP_INSPECTOR_URL: "https://mcp-inspector-kagenti-system.${OCP_APPS_DOMAIN}"
+  MCP_PROXY_FULL_ADDRESS: "https://mcp-proxy-kagenti-system.${OCP_APPS_DOMAIN}"
+  KEYCLOAK_CONSOLE_URL: "https://${KEYCLOAK_HOST}/admin/master/console/"
+UICFG
             fi
 
             # Copy keycloak-admin-secret into app namespace (read from Helm-created secret)
@@ -907,6 +949,14 @@ else
             echo "  Applying KAgenti manifests..."
             sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f - 2>/dev/null || true
             oc apply -k k8s/kagenti/ -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -10
+
+            # Apply AgentRuntime CRDs (requires KAgenti operator CRD to be installed)
+            if oc api-resources --api-group=agent.kagenti.dev 2>/dev/null | grep -q agentruntime; then
+                echo "  Applying AgentRuntime CRDs..."
+                oc apply -f k8s/kagenti/agentruntime.yaml -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -5
+            else
+                echo "  AgentRuntime CRD not found — skipping (apply manually after KAgenti operator is ready)"
+            fi
 
             # Patch authbridge-config with actual Keycloak URLs
             KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")

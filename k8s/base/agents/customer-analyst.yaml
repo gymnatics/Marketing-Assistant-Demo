@@ -20,8 +20,8 @@ metadata:
     kagenti.io/type: agent
     protocol.kagenti.io/a2a: ''
     kagenti.io/workload-type: deployment
-    kagenti.io/inject: disabled # Enable to test AuthBridge
-    kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False
+    kagenti.io/inject: disabled
+    kagenti.io/spire: disabled
   name: customer-analyst
 spec:
   strategy:
@@ -31,7 +31,9 @@ spec:
     matchLabels:
       app: customer-analyst
   template:
-    metadata:      
+    metadata:
+      annotations:
+        kagenti.io/outbound-ports-exclude: "5001,8090"
       labels:
         app: customer-analyst
         app.kubernetes.io/component: backend
@@ -39,8 +41,8 @@ spec:
         app.kubernetes.io/part-of: simon-casino-agents
         app.openshift.io/runtime: python
         component: agent
-        kagenti.io/inject: disabled # Enable to test AuthBridge
-        kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False
+        kagenti.io/inject: disabled
+        kagenti.io/spire: disabled
         kagenti.io/type: agent
         kagenti.io/workload-type: deployment
         kagenti.io/framework: Python

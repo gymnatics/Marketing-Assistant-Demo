@@ -8,3 +8,4 @@ resources:
   - spiffe-helper-config.yaml
   - authbridge-config.yaml
   - authproxy-routes.yaml
+  - agentruntime.yaml
