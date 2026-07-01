@@ -840,110 +840,103 @@ window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
         oc rollout restart deployment/frontend -n "${NAMESPACE}" 2>/dev/null || true
     fi
 
-            echo ""
-            echo "--- Step 6d: App-specific Keycloak configuration ---"
-            echo ""
-            KC_REALM="kagenti"
+    echo ""
+    echo "--- Step 6d: App-specific Keycloak configuration ---"
+    echo ""
+    KC_REALM="kagenti"
 
-            KEYCLOAK_ADMIN_USER=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
-            KEYCLOAK_ADMIN_PASS=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
+    KEYCLOAK_ADMIN_USER=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
+    KEYCLOAK_ADMIN_PASS=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
 
-            KC_TOKEN=""
-            if [ -n "$KEYCLOAK_ROUTE" ]; then
-                KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
-                    -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
-                    python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
-            fi
-
-            if [ -z "$KC_TOKEN" ]; then
-                echo "  WARNING: Could not obtain Keycloak admin token. Skipping app-specific config."
-            else
-                KC_REALM_API="https://${KEYCLOAK_ROUTE}/admin/realms/${KC_REALM}"
-                FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
-                FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
-
-                # demo-ui client (public, for React Dashboard SSO — separate from KAgenti UI)
-                echo "  Creating 'demo-ui' client..."
-                curl -sk -X POST "${KC_REALM_API}/clients" \
-                    -H "Authorization: Bearer ${KC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{
-                        \"clientId\": \"demo-ui\",
-                        \"name\": \"Marketing Assistant Dashboard\",
-                        \"enabled\": true,
-                        \"publicClient\": true,
-                        \"standardFlowEnabled\": true,
-                        \"directAccessGrantsEnabled\": false,
-                        \"rootUrl\": \"https://${FRONTEND_HOST}\",
-                        \"redirectUris\": [\"https://${FRONTEND_HOST}/*\"],
-                        \"webOrigins\": [\"https://${FRONTEND_HOST}\"],
-                        \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
-                    }" 2>/dev/null > /dev/null
-                echo "    done"
-
-                # Reset demo user passwords (upstream installer may use different defaults)
-                echo "  Resetting demo user passwords..."
-                for KC_USER_DATA in "alice:alice:Alice:Chen" "bob:bob:Bob:Santos" "demo-user:password:Demo:User"; do
-                    KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1)
-                    KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
-                    KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3)
-                    KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
-
-                    # Create user if not exists (upstream creates alice/bob but not demo-user)
-                    curl -sk -X POST "${KC_REALM_API}/users" \
-                        -H "Authorization: Bearer ${KC_TOKEN}" \
-                        -H "Content-Type: application/json" \
-                        -d "{\"username\":\"${KC_UNAME}\",\"enabled\":true,\"firstName\":\"${KC_FIRST}\",\"lastName\":\"${KC_LAST}\",\"email\":\"${KC_UNAME}@demo.example.com\",\"emailVerified\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}]}" 2>/dev/null > /dev/null
-
-                    KC_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
-                        "${KC_REALM_API}/users?username=${KC_UNAME}&exact=true" 2>/dev/null | \
-                        python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-                    if [ -n "$KC_UID" ]; then
-                        curl -sk -X PUT "${KC_REALM_API}/users/${KC_UID}/reset-password" \
-                            -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                            -d "{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}" 2>/dev/null > /dev/null
-                    fi
-                    echo "    ${KC_UNAME} / ${KC_UPASS}"
-                done
-
-                # platinum-access role (app-specific — controls MongoDB MCP data filtering)
-                echo "  Creating 'platinum-access' role..."
-                curl -sk -X POST "${KC_REALM_API}/roles" \
-                    -H "Authorization: Bearer ${KC_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d '{"name":"platinum-access","description":"Access to platinum-tier customer data"}' 2>/dev/null > /dev/null
-
-                # Assign platinum-access to alice only
-                PLAT_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
-                ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
-                    "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
-                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-                if [ -n "$ALICE_ID" ] && [ -n "$PLAT_ROLE" ]; then
-                    curl -sk -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
-                        -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                        -d "[${PLAT_ROLE}]" 2>/dev/null > /dev/null
-                    echo "    alice: platinum-access"
-                fi
-                echo "    (bob does NOT have platinum-access — data will be filtered)"
-
-                echo ""
-                echo "  App Keycloak config done:"
-                echo "    Client: demo-ui (public, dashboard SSO)"
-                echo "    Users: alice/alice (platinum), bob/bob (no platinum), demo-user/password"
-                echo "    Role: platinum-access (alice only)"
-                echo "    Note: realm, agent clients, audience scopes, and roles (admin, kagenti-viewer)"
-                echo "          are managed by the upstream KAgenti installer"
-            fi
-
-            KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-
-            echo ""
-            echo "KAgenti deployed successfully!"
-            [ -n "$KAGENTI_ROUTE" ] && echo "  KAgenti UI: https://${KAGENTI_ROUTE}"
-            [ -n "$KEYCLOAK_ROUTE" ] && echo "  Keycloak:   https://${KEYCLOAK_ROUTE}/admin/${KC_REALM}/console/"
-            echo "  Default credentials: admin / admin"
-        fi
+    KC_TOKEN=""
+    if [ -n "$KEYCLOAK_ROUTE" ]; then
+        KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
+            -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
+            python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
     fi
+
+    if [ -z "$KC_TOKEN" ]; then
+        echo "  WARNING: Could not obtain Keycloak admin token. Skipping app-specific config."
+    else
+        KC_REALM_API="https://${KEYCLOAK_ROUTE}/admin/realms/${KC_REALM}"
+        FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
+        FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
+
+        echo "  Creating 'demo-ui' client..."
+        curl -sk -X POST "${KC_REALM_API}/clients" \
+            -H "Authorization: Bearer ${KC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"clientId\": \"demo-ui\",
+                \"name\": \"Marketing Assistant Dashboard\",
+                \"enabled\": true,
+                \"publicClient\": true,
+                \"standardFlowEnabled\": true,
+                \"directAccessGrantsEnabled\": false,
+                \"rootUrl\": \"https://${FRONTEND_HOST}\",
+                \"redirectUris\": [\"https://${FRONTEND_HOST}/*\"],
+                \"webOrigins\": [\"https://${FRONTEND_HOST}\"],
+                \"attributes\": {\"pkce.code.challenge.method\": \"S256\"}
+            }" 2>/dev/null > /dev/null
+        echo "    done"
+
+        echo "  Resetting demo user passwords..."
+        for KC_USER_DATA in "alice:alice:Alice:Chen" "bob:bob:Bob:Santos" "demo-user:password:Demo:User"; do
+            KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1)
+            KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
+            KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3)
+            KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
+
+            curl -sk -X POST "${KC_REALM_API}/users" \
+                -H "Authorization: Bearer ${KC_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"username\":\"${KC_UNAME}\",\"enabled\":true,\"firstName\":\"${KC_FIRST}\",\"lastName\":\"${KC_LAST}\",\"email\":\"${KC_UNAME}@demo.example.com\",\"emailVerified\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}]}" 2>/dev/null > /dev/null
+
+            KC_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+                "${KC_REALM_API}/users?username=${KC_UNAME}&exact=true" 2>/dev/null | \
+                python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+            if [ -n "$KC_UID" ]; then
+                curl -sk -X PUT "${KC_REALM_API}/users/${KC_UID}/reset-password" \
+                    -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                    -d "{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}" 2>/dev/null > /dev/null
+            fi
+            echo "    ${KC_UNAME} / ${KC_UPASS}"
+        done
+
+        echo "  Creating 'platinum-access' role..."
+        curl -sk -X POST "${KC_REALM_API}/roles" \
+            -H "Authorization: Bearer ${KC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"platinum-access","description":"Access to platinum-tier customer data"}' 2>/dev/null > /dev/null
+
+        PLAT_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
+        ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" \
+            "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
+            python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
+        if [ -n "$ALICE_ID" ] && [ -n "$PLAT_ROLE" ]; then
+            curl -sk -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
+                -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
+                -d "[${PLAT_ROLE}]" 2>/dev/null > /dev/null
+            echo "    alice: platinum-access"
+        fi
+        echo "    (bob does NOT have platinum-access — data will be filtered)"
+
+        echo ""
+        echo "  App Keycloak config done:"
+        echo "    Client: demo-ui (public, dashboard SSO)"
+        echo "    Users: alice/alice (platinum), bob/bob (no platinum), demo-user/password"
+        echo "    Role: platinum-access (alice only)"
+        echo "    Note: realm, agent clients, audience scopes, and roles (admin, kagenti-viewer)"
+        echo "          are managed by the upstream KAgenti installer"
+    fi
+
+    KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
+    echo ""
+    echo "KAgenti deployed successfully!"
+    [ -n "$KAGENTI_ROUTE" ] && echo "  KAgenti UI: https://${KAGENTI_ROUTE}"
+    [ -n "$KEYCLOAK_ROUTE" ] && echo "  Keycloak:   https://${KEYCLOAK_ROUTE}/admin/${KC_REALM}/console/"
+    echo "  Default credentials: admin / admin"
 fi
 
 echo ""
