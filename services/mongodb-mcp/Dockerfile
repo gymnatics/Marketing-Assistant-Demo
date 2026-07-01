@@ -12,4 +12,4 @@ COPY services/mongodb-mcp/seed_data.py .
 
 EXPOSE 8090
 
-CMD ["python", "server.py", "--port", "8090"]
+CMD ["python", "server.py"]
