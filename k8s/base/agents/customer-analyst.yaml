@@ -33,7 +33,7 @@ spec:
   template:
     metadata:
       annotations:
-        kagenti.io/outbound-ports-exclude: "5001,8090"
+        kagenti.io/outbound-ports-exclude: "5001"
       labels:
         app: customer-analyst
         app.kubernetes.io/component: backend
