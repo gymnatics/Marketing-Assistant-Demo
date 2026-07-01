@@ -715,7 +715,7 @@ else
 import pathlib, re
 f = pathlib.Path('${KAGENTI_CACHE}/charts/kagenti/values.yaml')
 text = f.read_text()
-text = re.sub(r'agentNamespaces:\n- team1\n- team2', 'agentNamespaces:\n- ${NAMESPACE}', text)
+text = re.sub(r'agentNamespaces:\n(- .+\n)+', 'agentNamespaces:\n- ${NAMESPACE}\n', text)
 f.write_text(text)
 "
 
@@ -772,6 +772,18 @@ roleRef:
 SCCCRB
 
         echo "  ✓ All patches applied"
+
+        # Label existing namespaces so Helm can adopt them (required if Keycloak/cert-manager/Istio already exist)
+        echo "  Labeling existing namespaces for Helm adoption..."
+        for NS_ADOPT in keycloak cert-manager istio-system istio-cni istio-ztunnel zero-trust-workload-identity-manager; do
+            if oc get ns "$NS_ADOPT" &>/dev/null 2>&1; then
+                oc label namespace "$NS_ADOPT" app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null || true
+                oc annotate namespace "$NS_ADOPT" meta.helm.sh/release-name=kagenti-deps meta.helm.sh/release-namespace=kagenti-system --overwrite 2>/dev/null || true
+            fi
+        done
+        # Label app namespace for kagenti chart adoption (it manages agent namespace resources)
+        oc label namespace "${NAMESPACE}" app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null || true
+        oc annotate namespace "${NAMESPACE}" meta.helm.sh/release-name=kagenti meta.helm.sh/release-namespace=kagenti-system --overwrite 2>/dev/null || true
 
         echo ""
         echo "--- Step 6b: Running upstream KAgenti installer ---"

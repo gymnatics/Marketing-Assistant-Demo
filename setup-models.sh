@@ -211,9 +211,14 @@ EOFYAML
             return 1
         fi
 
-        # Show progress every 30s
+        # Show progress every 30s (from the active pod only)
         if [ $((ELAPSED % 30)) -eq 0 ]; then
-            local LAST_LOG=$(oc logs -n "$NS" -l "job-name=${JOB_NAME}" --tail=1 2>/dev/null | head -1)
+            local ACTIVE_POD=$(oc get pods -n "$NS" -l "job-name=${JOB_NAME}" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+            if [ -n "$ACTIVE_POD" ]; then
+                local LAST_LOG=$(oc logs -n "$NS" "$ACTIVE_POD" --tail=1 2>/dev/null | head -1)
+            else
+                local LAST_LOG="(waiting for pod)"
+            fi
             echo "  [${ELAPSED}s] ${LAST_LOG}"
         fi
     done
