@@ -5,6 +5,7 @@ metadata:
   name: campaign-director-runtime
 spec:
   targetRef:
+    apiVersion: apps/v1
     kind: Deployment
     name: campaign-director
   type: agent
@@ -15,6 +16,7 @@ metadata:
   name: creative-producer-runtime
 spec:
   targetRef:
+    apiVersion: apps/v1
     kind: Deployment
     name: creative-producer
   type: agent
@@ -25,6 +27,7 @@ metadata:
   name: customer-analyst-runtime
 spec:
   targetRef:
+    apiVersion: apps/v1
     kind: Deployment
     name: customer-analyst
   type: agent
@@ -35,6 +38,7 @@ metadata:
   name: delivery-manager-runtime
 spec:
   targetRef:
+    apiVersion: apps/v1
     kind: Deployment
     name: delivery-manager
   type: agent
@@ -45,6 +49,7 @@ metadata:
   name: policy-guardian-runtime
 spec:
   targetRef:
+    apiVersion: apps/v1
     kind: Deployment
     name: policy-guardian
   type: agent
