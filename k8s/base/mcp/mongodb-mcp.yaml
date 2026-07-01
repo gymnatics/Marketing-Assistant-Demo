@@ -40,7 +40,7 @@ spec:
       containers:
       - env:
         - name: PORT
-          value: "8095"
+          value: "8096"
         envFrom:
         - configMapRef:
             name: marketing-assistant-config
