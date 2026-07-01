@@ -38,7 +38,10 @@ spec:
         protocol.kagenti.io/mcp: ''
     spec:
       containers:
-      - envFrom:
+      - env:
+        - name: PORT
+          value: "8095"
+        envFrom:
         - configMapRef:
             name: marketing-assistant-config
         - secretRef:
@@ -47,7 +50,7 @@ spec:
         imagePullPolicy: Always
         name: mcp
         ports:
-        - containerPort: 8090
+        - containerPort: 8095
         resources:
           limits:
             cpu: 200m
@@ -63,7 +66,7 @@ metadata:
 spec:
   ports:
   - port: 8090
-    targetPort: 8090
+    targetPort: 8095
   selector:
     app: mongodb-mcp
 ---
@@ -76,6 +79,6 @@ metadata:
 spec:
   ports:
   - port: 8000
-    targetPort: 8090
+    targetPort: 8095
   selector:
     app: mongodb-mcp

@@ -50,7 +50,10 @@ spec:
     spec:
       serviceAccount: customer-analyst
       containers:
-      - envFrom:
+      - env:
+        - name: PORT
+          value: "8085"
+        envFrom:
         - configMapRef:
             name: marketing-assistant-config
         - secretRef:
@@ -60,16 +63,16 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8082
+            port: 8085
           initialDelaySeconds: 10
           periodSeconds: 30
         name: agent
         ports:
-        - containerPort: 8082
+        - containerPort: 8085
         readinessProbe:
           httpGet:
             path: /healthz
-            port: 8082
+            port: 8085
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
@@ -88,9 +91,9 @@ spec:
   ports:
   - name: a2a
     port: 8080
-    targetPort: 8082
+    targetPort: 8085
   - name: original
-    port: 8082
-    targetPort: 8082
+    port: 8085
+    targetPort: 8085
   selector:
     app: customer-analyst

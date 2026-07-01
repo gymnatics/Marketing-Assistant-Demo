@@ -13,7 +13,7 @@ data:
   # Internal service URLs (same across all clusters)
   CAMPAIGN_DIRECTOR_URL: "http://campaign-director:8080"
   CREATIVE_PRODUCER_URL: "http://creative-producer:8081"
-  CUSTOMER_ANALYST_URL: "http://customer-analyst:8082"
+  CUSTOMER_ANALYST_URL: "http://customer-analyst:8085"
   DELIVERY_MANAGER_URL: "http://delivery-manager:8083"
   MONGODB_MCP_URL: "http://mongodb-mcp:8090"
   IMAGEGEN_MCP_URL: "http://imagegen-mcp:8091"
