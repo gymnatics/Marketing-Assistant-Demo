@@ -677,14 +677,131 @@ KAGENTI_INSTALLED=$(echo "$KAGENTI_INSTALLED" | tr -dc '0-9')
 KAGENTI_INSTALLED=${KAGENTI_INSTALLED:-0}
 
 if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
-    echo "KAgenti Helm releases found — skipping Helm install (Steps 6a/6b)."
+    echo "KAgenti Helm releases found — skipping platform install (Steps 6a/6b)."
     echo "  Running post-install config (Steps 6c/6d)..."
     KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
     KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+else
+    read -p "Deploy KAgenti platform (agent discovery + zero-trust auth)? (y/N): " DEPLOY_KAGENTI
+    if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
 
-    # Run 6c: Keycloak URL patching + namespace labeling + AgentRuntime CRDs
+        DOMAIN="${CLUSTER_DOMAIN}"
+
+        echo ""
+        echo "--- Step 6a: Clone and patch upstream KAgenti ---"
+
+        KAGENTI_CACHE="${HOME}/.cache/kagenti"
+        KAGENTI_GITHUB_URL="https://github.com/kagenti/kagenti.git"
+        KAGENTI_TAG="${KAGENTI_TAG:-}"
+
+        if [ -d "$KAGENTI_CACHE/.git" ]; then
+            echo "  Updating cached KAgenti repo..."
+            git -C "$KAGENTI_CACHE" fetch --tags 2>/dev/null || true
+        else
+            echo "  Cloning KAgenti repo..."
+            rm -rf "$KAGENTI_CACHE" 2>/dev/null
+            git clone "$KAGENTI_GITHUB_URL" "$KAGENTI_CACHE" 2>/dev/null
+        fi
+
+        if [ -z "$KAGENTI_TAG" ]; then
+            KAGENTI_TAG=$(git -C "$KAGENTI_CACHE" tag --sort=-v:refname | head -1 | sed 's/^v//')
+        fi
+        echo "  KAgenti version: v${KAGENTI_TAG}"
+        git -C "$KAGENTI_CACHE" checkout "v${KAGENTI_TAG}" 2>/dev/null || git -C "$KAGENTI_CACHE" checkout main 2>/dev/null
+
+        # Patch 1: Set agentNamespaces to our app namespace (default is team1/team2)
+        echo "  Patching agentNamespaces → ${NAMESPACE}"
+        python3 -c "
+import pathlib, re
+f = pathlib.Path('${KAGENTI_CACHE}/charts/kagenti/values.yaml')
+text = f.read_text()
+text = re.sub(r'agentNamespaces:\n- team1\n- team2', 'agentNamespaces:\n- ${NAMESPACE}', text)
+f.write_text(text)
+"
+
+        # Patch 2: Change transparentPort from 8082 to 15006 (avoids collision with our agent containers)
+        echo "  Patching transparentPort → 15006"
+        python3 -c "
+import pathlib, re
+for p in pathlib.Path('${KAGENTI_CACHE}/charts').rglob('values.yaml'):
+    text = p.read_text()
+    if 'transparentPort' in text:
+        text = re.sub(r'transparentPort:\s*8082', 'transparentPort: 15006', text)
+        p.write_text(text)
+"
+
+        # Patch 3: Add keycloak service alias for OpenShift
+        # The RHBK operator creates 'keycloak-service' but the kagenti-operator constructs
+        # 'keycloak.{namespace}.svc.cluster.local' for admin token requests. This ExternalName
+        # service bridges the gap.
+        echo "  Adding Keycloak service alias (keycloak → keycloak-service)"
+        cat > "${KAGENTI_CACHE}/charts/kagenti-deps/templates/keycloak-alias-svc.yaml" << 'KCALIAS'
+{{- if .Values.openshift }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "kagenti.labels" . | nindent 4 }}
+spec:
+  type: ExternalName
+  externalName: keycloak-service.{{ .Values.keycloak.namespace }}.svc.cluster.local
+{{- end }}
+KCALIAS
+
+        # Patch 4: Grant operator SA the kagenti-authbridge SCC (needed to create SCC RoleBindings in agent namespaces)
+        echo "  Adding operator SCC ClusterRoleBinding"
+        cat > "${KAGENTI_CACHE}/charts/kagenti/templates/operator-scc-crb.yaml" << 'SCCCRB'
+{{- if .Values.openshift }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kagenti-operator-authbridge-scc
+  labels:
+    {{- include "kagenti.labels" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: controller-manager
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:kagenti-authbridge
+{{- end }}
+SCCCRB
+
+        echo "  ✓ All patches applied"
+
+        echo ""
+        echo "--- Step 6b: Running upstream KAgenti installer ---"
+        echo ""
+
+        bash "${KAGENTI_CACHE}/scripts/ocp/setup-kagenti.sh" \
+            --kagenti-repo "${KAGENTI_CACHE}" \
+            --with-mcp-gateway \
+            --skip-mlflow \
+            --skip-ovn-patch
+
+        KAGENTI_ROUTE=$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+        KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    fi
+fi
+
+# Steps 6c/6d run for both fresh installs and re-runs
+if [ -n "$KAGENTI_ROUTE" ] || [ "$KAGENTI_INSTALLED" -ge 1 ]; then
+    KEYCLOAK_ROUTE=${KEYCLOAK_ROUTE:-$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")}
+    KAGENTI_ROUTE=${KAGENTI_ROUTE:-$(oc get route kagenti-ui -n kagenti-system -o jsonpath='{.spec.host}' 2>/dev/null || echo "")}
+
+    echo ""
+    echo "--- Step 6c: App-specific KAgenti configuration ---"
+
     echo "  Labeling namespace for KAgenti discovery..."
     oc label namespace "${NAMESPACE}" kagenti-enabled=true shared-gateway-access=true --overwrite 2>/dev/null || true
+
+    echo "  Applying KAgenti manifests..."
+    sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f - 2>/dev/null || true
+    oc apply -k k8s/kagenti/ -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -10
 
     if oc api-resources --api-group=agent.kagenti.dev 2>/dev/null | grep -q agentruntime; then
         echo "  Applying AgentRuntime CRDs..."
@@ -694,7 +811,7 @@ if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
     if [ -n "$KEYCLOAK_ROUTE" ]; then
         echo "  Patching AuthBridge config with Keycloak URLs..."
         oc patch configmap authbridge-config -n "${NAMESPACE}" --type=merge \
-            -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080\",\"TOKEN_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null || true
+            -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak-service.keycloak.svc:8080\",\"TOKEN_URL\":\"http://keycloak-service.keycloak.svc:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null || true
 
         echo "  Patching app ConfigMap with Keycloak URL for SSO..."
         oc patch configmap marketing-assistant-config -n "${NAMESPACE}" --type=merge \
@@ -706,289 +823,15 @@ if [ "$KAGENTI_INSTALLED" -ge 1 ]; then
 window.__KEYCLOAK_REALM__ = \"kagenti\";
 window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
             --dry-run=client -o yaml | oc apply -f - 2>/dev/null || true
+
+        echo "  Restarting frontend to pick up Keycloak config..."
+        oc rollout restart deployment/frontend -n "${NAMESPACE}" 2>/dev/null || true
     fi
-
-    # Run 6d: Keycloak realm configuration
-    if [ -n "$KEYCLOAK_ROUTE" ]; then
-        KC_REALM="kagenti"
-        KEYCLOAK_ADMIN_USER=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
-        KEYCLOAK_ADMIN_PASS=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
-        echo "  Keycloak admin user: ${KEYCLOAK_ADMIN_USER}"
-
-        KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
-            -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
-            python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
-
-        if [ -n "$KC_TOKEN" ]; then
-            echo "  Keycloak token obtained — configuring realm..."
-            KC_REALM_API="https://${KEYCLOAK_ROUTE}/admin/realms/${KC_REALM}"
-            FRONTEND_HOST=$(oc get routes -n "${NAMESPACE}" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.to.name}{" "}{.spec.host}{"\n"}{end}' 2>/dev/null | grep "frontend" | head -1 | awk '{print $3}')
-            FRONTEND_HOST=${FRONTEND_HOST:-"frontend-${NAMESPACE}.${CLUSTER_DOMAIN}"}
-
-            # Create realm
-            curl -sk -X POST "https://${KEYCLOAK_ROUTE}/admin/realms" \
-                -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                -d "{\"realm\":\"${KC_REALM}\",\"enabled\":true}" 2>/dev/null > /dev/null
-
-            # Refresh token
-            KC_TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_ROUTE}/realms/master/protocol/openid-connect/token" \
-                -d "client_id=admin-cli&username=${KEYCLOAK_ADMIN_USER}&password=${KEYCLOAK_ADMIN_PASS}&grant_type=password" 2>/dev/null | \
-                python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
-
-            # Clients
-            echo "  Creating clients..."
-            curl -sk -o /dev/null -X POST "${KC_REALM_API}/clients" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                -d "{\"clientId\":\"demo-ui\",\"publicClient\":true,\"standardFlowEnabled\":true,\"rootUrl\":\"https://${FRONTEND_HOST}\",\"redirectUris\":[\"https://${FRONTEND_HOST}/*\"],\"webOrigins\":[\"https://${FRONTEND_HOST}\"],\"attributes\":{\"pkce.code.challenge.method\":\"S256\"}}" 2>/dev/null
-            curl -sk -o /dev/null -X POST "${KC_REALM_API}/clients" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                -d '{"clientId":"mongodb-tool","publicClient":false,"serviceAccountsEnabled":true,"standardFlowEnabled":false}' 2>/dev/null
-            echo "    demo-ui, mongodb-tool"
-
-            # Users + password reset
-            echo "  Creating users..."
-            for KC_USER_DATA in "alice:alice:Alice:Chen" "bob:bob:Bob:Santos" "admin:admin:Admin:User" "demo-user:password:Demo:User"; do
-                KC_UNAME=$(echo "$KC_USER_DATA" | cut -d: -f1); KC_UPASS=$(echo "$KC_USER_DATA" | cut -d: -f2)
-                KC_FIRST=$(echo "$KC_USER_DATA" | cut -d: -f3); KC_LAST=$(echo "$KC_USER_DATA" | cut -d: -f4)
-                curl -sk -o /dev/null -X POST "${KC_REALM_API}/users" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                    -d "{\"username\":\"${KC_UNAME}\",\"enabled\":true,\"firstName\":\"${KC_FIRST}\",\"lastName\":\"${KC_LAST}\",\"email\":\"${KC_UNAME}@demo.example.com\",\"emailVerified\":true,\"credentials\":[{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}]}" 2>/dev/null
-                KC_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=${KC_UNAME}&exact=true" 2>/dev/null | \
-                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-                if [ -n "$KC_UID" ]; then
-                    curl -sk -o /dev/null -X PUT "${KC_REALM_API}/users/${KC_UID}/reset-password" \
-                        -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                        -d "{\"type\":\"password\",\"value\":\"${KC_UPASS}\",\"temporary\":false}" 2>/dev/null
-                fi
-                echo "    ${KC_UNAME}/${KC_UPASS}"
-            done
-
-            # Roles
-            echo "  Creating roles..."
-            curl -sk -o /dev/null -X POST "${KC_REALM_API}/roles" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                -d '{"name":"kagenti-viewer","description":"View agents and tools in KAgenti UI"}' 2>/dev/null
-            curl -sk -o /dev/null -X POST "${KC_REALM_API}/roles" -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                -d '{"name":"platinum-access","description":"Access to top-tier customer data"}' 2>/dev/null
-            ADMIN_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/admin" 2>/dev/null)
-            VIEWER_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/kagenti-viewer" 2>/dev/null)
-            PLAT_ROLE=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/roles/platinum-access" 2>/dev/null)
-
-            # Assign roles
-            for KC_ROLE_USER in alice bob admin demo-user; do
-                KC_ROLE_UID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=${KC_ROLE_USER}&exact=true" 2>/dev/null | \
-                    python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-                if [ -n "$KC_ROLE_UID" ]; then
-                    curl -sk -o /dev/null -X POST "${KC_REALM_API}/users/${KC_ROLE_UID}/role-mappings/realm" \
-                        -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                        -d "[${ADMIN_ROLE},${VIEWER_ROLE}]" 2>/dev/null
-                fi
-            done
-            # Only alice gets platinum-access
-            ALICE_ID=$(curl -sk -H "Authorization: Bearer ${KC_TOKEN}" "${KC_REALM_API}/users?username=alice&exact=true" 2>/dev/null | \
-                python3 -c "import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')" 2>/dev/null || echo "")
-            if [ -n "$ALICE_ID" ]; then
-                curl -sk -o /dev/null -X POST "${KC_REALM_API}/users/${ALICE_ID}/role-mappings/realm" \
-                    -H "Authorization: Bearer ${KC_TOKEN}" -H "Content-Type: application/json" \
-                    -d "[${PLAT_ROLE}]" 2>/dev/null
-            fi
-            echo "    Roles assigned (alice has platinum-access)"
-            echo "  Keycloak realm configured."
-        else
-            echo "  WARNING: Could not obtain Keycloak admin token (Keycloak may not be ready yet)."
-            echo "  Re-run deploy.sh after Keycloak is fully started."
-        fi
-    else
-        echo "  WARNING: No Keycloak route found. KAgenti may still be starting."
-        echo "  Re-run deploy.sh after KAgenti components are ready."
-    fi
-    KAGENTI_SKIP_HELM=true
-else
-    read -p "Deploy KAgenti platform (agent discovery + zero-trust auth)? (y/N): " DEPLOY_KAGENTI
-    if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
-
-        echo ""
-        echo "--- Step 6a: Pre-flight checks ---"
-
-        KAGENTI_EXTRA_SETS=""
-
-        # Check for existing cert-manager -- if present, tell KAgenti to skip its own
-        CERTMGR_COUNT=$(oc get deployment -n cert-manager --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
-        CERTMGR_COUNT=${CERTMGR_COUNT:-0}
-        if [ "$CERTMGR_COUNT" -ge 1 ]; then
-            echo "  Existing cert-manager detected — will reuse it."
-            KAGENTI_EXTRA_SETS="$KAGENTI_EXTRA_SETS --set components.certManager.enabled=false"
-        fi
-
-        # Check for existing Istio -- if present, skip KAgenti's and adopt the namespaces
-        ISTIO_COUNT=$(oc get deployment -n istio-system --no-headers 2>/dev/null | wc -l | tr -dc '0-9')
-        ISTIO_COUNT=${ISTIO_COUNT:-0}
-        if [ "$ISTIO_COUNT" -ge 1 ]; then
-            echo "  Existing Istio detected — will reuse it."
-            KAGENTI_EXTRA_SETS="$KAGENTI_EXTRA_SETS --set components.istio.enabled=false"
-            # Label existing namespaces so Helm can adopt them
-            for NS_ADOPT in istio-system istio-cni istio-ztunnel keycloak zero-trust-workload-identity-manager; do
-                if oc get ns "$NS_ADOPT" &>/dev/null 2>&1; then
-                    oc label namespace "$NS_ADOPT" app.kubernetes.io/managed-by=Helm --overwrite 2>/dev/null || true
-                    oc annotate namespace "$NS_ADOPT" meta.helm.sh/release-name=kagenti-deps meta.helm.sh/release-namespace=kagenti-system --overwrite 2>/dev/null || true
-                fi
-            done
-            echo "  Labeled existing namespaces for Helm adoption."
-        fi
-
-        if [ "$DEPLOY_KAGENTI" = "y" ] || [ "$DEPLOY_KAGENTI" = "Y" ]; then
-
-            # Enable OVN local gateway mode for Istio Ambient
-            NETWORK_TYPE=$(oc get network.config/cluster -o jsonpath='{.spec.networkType}' 2>/dev/null || echo "")
-            if [ "$NETWORK_TYPE" = "OVNKubernetes" ]; then
-                echo "Enabling OVN local gateway mode for Istio Ambient..."
-                oc patch network.operator.openshift.io cluster --type=merge \
-                    -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"routingViaHost":true}}}}}' 2>/dev/null || echo "  OVN patch failed (may already be set)"
-            fi
-
-            # Trust domain from cluster DNS
-            DOMAIN="${CLUSTER_DOMAIN}"
-            echo "Trust domain: ${DOMAIN}"
-
-            echo ""
-            echo "--- Step 6b: Installing KAgenti Helm charts ---"
-
-            # Pin to tested stable version
-            KAGENTI_TAG="${KAGENTI_TAG:-0.6.0}"
-            echo "KAgenti version: v${KAGENTI_TAG}"
-
-            # Install kagenti-deps (SPIRE, Keycloak, Istio; cert-manager only if not already present)
-            echo "  Installing kagenti-deps..."
-            helm upgrade --install --create-namespace -n kagenti-system kagenti-deps \
-                oci://ghcr.io/kagenti/kagenti/kagenti-deps \
-                --version "${KAGENTI_TAG}" \
-                --set spire.trustDomain="${DOMAIN}" \
-                --set openshift=true \
-                $KAGENTI_EXTRA_SETS \
-                --no-hooks \
-                --wait --timeout 15m 2>&1 | tail -5
-
-            # Install MCP Gateway
-            echo "  Installing MCP Gateway..."
-            GATEWAY_TAG=$(skopeo list-tags docker://ghcr.io/kagenti/charts/mcp-gateway 2>/dev/null | python3 -c "import sys,json; tags=json.load(sys.stdin)['Tags']; print(tags[-1])" 2>/dev/null || echo "0.4.0")
-            helm upgrade --install mcp-gateway oci://ghcr.io/kagenti/charts/mcp-gateway \
-                --create-namespace --namespace mcp-system \
-                --version "${GATEWAY_TAG}" \
-                --no-hooks \
-                --wait --timeout 5m 2>&1 | tail -3
-
-            # Force-remove any stuck terminating namespaces from previous installs
-            for STUCK_NS in team1 team2; do
-                if oc get ns "$STUCK_NS" 2>/dev/null | grep -q Terminating; then
-                    echo "  Removing stuck namespace: $STUCK_NS"
-                    oc get ns "$STUCK_NS" -o json | python3 -c "import json,sys; ns=json.load(sys.stdin); ns['spec']['finalizers']=[]; json.dump(ns,sys.stdout)" | \
-                        oc replace --raw "/api/v1/namespaces/${STUCK_NS}/finalize" -f - 2>/dev/null || true
-                fi
-            done
-
-            OCP_APPS_DOMAIN="apps.${DOMAIN}"
-
-            # Install KAgenti (UI, operator)
-            echo "  Installing kagenti..."
-            helm upgrade --install --create-namespace -n kagenti-system \
-                kagenti oci://ghcr.io/kagenti/kagenti/kagenti \
-                --version "${KAGENTI_TAG}" \
-                --set openshift=true \
-                --set domain="${DOMAIN}" \
-                --set agentOAuthSecret.spiffePrefix="spiffe://${DOMAIN}/sa" \
-                --set uiOAuthSecret.useServiceAccountCA=false \
-                --set agentOAuthSecret.useServiceAccountCA=false \
-                --set mcpGateway.openshiftDomain="${OCP_APPS_DOMAIN}" \
-                --no-hooks \
-                --wait --timeout 15m 2>&1 | tail -3
-
-            echo ""
-            echo "--- Step 6c: Post-install configuration ---"
-
-            # Fix SPIRE daemonset SCC if needed
-            SPIRE_READY=$(oc get daemonset spire-agent -n zero-trust-workload-identity-manager -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
-            if [ "$SPIRE_READY" = "0" ]; then
-                echo "  Fixing SPIRE daemonset SCC..."
-                oc adm policy add-scc-to-user privileged -z spire-agent -n zero-trust-workload-identity-manager 2>/dev/null || true
-                oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-agent 2>/dev/null || true
-                oc adm policy add-scc-to-user privileged -z spire-spiffe-csi-driver -n zero-trust-workload-identity-manager 2>/dev/null || true
-                oc rollout restart daemonsets -n zero-trust-workload-identity-manager spire-spiffe-csi-driver 2>/dev/null || true
-            fi
-
-            # Create kagenti-ui-config ConfigMap if not present (required by kagenti-backend)
-            if ! oc get configmap kagenti-ui-config -n kagenti-system &>/dev/null; then
-                echo "  Creating kagenti-ui-config ConfigMap..."
-                KEYCLOAK_HOST=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-                cat <<UICFG | oc apply -n kagenti-system -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kagenti-ui-config
-  namespace: kagenti-system
-data:
-  DOMAIN_NAME: "${DOMAIN}"
-  TRACES_DASHBOARD_URL: "https://jaeger-kagenti-system.${OCP_APPS_DOMAIN}"
-  NETWORK_TRAFFIC_DASHBOARD_URL: "https://kiali-kagenti-system.${OCP_APPS_DOMAIN}"
-  MLFLOW_DASHBOARD_URL: ""
-  MCP_INSPECTOR_URL: "https://mcp-inspector-kagenti-system.${OCP_APPS_DOMAIN}"
-  MCP_PROXY_FULL_ADDRESS: "https://mcp-proxy-kagenti-system.${OCP_APPS_DOMAIN}"
-  KEYCLOAK_CONSOLE_URL: "https://${KEYCLOAK_HOST}/admin/master/console/"
-UICFG
-            fi
-
-            # Copy keycloak-admin-secret into app namespace (read from Helm-created secret)
-            echo "  Creating keycloak-admin-secret in ${NAMESPACE}..."
-            KC_ADMIN_U=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.username | base64decode}}' 2>/dev/null || echo "admin")
-            KC_ADMIN_P=$(oc get secret keycloak-initial-admin -n keycloak -o go-template='{{.data.password | base64decode}}' 2>/dev/null || echo "admin")
-            oc create secret generic keycloak-admin-secret -n "${NAMESPACE}" \
-                --from-literal=KEYCLOAK_ADMIN_USERNAME="${KC_ADMIN_U}" \
-                --from-literal=KEYCLOAK_ADMIN_PASSWORD="${KC_ADMIN_P}" \
-                --dry-run=client -o yaml | oc apply -f - 2>/dev/null
-
-            # Label app namespace for KAgenti discovery
-            echo "  Labeling namespace for KAgenti discovery..."
-            oc label namespace "${NAMESPACE}" kagenti-enabled=true shared-gateway-access=true --overwrite 2>/dev/null || true
-
-            # Apply KAgenti-specific manifests
-            echo "  Applying KAgenti manifests..."
-            sed "s/NAMESPACE_PLACEHOLDER/${NAMESPACE}/" k8s/kagenti/crb.yaml | oc apply -f - 2>/dev/null || true
-            oc apply -k k8s/kagenti/ -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -10
-
-            # Apply AgentRuntime CRDs (requires KAgenti operator CRD to be installed)
-            if oc api-resources --api-group=agent.kagenti.dev 2>/dev/null | grep -q agentruntime; then
-                echo "  Applying AgentRuntime CRDs..."
-                oc apply -f k8s/kagenti/agentruntime.yaml -n "${NAMESPACE}" 2>&1 | grep -E "created|configured|unchanged" | head -5
-            else
-                echo "  AgentRuntime CRD not found — skipping (apply manually after KAgenti operator is ready)"
-            fi
-
-            # Patch authbridge-config with actual Keycloak URLs
-            KEYCLOAK_ROUTE=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-            if [ -n "$KEYCLOAK_ROUTE" ]; then
-                echo "  Patching AuthBridge config with Keycloak URLs..."
-                oc patch configmap authbridge-config -n "${NAMESPACE}" --type=merge \
-                    -p "{\"data\":{\"ISSUER\":\"https://${KEYCLOAK_ROUTE}/realms/kagenti\",\"KEYCLOAK_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080\",\"TOKEN_URL\":\"http://keycloak.keycloak.svc.cluster.local:8080/realms/kagenti/protocol/openid-connect/token\"}}" 2>/dev/null
-            fi
-
-            # Wire Keycloak URL into the app ConfigMap for frontend SSO
-            if [ -n "$KEYCLOAK_ROUTE" ]; then
-                echo "  Patching app ConfigMap with Keycloak URL for SSO..."
-                oc patch configmap marketing-assistant-config -n "${NAMESPACE}" --type=merge \
-                    -p "{\"data\":{\"KEYCLOAK_URL\":\"https://${KEYCLOAK_ROUTE}\"}}" 2>/dev/null
-
-                # Overwrite frontend-keycloak-config with actual Keycloak URL
-                # (volume-mounted into frontend pod since docker-entrypoint.sh can't write on OpenShift)
-                echo "  Creating frontend-keycloak-config ConfigMap..."
-                oc create configmap frontend-keycloak-config -n "${NAMESPACE}" \
-                    --from-literal="keycloak-config.js=window.__KEYCLOAK_URL__ = \"https://${KEYCLOAK_ROUTE}\";
-window.__KEYCLOAK_REALM__ = \"kagenti\";
-window.__KEYCLOAK_CLIENT_ID__ = \"demo-ui\";" \
-                    --dry-run=client -o yaml | oc apply -f - 2>/dev/null
-
-                echo "  Restarting frontend to pick up Keycloak config..."
-                oc rollout restart deployment/frontend -n "${NAMESPACE}" 2>/dev/null || true
-            fi
 
             echo ""
             echo "--- Step 6d: Keycloak realm configuration ---"
             echo ""
-            KEYCLOAK_INTERNAL="http://keycloak.keycloak.svc.cluster.local:8080"
+            KEYCLOAK_INTERNAL="http://keycloak-service.keycloak.svc:8080"
             KC_REALM="kagenti"
 
             # Read actual Keycloak admin credentials from the secret created by the Helm chart
