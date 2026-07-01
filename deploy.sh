@@ -771,6 +771,40 @@ roleRef:
 {{- end }}
 SCCCRB
 
+        # Patch 5: Grant operator SA permission to manage ServiceAccounts
+        # The webhook needs to create/fetch SAs when injecting AuthBridge into pods
+        # that don't have a dedicated ServiceAccount (e.g., mongodb-mcp uses default SA)
+        echo "  Adding operator ServiceAccount RBAC"
+        cat > "${KAGENTI_CACHE}/charts/kagenti/templates/operator-sa-rbac.yaml" << 'SARBAC'
+{{- if .Values.openshift }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kagenti-operator-sa-manager
+  labels:
+    {{- include "kagenti.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "list", "watch", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kagenti-operator-sa-manager
+  labels:
+    {{- include "kagenti.labels" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: controller-manager
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kagenti-operator-sa-manager
+{{- end }}
+SARBAC
+
         echo "  ✓ All patches applied"
 
         # Label existing namespaces so Helm can adopt them (required if Keycloak/cert-manager/Istio already exist)
