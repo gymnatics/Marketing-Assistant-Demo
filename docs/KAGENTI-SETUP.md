@@ -251,6 +251,59 @@ echo "Keycloak: https://${KEYCLOAK_URL}"
 echo "Credentials: admin / admin"
 ```
 
+## AgentRuntime CRDs
+
+Each agent has an `AgentRuntime` Custom Resource in `k8s/kagenti/agentruntime.yaml` that formally registers it with the KAgenti operator (beyond label-based discovery). The CRD gives the operator lifecycle management (Phase: Active/Inactive).
+
+```bash
+# Verify AgentRuntimes after deployment
+oc get agentruntime -n $NAMESPACE
+# Expected: 5 runtimes (campaign-director, creative-producer, customer-analyst, delivery-manager, policy-guardian)
+```
+
+The CRDs are applied automatically by `deploy.sh` Step 6c when the KAgenti operator is installed. If the CRD definition doesn't exist yet (operator not ready), the apply is skipped with a warning.
+
+## SPIFFE-Tagged MLflow Traces
+
+When AuthBridge sidecars are injected (SPIFFE SVIDs available), MLflow traces are automatically tagged with workload identity metadata. This enables cryptographic audit trails where every AI decision can be traced to a specific workload identity.
+
+### Tags Added
+
+| Tag | Source | Example |
+|-----|--------|---------|
+| `spiffe.id` | JWT SVID `sub` claim | `spiffe://apps.cluster.example.com/ns/demo/sa/campaign-director` |
+| `spiffe.audience` | JWT SVID `aud` claim | `['kagenti']` |
+| `spiffe.issuer` | JWT SVID `iss` claim | `https://oidc-discovery.apps.cluster.example.com` |
+| `spiffe.expiry` | JWT SVID `exp` claim | `1777371973` |
+| `spiffe.jwt_svid` | Truncated token (80 chars) | `eyJhbGciOiJSUzI1NiIs...` |
+| `spiffe.x509_svid` | Truncated cert (120 chars) | `-----BEGIN CERTIFIC...` |
+
+### How It Works
+
+1. `spiffe-helper` sidecar writes JWT SVID to `/opt/jwt_svid.token` (configured in `k8s/kagenti/spiffe-helper-config.yaml`)
+2. `tag_trace_with_spiffe()` in `shared/mlflow_bootstrap.py` reads and decodes the token
+3. Campaign Director and Creative Producer call it after each traced workflow completes
+4. No-ops gracefully when SVID files don't exist (non-KAgenti deployments)
+
+### Instrumented Agents
+
+- **Campaign Director**: 3 workflows (`workflow_landing_page`, `workflow_email_preview`, `workflow_go_live`) + 2 skills (`skill_chat`, `skill_create_campaign`)
+- **Creative Producer**: 1 span (`creative producer`)
+
+## Port Exclusion Annotations
+
+All agent pod templates include `kagenti.io/outbound-ports-exclude` annotations to prevent AuthBridge from intercepting internal service traffic when injection is enabled:
+
+| Agent | Excluded Outbound Ports | Reason |
+|-------|------------------------|--------|
+| Campaign Director | 5001, 8081-8084 | Event Hub, downstream agents |
+| Creative Producer | 5001, 8091 | Event Hub, ImageGen MCP |
+| Customer Analyst | 5001, 8090 | Event Hub, MongoDB MCP |
+| Delivery Manager | 443, 5001, 6443 | K8s API, Event Hub |
+| Policy Guardian | 5001 | Event Hub |
+
+These annotations are harmless when `kagenti.io/inject: disabled` -- the operator ignores them.
+
 ## MCP Service Naming Workaround
 
 The KAgenti UI hardcodes MCP tool service discovery as `{service-name}-mcp` ([source](https://github.com/kagenti/kagenti/blob/main/kagenti/ui-v2/src/pages/ToolDetailPage.tsx#L292-L299)). Since our services are already named `mongodb-mcp` and `imagegen-mcp`, KAgenti looks for `mongodb-mcp-mcp` and `imagegen-mcp-mcp`.

@@ -64,7 +64,9 @@ slides/
 generate_slides.py
 tests/mlflow-tracing/*.db
 tests/mlflow-tracing/mlruns/
-tests/
+tests/mlflow-tracing/__pycache__/
+tests/__pycache__/
+tests/demo_*
 Digital_Marketing_Demo.mp4
 
 # Jupyter notebook checkpoints

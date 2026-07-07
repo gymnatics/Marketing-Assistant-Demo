@@ -10,12 +10,14 @@ import os
 import httpx
 import mlflow
 from mlflow.entities import SpanType
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.vertical_config import prompt as vcfg_prompt
+from shared.model_utils import resolve_model_name
 from shared.models import (
     CustomerProfile,
     GetTargetCustomersInput,
@@ -29,8 +31,14 @@ LANG_MODEL_ENDPOINT = os.environ.get(
     "LANG_MODEL_ENDPOINT",
     "https://qwen3-32b-fp8-dynamic-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
-LANG_MODEL_NAME = os.environ.get("LANG_MODEL_NAME", "qwen3-32b-fp8-dynamic")
+LANG_MODEL_NAME = resolve_model_name("LANG_MODEL_ENDPOINT", "LANG_MODEL_NAME")
 LANG_MODEL_API_KEY = os.environ.get("LANG_MODEL_API_KEY", "")
+
+_llm_client = AsyncOpenAI(
+    base_url=LANG_MODEL_ENDPOINT,
+    api_key=LANG_MODEL_API_KEY or "unused",
+    timeout=120.0,
+)
 
 TOOLS = [
     {
@@ -185,55 +193,31 @@ async def call_mcp_tool(tool_name: str, arguments: dict, auth_headers: dict = No
 
 async def _llm_select_and_call_tool(user_prompt: str, target_audience: str = "", limit: int = 50, auth_headers: dict = {}) -> tuple[list, str]:
     """Use Qwen3 LLM to decide which MCP tool to call, then execute it."""
-    url = f"{LANG_MODEL_ENDPOINT}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    if auth_headers:
-        headers.update(auth_headers)
-    
-    payload = {
-        "model": LANG_MODEL_NAME,
-        "messages": [
+    stream = await _llm_client.chat.completions.create(
+        model=LANG_MODEL_NAME,
+        messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ],
-        "tools": TOOLS,
-        "tool_choice": "auto",
-        "temperature": 0.1,
-        "max_tokens": 256,
-        "stream": True,
-        "chat_template_kwargs": {"enable_thinking": False},
-    }
+        tools=TOOLS,
+        tool_choice="auto",
+        temperature=0.1,
+        max_tokens=256,
+        stream=True,
+        stream_options={"include_usage": True},
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    )
 
     tool_call_name = None
     tool_call_args = ""
 
-    if LANG_MODEL_API_KEY:
-        headers.update({"Authorization": f"Bearer {LANG_MODEL_API_KEY}"})
-
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                raise Exception(f"LLM API error: {response.status_code} - {error_text}")
-
-            async for line in response.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)                    
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    if "tool_calls" in delta:
-                        tc = delta["tool_calls"][0]
-                        if "function" in tc:
-                            if "name" in tc["function"]:
-                                tool_call_name = tc["function"]["name"]
-                            if "arguments" in tc["function"]:
-                                tool_call_args += tc["function"]["arguments"]
-                except json.JSONDecodeError:
-                    continue
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.tool_calls:
+            tc = chunk.choices[0].delta.tool_calls[0]
+            if tc.function and tc.function.name:
+                tool_call_name = tc.function.name
+            if tc.function and tc.function.arguments:
+                tool_call_args += tc.function.arguments
 
     if not tool_call_name:
         logger.info(

@@ -9,7 +9,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      MONGO_INITDB_DATABASE: casino_crm
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-casino_crm}
 
   # MongoDB MCP Server
   mongodb-mcp:
@@ -20,7 +20,8 @@ services:
       - "8090:8090"
     environment:
       MONGODB_URI: mongodb://mongodb:27017
-      MONGODB_DATABASE: casino_crm
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-casino_crm}
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - mongodb
 
@@ -43,6 +44,7 @@ services:
       IMAGEGEN_MODEL_ENDPOINT: ${IMAGEGEN_MODEL_ENDPOINT}
       IMAGEGEN_MODEL_NAME: ${IMAGEGEN_MODEL_NAME:-flux2-klein-4b}
       IMAGEGEN_MCP_SELF_URL: http://imagegen-mcp:8091
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
 
   # Creative Producer Agent
   creative-producer:
@@ -56,6 +58,7 @@ services:
       CODE_MODEL_NAME: ${CODE_MODEL_NAME:-qwen25-coder-32b-fp8}
       EVENT_HUB_URL: http://event-hub:5001
       IMAGEGEN_MCP_URL: http://imagegen-mcp:8091
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - event-hub
       - imagegen-mcp
@@ -72,6 +75,7 @@ services:
       LANG_MODEL_ENDPOINT: ${LANG_MODEL_ENDPOINT}
       LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
       EVENT_HUB_URL: http://event-hub:5001
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - mongodb-mcp
       - event-hub
@@ -91,9 +95,9 @@ services:
       CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}
       PROD_NAMESPACE: ${PROD_NAMESPACE:-marketing-assistant-prod}
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - event-hub
-
 
   # Policy Guardian Agent
   policy-guardian:
@@ -106,6 +110,7 @@ services:
       LANG_MODEL_ENDPOINT: ${LANG_MODEL_ENDPOINT}
       LANG_MODEL_NAME: ${LANG_MODEL_NAME:-qwen3-32b-fp8-dynamic}
       EVENT_HUB_URL: http://event-hub:5001
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - event-hub
 
@@ -125,6 +130,7 @@ services:
       CLUSTER_DOMAIN: ${CLUSTER_DOMAIN:-localhost}
       DEV_NAMESPACE: ${DEV_NAMESPACE:-marketing-assistant-dev}
       PROD_NAMESPACE: ${PROD_NAMESPACE:-marketing-assistant-prod}
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - creative-producer
       - customer-analyst
@@ -141,6 +147,7 @@ services:
       - "5000:5000"
     environment:
       CAMPAIGN_DIRECTOR_URL: http://campaign-director:8080
+      VERTICAL_CONFIG: ${VERTICAL_CONFIG:-hotel-casino}
     depends_on:
       - campaign-director
 

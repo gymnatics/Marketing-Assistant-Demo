@@ -21,7 +21,7 @@ from langgraph.graph import StateGraph, START, END
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.vertical_config import brand
-from shared.mlflow_bootstrap import update_trace_session
+from shared.mlflow_bootstrap import update_trace_session, tag_trace_with_spiffe
 from shared.models import (
     CampaignRequest,
     CampaignData,
@@ -410,6 +410,7 @@ async def _run_landing_page_workflow(campaign_id: str, campaign):
         print(f"[Campaign Director] Landing page workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+    tag_trace_with_spiffe()
 
 
 @mlflow.trace(name="workflow_email_preview")
@@ -455,6 +456,7 @@ async def _run_email_preview_workflow(campaign_id: str, campaign):
         print(f"[Campaign Director] Email preview workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+    tag_trace_with_spiffe()
 
 
 @mlflow.trace(name="workflow_go_live")
@@ -498,6 +500,7 @@ async def _run_go_live_workflow(campaign_id: str, campaign):
         print(f"[Campaign Director] Go live workflow error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
         campaign.status = CampaignStatus.FAILED
         campaign.error_message = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+    tag_trace_with_spiffe()
 
 
 class CampaignDirectorAgent:

@@ -96,7 +96,7 @@ spec:
             # Build allowed hosts list: service name, service FQDN, route hostname, and localhost for health probes
             # Note: Kubernetes health probes may use pod IPs, so we include localhost patterns
             # If health probes still fail, you may need to add your pod IP CIDR range
-            ALLOWED_HOSTS="localhost,127.0.0.1,mlflow-service,mlflow-service.${POD_NAMESPACE}.svc.cluster.local,${ROUTE_HOST}"
+            ALLOWED_HOSTS="localhost,127.0.0.1,mlflow-service,mlflow-service:5000,mlflow-service.${POD_NAMESPACE}.svc.cluster.local,mlflow-service.${POD_NAMESPACE}.svc.cluster.local:5000,${ROUTE_HOST}"
             # For health probes that use pod IP, we'll rely on the Host header in probe config
             # If that doesn't work, uncomment the line below to allow all internal IPs (less secure)
             # ALLOWED_HOSTS="${ALLOWED_HOSTS},10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

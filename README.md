@@ -1,6 +1,19 @@
-# Simon Casino Resort — AI Campaign Manager
+# AI Campaign Manager — Multi-Vertical Marketing Assistant
 
-A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI. Generates personalized luxury landing pages, marketing email campaigns, and AI hero images — all orchestrated by autonomous agents. Fully integrated with [KAgenti](https://github.com/kagenti/kagenti) for Kubernetes-native agent discovery and chat-based interaction.
+A multi-agent AI marketing campaign assistant using A2A protocol, MCP tools, and LLM inference on Red Hat OpenShift AI. Generates personalized landing pages, marketing email campaigns, and AI hero images — all orchestrated by autonomous agents. Fully integrated with [KAgenti](https://github.com/kagenti/kagenti) for Kubernetes-native agent discovery and chat-based interaction.
+
+## Multi-Vertical Support
+
+The platform is **vertical-agnostic** — a single deployment can be configured for any industry by selecting a vertical config at deploy time. Each vertical defines its own brand, properties, customer tiers, themes, prompts, seed data, competitors, and guardrail presets.
+
+| Vertical | Brand | Properties | Config |
+|----------|-------|------------|--------|
+| **Hotel & Casino** | Simon Casino Resort | 5 venues (Casino Resort, Imperial Palace, ...) | `config/verticals/hotel-casino.json` |
+| **Retail & Mall** | Grandeur Mall Group | 5 malls (Central Mall, Harbour Plaza, ...) | `config/verticals/retail-mall.json` |
+| **Banking** | Meridian Private Bank | 5 branches (Central, Marina Bay, ...) | `config/verticals/banking.json` |
+| **Telecommunications** | Nova Telecom | 5 divisions (Consumer, Enterprise, ...) | `config/verticals/telco.json` |
+
+To add a new vertical, create a JSON file in `config/verticals/` following the existing schema. The `deploy.sh` script prompts you to select a vertical, or set `VERTICAL_CONFIG` to deploy non-interactively.
 
 ## Architecture
 
@@ -249,9 +262,9 @@ The script will:
 
 1. Open the **Frontend URL** printed at the end of `deploy.sh`
 2. Click **Create New Campaign**
-3. Use the **Quick Start** dropdown to auto-fill a sample campaign, or type your own
+3. Use the **Quick Start** dropdown to auto-fill a sample campaign (presets are vertical-specific), or type your own
 4. Pick a **theme** and click **Next** — watch the AI agents generate a landing page in real-time
-5. **Preview** the landing page, select VIPs from the dropdown to see personalization
+5. **Preview** the landing page, select VIP customers from the dropdown to see personalization
 6. Click **Prepare Emails** — AI retrieves customers and generates email content
 7. **Review** everything, then click **Go Live** — deploys to production and sends emails
 8. Check the **Inbox** page to see personalized emails per recipient
@@ -304,9 +317,9 @@ flowchart LR
     G --> H["Go Live"]
 ```
 
-1. **Define Campaign** — Name, description, hotel, audience, dates
+1. **Define Campaign** — Name, description, property/venue, audience, dates
 2. **Guardrails Validation** — 4-layer check (TrustyAI regex via orchestrator, HAP, prompt injection, policy) before proceeding
-3. **Select Theme** — Visual style picker (Luxury Gold, Festive Red, Modern Black, Classic Casino)
+3. **Select Theme** — Visual style picker (4 themes per vertical, e.g. Luxury Gold, Festive Red, Modern Minimal, Classic Emerald)
 4. **Generate Landing Page** — AI generates hero image (FLUX.2) + HTML/CSS (Qwen Coder), deploys preview pod
 5. **Preview + Personalize** — Review landing page, select VIP from dropdown for personalized preview
 6. **Prepare Emails** — LLM selects MCP tool for customer retrieval, generates email content (English only)
@@ -362,13 +375,14 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 - **Agent Protocol**: A2A SDK 0.3.25 (JSON-RPC 2.0, `a2a-sdk[http-server]`)
 - **MCP Transport**: FastMCP 3.x (Streamable HTTP at `/mcp`)
 - **Orchestration**: LangGraph 0.2+, LangChain 0.2+
+- **LLM Client**: OpenAI Python SDK (`AsyncOpenAI`) against vLLM-compatible endpoints
 - **LLM Inference**: vLLM on RHOAI (Qwen2.5-Coder-32B, Qwen3-32B)
 - **Image Generation**: vLLM-Omni 0.18.0 (FLUX.2-klein-4B)
 - **Guardrails**: TrustyAI (Regex Orchestrator, Granite Guardian, DeBERTa v3) + Policy Guardian (Qwen3)
 - **Database**: MongoDB 7
 - **Landing Pages**: Express.js on UBI9 Node 18 (personalized via MCP)
 - **Agent Management**: KAgenti (Kubernetes-native agent discovery + catalog)
-- **Tracing**: MLflow 3.10 (`mlflow[genai]`) with GenAI tracing, distributed trace context, LangChain autolog
+- **Tracing**: MLflow 3.10 (`mlflow[genai]`) with `mlflow.openai.autolog()`, distributed trace context, LangChain autolog
 - **Platform**: Red Hat OpenShift AI 3.3, 3x NVIDIA L40S GPUs
 
 ## Models
@@ -386,6 +400,7 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 
 ```
 ├── frontend/                    # React Dashboard (nginx)
+│   └── src/pages/               # Dashboard, CampaignCreate, Inbox
 ├── services/
 │   ├── campaign-api/            # Flask API Gateway + guardrails + inbox
 │   ├── event-hub/               # SSE Broadcasting
@@ -397,19 +412,33 @@ All A2A agents and MCP servers are annotated for [KAgenti](https://github.com/ka
 │   ├── mongodb-mcp/             # Customer DB MCP Server
 │   ├── imagegen-mcp/            # AI Image Gen MCP Server
 │   └── campaign-landing/        # Personalized Landing Pages (Express.js)
+├── config/
+│   └── verticals/               # Vertical configs (hotel-casino, retail-mall, banking, telco)
 ├── shared/
 │   ├── models.py                # Shared Pydantic models + themes
+│   ├── vertical_config.py       # Vertical config loader (brand, tiers, prompts, seed data)
 │   └── mlflow_bootstrap.py      # MLflow tracing initialization + helpers
 ├── k8s/                         # Kubernetes manifests (Kustomize)
 │   ├── base/                    # Namespace-agnostic manifests
 │   ├── overlays/dev/            # Cluster-specific config
+│   ├── overlays/internal-build/ # Internal ImageStream variant
+│   ├── models/                  # KServe InferenceService + ServingRuntime
 │   ├── guardrails/              # TrustyAI detector deployment
+│   ├── kagenti/                 # KAgenti AuthBridge manifests
 │   ├── imagegen/                # vLLM-Omni ServingRuntime
 │   ├── mlflow/                  # MLflow stack (PostgreSQL + MinIO + server)
+│   ├── openshift/               # BuildConfigs + ImageStream
 │   └── rbac.yaml                # Cross-namespace permissions
-├── build-and-push.sh            # Build & push all container images
+├── docs/                        # Setup guides (cluster replication, KAgenti, SSO)
+├── eval/                        # Agent evaluation notebooks
 ├── deploy.sh                    # Interactive OpenShift deployment
-└── docker-compose.yaml          # Local development (all services)
+├── build-and-push.sh            # Build & push all container images
+├── setup-models.sh              # Model download + KServe serving setup
+├── update-app.sh                # Rolling restart of pods
+├── reset-demo.sh                # Clean demo state
+├── seed-basic-campaign.sh       # Seed static baseline campaign
+├── docker-compose.yaml          # Local development (11 services)
+└── .env.example                 # Environment variable template
 ```
 
 ## MLflow Tracing
@@ -428,4 +457,8 @@ The MLflow UI is accessible via the `mlflow-route` OpenShift Route.
 
 For deeper technical details — sequence diagrams, A2A/MCP protocol flows, LangGraph workflows, KAgenti integration, K8s deployment internals, personalization architecture, and observability — see:
 
+- **[PRD.md](PRD.md)** — Product requirements, API specs, workflow details, KAgenti/SSO branch scopes
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full architecture reference with Mermaid diagrams for every data flow, including KAgenti discovery, security schemes, dual-mode input, and MLflow tracing
+- **[docs/CLUSTER-REPLICATION.md](docs/CLUSTER-REPLICATION.md)** — End-to-end guide for replicating on a fresh OpenShift cluster
+- **[docs/KAGENTI-SETUP.md](docs/KAGENTI-SETUP.md)** — KAgenti platform installation, Keycloak config, troubleshooting
+- **[docs/SSO-SETUP.md](docs/SSO-SETUP.md)** — Keycloak SSO integration for the React dashboard

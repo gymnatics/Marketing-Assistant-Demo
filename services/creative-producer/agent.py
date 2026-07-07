@@ -12,11 +12,13 @@ import json
 import httpx
 import mlflow
 import traceback
+from openai import AsyncOpenAI
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.models import CAMPAIGN_THEMES, GenerateLandingPageInput, GenerateLandingPageOutput
-from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context
+from shared.mlflow_bootstrap import update_trace_session, set_safe_tracing_context, tag_trace_with_spiffe
 from shared.vertical_config import get_config, prompt as vcfg_prompt, brand, themes as vcfg_themes
+from shared.model_utils import resolve_model_name
 
 from mlflow.tracing import get_tracing_context_headers_for_http_request
 from mlflow.entities import SpanType
@@ -25,8 +27,14 @@ CODE_MODEL_ENDPOINT = os.environ.get(
     "CODE_MODEL_ENDPOINT",
     "https://qwen25-coder-32b-fp8-0-marketing-assistant-demo.apps.cluster-qf44v.qf44v.sandbox543.opentlc.com/v1"
 )
-CODE_MODEL_NAME = os.environ.get("CODE_MODEL_NAME", "qwen25-coder-32b-fp8")
+CODE_MODEL_NAME = resolve_model_name("CODE_MODEL_ENDPOINT", "CODE_MODEL_NAME")
 EVENT_HUB_URL = os.environ.get("EVENT_HUB_URL", "http://event-hub:5001")
+
+_llm_client = AsyncOpenAI(
+    base_url=CODE_MODEL_ENDPOINT,
+    api_key=os.environ.get("CODE_MODEL_TOKEN", "unused"),
+    timeout=300.0,
+)
 IMAGEGEN_MCP_URL = os.environ.get("IMAGEGEN_MCP_URL", "http://imagegen-mcp:8091")
 
 BASE_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "base_template.html")
@@ -222,44 +230,22 @@ async def publish_event(campaign_id: str, event_type: str, agent: str, task: str
 
 async def stream_llm(system_prompt: str, user_prompt: str) -> str:
     """Stream a completion from Qwen Coder and return the full response text."""
-    url = f"{CODE_MODEL_ENDPOINT}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    auth_token = os.environ.get("CODE_MODEL_TOKEN", "")
-    if auth_token:
-        headers["Authorization"] = f"Bearer {auth_token}"
-
-    payload = {
-        "model": CODE_MODEL_NAME,
-        "messages": [
+    stream = await _llm_client.chat.completions.create(
+        model=CODE_MODEL_NAME,
+        messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.9,
-        "max_tokens": 8000,
-        "stream": True
-    }
+        temperature=0.9,
+        max_tokens=8000,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
 
     result = ""
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as response:
-            if response.status_code != 200:
-                error_text = await response.aread()
-                raise Exception(f"Model API error: {response.status_code} - {error_text}")
-
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data = line[6:]
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                result += content
-                    except json.JSONDecodeError:
-                        continue
+    async for chunk in stream:
+        if chunk.choices and chunk.choices[0].delta.content:
+            result += chunk.choices[0].delta.content
     return result
 
 
@@ -429,7 +415,10 @@ class CreativeProducerAgent:
                     
                     result = {"html": html, "hero_image_url": hero_image_url, "status": "success"}
                     span.set_outputs(result)
-                    return result
+
+            tag_trace_with_spiffe()
+            mlflow.flush_trace_async_logging()
+            return result
                 
         except Exception as e:
             traceback.print_exc()

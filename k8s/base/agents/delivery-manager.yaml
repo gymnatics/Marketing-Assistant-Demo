@@ -23,6 +23,8 @@ spec:
       app: delivery-manager
   template:
     metadata:
+      annotations:
+        kagenti.io/outbound-ports-exclude: "443,5001,6443"
       labels:
         app: delivery-manager
         app.kubernetes.io/component: backend
@@ -30,6 +32,11 @@ spec:
         app.kubernetes.io/part-of: simon-casino-agents
         app.openshift.io/runtime: python
         component: agent
+        kagenti.io/type: agent
+        kagenti.io/framework: Python
+        kagenti.io/inject: disabled
+        kagenti.io/spire: disabled
+        protocol.kagenti.io/a2a: ''
     spec:
       containers:
       - envFrom:

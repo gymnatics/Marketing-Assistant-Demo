@@ -23,6 +23,8 @@ spec:
       app: creative-producer
   template:
     metadata:
+      annotations:
+        kagenti.io/outbound-ports-exclude: "5001,8091"
       labels:
         app: creative-producer
         app.kubernetes.io/component: backend
@@ -30,6 +32,11 @@ spec:
         app.kubernetes.io/part-of: simon-casino-agents
         app.openshift.io/runtime: python
         component: agent
+        kagenti.io/type: agent
+        kagenti.io/framework: Python
+        kagenti.io/inject: disabled
+        kagenti.io/spire: disabled
+        protocol.kagenti.io/a2a: ''
     spec:
       containers:
       - envFrom:

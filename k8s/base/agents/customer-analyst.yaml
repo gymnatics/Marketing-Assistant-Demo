@@ -20,8 +20,8 @@ metadata:
     kagenti.io/type: agent
     protocol.kagenti.io/a2a: ''
     kagenti.io/workload-type: deployment
-    kagenti.io/inject: disabled # Enable to test AuthBridge
-    kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False
+    kagenti.io/inject: disabled
+    kagenti.io/spire: disabled
   name: customer-analyst
 spec:
   strategy:
@@ -31,7 +31,9 @@ spec:
     matchLabels:
       app: customer-analyst
   template:
-    metadata:      
+    metadata:
+      annotations:
+        kagenti.io/outbound-ports-exclude: "5001"
       labels:
         app: customer-analyst
         app.kubernetes.io/component: backend
@@ -39,8 +41,8 @@ spec:
         app.kubernetes.io/part-of: simon-casino-agents
         app.openshift.io/runtime: python
         component: agent
-        kagenti.io/inject: disabled # Enable to test AuthBridge
-        kagenti.io/spire: disabled # authbridge-config SPIRE_ENABLED=False
+        kagenti.io/inject: disabled
+        kagenti.io/spire: disabled
         kagenti.io/type: agent
         kagenti.io/workload-type: deployment
         kagenti.io/framework: Python
@@ -48,7 +50,10 @@ spec:
     spec:
       serviceAccount: customer-analyst
       containers:
-      - envFrom:
+      - env:
+        - name: PORT
+          value: "8085"
+        envFrom:
         - configMapRef:
             name: marketing-assistant-config
         - secretRef:
@@ -58,16 +63,16 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8082
+            port: 8085
           initialDelaySeconds: 10
           periodSeconds: 30
         name: agent
         ports:
-        - containerPort: 8082
+        - containerPort: 8085
         readinessProbe:
           httpGet:
             path: /healthz
-            port: 8082
+            port: 8085
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
@@ -86,9 +91,9 @@ spec:
   ports:
   - name: a2a
     port: 8080
-    targetPort: 8082
+    targetPort: 8085
   - name: original
-    port: 8082
-    targetPort: 8082
+    port: 8085
+    targetPort: 8085
   selector:
     app: customer-analyst
